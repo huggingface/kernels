@@ -66,6 +66,9 @@
   # Fixed-output hashes for Git dependencies in Cargo.lock.
   rustGitHashes ? { },
 
+  # Whether the Rust kernels are built with the cuda-oxide codegen backend.
+  cudaOxide ? false,
+
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -138,11 +141,14 @@ let
 
   rustSupport = cargoLock != null;
 
+  cudaOxideSupport = rustSupport && cudaSupport && cudaOxide;
+
   # cuda-bindings runs bindgen against a single CUDA include directory that
-  # must provide both `cuda.h` and `curand.h`.
+  # must provide both `cuda.h` and `curand.h` (and include crt headers).
   rustCudaToolkit = pkgs.symlinkJoin {
     name = "rust-cuda-toolkit";
     paths = with cudaPackages; [
+      (lib.getInclude cuda_crt)
       (lib.getInclude cuda_cudart)
       (lib.getInclude libcurand)
     ];
@@ -265,14 +271,16 @@ stdenv.mkDerivation (
     ++ lib.optionals rustSupport [
       rustPlatform.cargoSetupHook
     ]
-    ++ lib.optionals (rustSupport && !cudaSupport) [
+    ++ lib.optionals (rustSupport && !cudaOxideSupport) [
       cargo
       rustc
     ]
     # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
-    ++ lib.optionals (rustSupport && cudaSupport) [
+    ++ lib.optionals cudaOxideSupport [
       cuda-oxide.toolchain
-      # libclang for the cuda-bindings build script.
+    ]
+    # libclang for the cuda-bindings build script (cuda-oxide and cuTile).
+    ++ lib.optionals (rustSupport && cudaSupport) [
       rustPlatform.bindgenHook
     ];
 
@@ -361,7 +369,7 @@ stdenv.mkDerivation (
       (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
       (lib.cmakeFeature "GPU_LANG" "CUDA")
     ]
-    ++ lib.optionals (rustSupport && cudaSupport) [
+    ++ lib.optionals cudaOxideSupport [
       (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${cuda-oxide.backend}/lib/librustc_codegen_cuda.so")
     ]
     ++ lib.optionals rocmSupport [
@@ -405,6 +413,9 @@ stdenv.mkDerivation (
       inherit dependencies;
       inherit (python3.pkgs.tvm-ffi) variant;
       archVariant = python3.pkgs.tvm-ffi.variant;
+    }
+    // lib.optionalAttrs (rustSupport && cudaSupport) {
+      inherit rustCudaToolkit;
     };
   }
   // lib.optionalAttrs rustSupport {

@@ -3,7 +3,7 @@
 set(_RUST_CMAKE_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 function(rust_kernel_component LIBS_VAR TARGETS_VAR)
-    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH" "CUDA_CAPABILITIES" ${ARGN})
+    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH;CUDA_FRONTEND" "CUDA_CAPABILITIES" ${ARGN})
 
     if(NOT KERNEL_NAME OR NOT KERNEL_MANIFEST_PATH)
         message(FATAL_ERROR "rust_kernel_component: NAME and MANIFEST_PATH are required")
@@ -14,7 +14,19 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
             "but `cargo` was not found. Install a Rust toolchain or set CARGO_EXECUTABLE.")
     endif()
 
+    set(_CUDA_OXIDE FALSE)
     if(GPU_LANG STREQUAL "CUDA")
+        set(_CUDA_FRONTENDS oxide cutile)
+        if(NOT KERNEL_CUDA_FRONTEND IN_LIST _CUDA_FRONTENDS)
+            message(FATAL_ERROR "rust_kernel_component: ${KERNEL_NAME} has CUDA_FRONTEND "
+                "`${KERNEL_CUDA_FRONTEND}`, expected one of: ${_CUDA_FRONTENDS}")
+        endif()
+        if(KERNEL_CUDA_FRONTEND STREQUAL "oxide")
+            set(_CUDA_OXIDE TRUE)
+        endif()
+    endif()
+
+    if(_CUDA_OXIDE)
         if(KERNEL_CUDA_CAPABILITIES)
             cuda_archs_intersection(_KERNEL_ARCHS "${KERNEL_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
             if(NOT _KERNEL_ARCHS)
@@ -80,7 +92,7 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     set(_CARGO_ARGS rustc --release --locked --lib --crate-type staticlib
         --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH})
 
-    if(GPU_LANG STREQUAL "CUDA")
+    if(_CUDA_OXIDE)
         # Like nvcc's `-gencode`, compile the device code once per capability,
         # with `cuda_arch` set for it and every lower capability, so kernels can
         # branch on it like on `__CUDA_ARCH__`. The first pass also builds the
@@ -131,7 +143,7 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     add_library(${KERNEL_NAME}_rust STATIC IMPORTED GLOBAL)
     set_target_properties(${KERNEL_NAME}_rust PROPERTIES IMPORTED_LOCATION ${_LINKED_STATICLIB})
 
-    if(GPU_LANG STREQUAL "CUDA")
+    if(_CUDA_OXIDE)
         _rust_cuda_fatbin(${KERNEL_NAME} "${_SMS}" "${_PTXS}" "${_PTX_SMS}")
     endif()
 

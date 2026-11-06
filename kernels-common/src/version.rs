@@ -15,6 +15,12 @@ impl<const N: usize> Version<N> {
     }
 }
 
+impl<const N: usize> From<&Version<N>> for pep440_rs::Version {
+    fn from(version: &Version<N>) -> Self {
+        pep440_rs::Version::new(version.0.iter().map(|&part| part as u64))
+    }
+}
+
 impl<'de, const N: usize> Deserialize<'de> for Version<N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

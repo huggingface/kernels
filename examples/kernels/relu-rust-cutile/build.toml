@@ -1,0 +1,17 @@
+[general]
+name = "relu-rust-cutile"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "kernels-test/relu-rust-cutile"
+
+[tvm-ffi]
+
+[kernel.relu_rust_cutile]
+language = "rust-cutile"
+cargo-manifest = "Cargo.toml"
+src = ["Cargo.toml", "Cargo.lock", "src/lib.rs"]
+tileiras-minver = "13.2"

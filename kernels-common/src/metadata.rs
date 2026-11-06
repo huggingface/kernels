@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use eyre::Result;
+pub use pep440_rs::VersionSpecifiers;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
@@ -8,14 +9,107 @@ use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
 use crate::version::Version;
 
-#[derive(Debug, Deserialize, Serialize)]
+/// Backend-specific information.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum BackendInfo {
+    Cann(CannInfo),
+    Cpu(CpuInfo),
+    Cuda(CudaInfo),
+    Metal(MetalInfo),
+    Neuron(NeuronInfo),
+    Rocm(RocmInfo),
+    Tpu(TpuInfo),
+    Xpu(XpuInfo),
+}
+
+impl BackendInfo {
+    /// The backend that the information is for.
+    pub fn backend(&self) -> Backend {
+        match self {
+            BackendInfo::Cann(_) => Backend::Cann,
+            BackendInfo::Cpu(_) => Backend::Cpu,
+            BackendInfo::Cuda(_) => Backend::Cuda,
+            BackendInfo::Metal(_) => Backend::Metal,
+            BackendInfo::Neuron(_) => Backend::Neuron,
+            BackendInfo::Rocm(_) => Backend::Rocm,
+            BackendInfo::Tpu(_) => Backend::Tpu,
+            BackendInfo::Xpu(_) => Backend::Xpu,
+        }
+    }
+
+    /// GPU architectures supported by the build, for backends that have them.
+    pub fn archs(&self) -> Option<&[String]> {
+        match self {
+            BackendInfo::Cuda(cuda) => cuda.archs.as_deref(),
+            BackendInfo::Rocm(rocm) => rocm.archs.as_deref(),
+            BackendInfo::Cann(_)
+            | BackendInfo::Cpu(_)
+            | BackendInfo::Metal(_)
+            | BackendInfo::Neuron(_)
+            | BackendInfo::Tpu(_)
+            | BackendInfo::Xpu(_) => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct BackendInfo {
-    #[serde(rename = "type")]
-    pub backend_type: Backend,
+pub struct CannInfo {}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CpuInfo {}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CudaInfo {
+    /// CUDA capabilities that the build supports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archs: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "CudaRequirements::is_empty")]
+    pub requirements: CudaRequirements,
+}
+
+/// CUDA environment requirements.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CudaRequirements {
+    /// Supported versions of the cuTile `tileiras` compiler.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tileiras: Option<VersionSpecifiers>,
+}
+
+impl CudaRequirements {
+    pub fn is_empty(&self) -> bool {
+        let CudaRequirements { tileiras } = self;
+        tileiras.is_none()
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetalInfo {}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct NeuronInfo {}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RocmInfo {
+    /// ROCm architectures that the build supports.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub archs: Option<Vec<String>>,
 }
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TpuInfo {}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct XpuInfo {}
 
 fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
@@ -125,6 +219,27 @@ impl Metadata {
         let python_depends = build.general.all_python_depends(backend)?;
         let kernel_depends = build.general.all_kernel_depends(backend);
         let archs = build.framework.precomputable_backend_archs(backend);
+        let backend_info = match backend {
+            Backend::Cann => BackendInfo::Cann(CannInfo {}),
+            Backend::Cpu => BackendInfo::Cpu(CpuInfo {}),
+            Backend::Cuda => BackendInfo::Cuda(CudaInfo {
+                archs,
+                requirements: CudaRequirements {
+                    tileiras: build.tileiras_minver(backend).map(|minver| {
+                        [pep440_rs::VersionSpecifier::greater_than_equal_version(
+                            (&minver).into(),
+                        )]
+                        .into_iter()
+                        .collect()
+                    }),
+                },
+            }),
+            Backend::Metal => BackendInfo::Metal(MetalInfo {}),
+            Backend::Neuron => BackendInfo::Neuron(NeuronInfo {}),
+            Backend::Rocm => BackendInfo::Rocm(RocmInfo { archs }),
+            Backend::Tpu => BackendInfo::Tpu(TpuInfo {}),
+            Backend::Xpu => BackendInfo::Xpu(XpuInfo {}),
+        };
 
         Ok(Self {
             id,
@@ -136,10 +251,7 @@ impl Metadata {
             source: build.general.source.clone(),
             python_depends,
             kernel_depends,
-            backend: BackendInfo {
-                archs,
-                backend_type: backend,
-            },
+            backend: backend_info,
             digest: None,
             provenance: None,
         })
@@ -170,13 +282,16 @@ mod tests {
     use std::str::FromStr;
 
     use crate::config::{
-        Backend, Build, Framework, General, KernelDependency, KernelName, KernelVersion,
+        Backend, Build, Framework, General, Kernel, KernelDependency, KernelName, KernelVersion,
         TorchNoarch, TvmFfi,
     };
     use crate::git::{GitStatus, Oid};
     use crate::version::Version;
 
-    use super::{KernelBuilderVersion, Metadata, Provenance};
+    use super::{
+        BackendInfo, CpuInfo, CudaInfo, CudaRequirements, KernelBuilderVersion, Metadata,
+        Provenance, RocmInfo, VersionSpecifiers, XpuInfo,
+    };
 
     /// During the development of kernels 0.17, we had a time period where
     /// `sha` was used before `oid`. The Hub as a bunch of kernels with `sha`
@@ -236,10 +351,12 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
         assert_eq!(
-            metadata.backend.archs,
-            Some(vec!["7.0".to_string(), "8.0".to_string()])
+            metadata.backend,
+            BackendInfo::Cuda(CudaInfo {
+                archs: Some(vec!["7.0".to_string(), "8.0".to_string()]),
+                requirements: CudaRequirements::default(),
+            })
         );
     }
 
@@ -248,8 +365,8 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Rocm).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Rocm);
-        assert_eq!(metadata.backend.archs, Some(vec!["gfx90a".to_string()]));
+        assert_eq!(metadata.backend.backend(), Backend::Rocm);
+        assert_eq!(metadata.backend.archs(), Some(&["gfx90a".to_string()][..]));
     }
 
     #[test]
@@ -257,8 +374,8 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cpu).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cpu);
-        assert!(metadata.backend.archs.is_none());
+        assert_eq!(metadata.backend, BackendInfo::Cpu(CpuInfo {}));
+        assert!(metadata.backend.archs().is_none());
     }
 
     #[test]
@@ -289,8 +406,55 @@ mod tests {
         };
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
-        assert!(metadata.backend.archs.is_none());
+        assert_eq!(metadata.backend, BackendInfo::Cuda(CudaInfo::default()));
+    }
+
+    #[test]
+    fn tileiras_requirement_for_cutile_kernels() {
+        let mut build = torch_noarch_build();
+        build.framework = Framework::TvmFfi(TvmFfi {
+            include: None,
+            pyext: None,
+            src: vec![],
+            cxx_flags: None,
+        });
+        for (name, minver) in [("a", [13, 2]), ("b", [13, 4])] {
+            build.kernels.insert(
+                name.to_string(),
+                Kernel::RustCutile {
+                    cargo_manifest: "Cargo.toml".to_string(),
+                    src: vec![],
+                    tileiras_minver: Version::new(minver),
+                },
+            );
+        }
+
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        assert_eq!(
+            metadata.backend,
+            tileiras_requirement_without_archs(">=13.4")
+        );
+
+        // Requirements are CUDA-specific.
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cpu).unwrap();
+        assert_eq!(metadata.backend, BackendInfo::Cpu(CpuInfo {}));
+    }
+
+    fn tileiras_requirement_without_archs(specifiers: &str) -> BackendInfo {
+        BackendInfo::Cuda(CudaInfo {
+            archs: None,
+            requirements: CudaRequirements {
+                tileiras: Some(specifiers.parse().unwrap()),
+            },
+        })
+    }
+
+    #[test]
+    fn no_tileiras_requirement_without_cutile_kernels() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        let value = serde_json::to_value(&metadata).unwrap();
+        assert!(value["backend"].get("requirements").is_none());
     }
 
     #[test]
@@ -462,8 +626,184 @@ mod tests {
         assert!(metadata.source.is_none());
         assert!(metadata.python_depends.is_empty());
         assert!(metadata.kernel_depends.is_empty());
-        assert_eq!(metadata.backend.backend_type, Backend::Cpu);
+        assert_eq!(metadata.backend, BackendInfo::Cpu(CpuInfo {}));
         assert!(metadata.digest.is_some());
+    }
+
+    #[test]
+    fn backend_info_parses_existing_metadata() {
+        let cases = [
+            (
+                serde_json::json!({"type": "cuda", "archs": ["8.0", "9.0+PTX"]}),
+                BackendInfo::Cuda(CudaInfo {
+                    archs: Some(vec!["8.0".to_string(), "9.0+PTX".to_string()]),
+                    ..CudaInfo::default()
+                }),
+            ),
+            (
+                serde_json::json!({"type": "cuda"}),
+                BackendInfo::Cuda(CudaInfo::default()),
+            ),
+            (
+                serde_json::json!({"type": "cuda", "archs": null}),
+                BackendInfo::Cuda(CudaInfo::default()),
+            ),
+            (
+                serde_json::json!({"type": "rocm", "archs": ["gfx90a"]}),
+                BackendInfo::Rocm(RocmInfo {
+                    archs: Some(vec!["gfx90a".to_string()]),
+                }),
+            ),
+            (
+                serde_json::json!({"type": "cpu"}),
+                BackendInfo::Cpu(CpuInfo {}),
+            ),
+            // Older writers could emit `archs: null` for any backend.
+            (
+                serde_json::json!({"type": "cpu", "archs": null}),
+                BackendInfo::Cpu(CpuInfo {}),
+            ),
+            (
+                serde_json::json!({"type": "xpu", "archs": null}),
+                BackendInfo::Xpu(XpuInfo {}),
+            ),
+        ];
+
+        for (json, expected) in cases {
+            let parsed: BackendInfo = serde_json::from_value(json.clone()).unwrap();
+            assert_eq!(parsed, expected, "parsing {json}");
+        }
+    }
+
+    #[test]
+    fn backend_info_serializes_in_existing_shape() {
+        let cuda = BackendInfo::Cuda(CudaInfo {
+            archs: Some(vec!["8.0".to_string()]),
+            ..CudaInfo::default()
+        });
+        assert_eq!(
+            serde_json::to_value(&cuda).unwrap(),
+            serde_json::json!({"type": "cuda", "archs": ["8.0"]})
+        );
+
+        let cuda_without_archs = BackendInfo::Cuda(CudaInfo::default());
+        assert_eq!(
+            serde_json::to_value(&cuda_without_archs).unwrap(),
+            serde_json::json!({"type": "cuda"})
+        );
+
+        let cpu = BackendInfo::Cpu(CpuInfo {});
+        assert_eq!(
+            serde_json::to_value(&cpu).unwrap(),
+            serde_json::json!({"type": "cpu"})
+        );
+    }
+
+    #[test]
+    fn backend_info_type_matches_backend_serialization() {
+        for backend in Backend::all() {
+            let backend_value = serde_json::to_value(backend).unwrap();
+            let info: BackendInfo =
+                serde_json::from_value(serde_json::json!({ "type": backend_value })).unwrap();
+            assert_eq!(info.backend(), backend);
+            assert_eq!(serde_json::to_value(&info).unwrap()["type"], backend_value);
+        }
+    }
+
+    #[test]
+    fn backend_info_ignores_unknown_fields() {
+        let parsed: BackendInfo = serde_json::from_value(serde_json::json!({
+            "type": "cuda",
+            "archs": ["8.0"],
+            "future-field": {"nested": true},
+        }))
+        .unwrap();
+        assert_eq!(parsed.archs(), Some(&["8.0".to_string()][..]));
+    }
+
+    fn tileiras_requirement(specifiers: &str) -> BackendInfo {
+        BackendInfo::Cuda(CudaInfo {
+            archs: Some(vec!["8.0".to_string()]),
+            requirements: CudaRequirements {
+                tileiras: Some(specifiers.parse().unwrap()),
+            },
+        })
+    }
+
+    #[test]
+    fn cuda_requirements_round_trip() {
+        let cuda = tileiras_requirement(">=13.2");
+        let value = serde_json::to_value(&cuda).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "type": "cuda",
+                "archs": ["8.0"],
+                "requirements": {"tileiras": ">=13.2"},
+            })
+        );
+
+        let parsed: BackendInfo = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed, cuda);
+    }
+
+    #[test]
+    fn empty_cuda_requirements_are_omitted() {
+        let cuda = BackendInfo::Cuda(CudaInfo::default());
+        let value = serde_json::to_value(&cuda).unwrap();
+        assert!(value.get("requirements").is_none());
+
+        let parsed: BackendInfo =
+            serde_json::from_value(serde_json::json!({"type": "cuda", "requirements": {}}))
+                .unwrap();
+        assert_eq!(parsed, cuda);
+    }
+
+    #[test]
+    fn unknown_cuda_requirements_are_ignored() {
+        let parsed: BackendInfo = serde_json::from_value(serde_json::json!({
+            "type": "cuda",
+            "archs": ["8.0"],
+            "requirements": {"tileiras": ">=13.2", "nvcc": ">=13.0"},
+        }))
+        .unwrap();
+        assert_eq!(parsed, tileiras_requirement(">=13.2"));
+    }
+
+    #[test]
+    fn invalid_requirement_is_rejected() {
+        for specifiers in ["~~13.2 or newer", "13.2"] {
+            let result = serde_json::from_value::<BackendInfo>(serde_json::json!({
+                "type": "cuda",
+                "requirements": {"tileiras": specifiers},
+            }));
+            assert!(result.is_err(), "should be rejected: {specifiers:?}");
+        }
+    }
+
+    #[test]
+    fn requirement_is_serialized_normalized() {
+        let specifiers: VersionSpecifiers = " >= 13.2 ,<14".parse().unwrap();
+        let cuda = BackendInfo::Cuda(CudaInfo {
+            archs: None,
+            requirements: CudaRequirements {
+                tileiras: Some(specifiers.clone()),
+            },
+        });
+        assert_eq!(
+            serde_json::to_value(&cuda).unwrap(),
+            serde_json::json!({"type": "cuda", "requirements": {"tileiras": ">=13.2,<14"}})
+        );
+
+        assert!(specifiers.contains(&"13.2.86".parse().unwrap()));
+        assert!(!specifiers.contains(&"13.1".parse().unwrap()));
+        assert!(!specifiers.contains(&"14.0".parse().unwrap()));
+    }
+
+    #[test]
+    fn backend_info_rejects_unknown_backend() {
+        assert!(serde_json::from_value::<BackendInfo>(serde_json::json!({"type": "foo"})).is_err());
+        assert!(serde_json::from_value::<BackendInfo>(serde_json::json!({})).is_err());
     }
 
     #[test]

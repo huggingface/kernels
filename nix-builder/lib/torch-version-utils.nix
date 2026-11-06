@@ -48,6 +48,31 @@ rec {
   # Validate a flattened Torch version entry (with `system`).
   validateFlatTorchVersion = validateTorchVersion' "system";
 
+  # Validate that there is only one system-flattened Torch version maps
+  # to a particula tvm-ffi build variant. E.g. if Torch 2.11 and 2.12
+  # both have tvm-ffi enabled for CUDA 13.0, this check will fail.
+  validateUniqueTvmFfiVariants =
+    versions:
+    let
+      variantName =
+        version:
+        (import ./variants/tvm-ffi.nix {
+          inherit lib;
+          buildConfig = version // {
+            backend = backend version;
+          };
+        }).arch;
+      # Group all tvm-ffi versions by their variant name.
+      byVariant = lib.groupBy variantName (builtins.filter (version: version ? tvmFfiVersion) versions);
+      duplicates = lib.filterAttrs (_: group: builtins.length group > 1) byVariant;
+      describe =
+        variant: group:
+        "${variant} (Torch ${lib.concatMapStringsSep ", " (version: version.torchVersion) group})";
+    in
+    lib.throwIf (duplicates != { })
+      "Multiple Torch versions enable tvm-ffi for the same variant: ${lib.concatStringsSep "; " (lib.mapAttrsToList describe duplicates)}"
+      versions;
+
   # Expand { systems = [ a b ]; .. } to [ { system = a; ..} { system = b; .. } ]
   flattenSystems =
     versions:

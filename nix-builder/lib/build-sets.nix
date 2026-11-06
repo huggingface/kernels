@@ -13,6 +13,7 @@ let
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend
     validateFlatTorchVersion
+    validateUniqueTvmFfiVariants
     ;
 
   # All build configurations. `torchVersions` must be flattened
@@ -42,7 +43,8 @@ rec {
   mkBuildSets =
     extraOverlays: torchVersions: systems:
     let
-      configs = lib.concatMap (buildConfigs (map validateFlatTorchVersion torchVersions)) systems;
+      validatedTorchVersions = validateUniqueTvmFfiVariants (map validateFlatTorchVersion torchVersions);
+      configs = lib.concatMap (buildConfigs validatedTorchVersions) systems;
       # Multiple builsets can share the same nixpkgs instance, for example:
       #
       # - All Torch CPU buildsets.

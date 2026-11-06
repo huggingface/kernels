@@ -45,6 +45,9 @@ const KERNELS_VERSION_BASELINE: Version<3> = Version::new([0, 14, 0]);
 /// First `kernels` version that can resolve kernel dependencies.
 const KERNELS_VERSION_KERNEL_DEPENDS: Version<3> = Version::new([0, 17, 0]);
 
+/// First CUDA version that ships `tileiras`, the cuTile compiler.
+const MIN_TILEIRAS_VERSION: Version<2> = Version::new([13, 2]);
+
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
@@ -67,6 +70,22 @@ impl Build {
 
     pub fn repo_id(&self) -> Option<&str> {
         self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
+    }
+
+    /// Minimum `tileiras` version required by the cuTile kernels for
+    /// `backend`. None` when there are no cuTile kernels for `backend`.
+    pub fn tileiras_minver(&self, backend: Backend) -> Option<Version<2>> {
+        self.kernels
+            .values()
+            .filter(|kernel| kernel.backend() == backend)
+            .filter_map(|kernel| match kernel {
+                Kernel::RustCutile {
+                    tileiras_minver, ..
+                } => Some(tileiras_minver),
+                _ => None,
+            })
+            .max()
+            .cloned()
     }
 
     /// Minimum version of the `kernels` Python library required to load a
@@ -368,6 +387,9 @@ pub enum Kernel {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
         src: Vec<String>,
+        /// Minimum `tileiras` version, determined by the Tile IR features
+        /// that the kernel uses.
+        tileiras_minver: Version<2>,
     },
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
@@ -773,6 +795,7 @@ mod tests {
             language = "rust-cutile"
             cargo-manifest = "Cargo.toml"
             src = ["Cargo.toml", "src/lib.rs"]
+            tileiras-minver = "13.3"
         "#;
 
         let parsed: v6::Build = toml::from_str(config).unwrap();
@@ -783,29 +806,105 @@ mod tests {
         );
         let build = Build::try_from(toml::from_str::<v6::Build>(&serialized).unwrap()).unwrap();
 
+        assert!(
+            serialized.contains("tileiras-minver = \"13.3\""),
+            "{serialized}"
+        );
+
         let kernel = &build.kernels["cutile_kernel"];
-        assert!(matches!(kernel, Kernel::RustCutile { .. }));
+        assert!(matches!(
+            kernel,
+            Kernel::RustCutile { tileiras_minver, .. } if *tileiras_minver == Version::new([13, 3])
+        ));
         assert_eq!(kernel.backend(), Backend::Cuda);
         assert_eq!(kernel.language(), Language::Rust);
         assert!(kernel.depends().is_empty());
         assert_eq!(kernel.src(), ["Cargo.toml", "src/lib.rs"]);
     }
 
+    fn rust_cutile_build(tileiras_minvers: &[&str]) -> Build {
+        let kernels = tileiras_minvers
+            .iter()
+            .enumerate()
+            .map(|(idx, minver)| {
+                format!(
+                    r#"
+                    [kernel.cutile_kernel_{idx}]
+                    language = "rust-cutile"
+                    cargo-manifest = "Cargo.toml"
+                    src = []
+                    tileiras-minver = "{minver}"
+                    "#
+                )
+            })
+            .join("\n");
+        let config = format!(
+            r#"
+            [general]
+            name = "rust-cutile"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["cuda"]
+
+            [tvm-ffi]
+
+            {kernels}
+            "#
+        );
+        Build::try_from(toml::from_str::<v6::Build>(&config).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn tileiras_minver_is_strictest_of_kernels() {
+        let build = rust_cutile_build(&["13.2", "13.4", "13.3"]);
+        assert_eq!(
+            build.tileiras_minver(Backend::Cuda),
+            Some(Version::new([13, 4]))
+        );
+        assert_eq!(build.tileiras_minver(Backend::Cpu), None);
+
+        let build = rust_cutile_build(&[]);
+        assert_eq!(build.tileiras_minver(Backend::Cuda), None);
+    }
+
     #[test]
     fn v6_rust_cutile_rejects_invalid_config() {
         let cases = [
-            ("[torch]\nsrc = []", "", "require a `[tvm-ffi]` framework"),
+            (
+                "[torch]\nsrc = []",
+                r#"tileiras-minver = "13.2""#,
+                "require a `[tvm-ffi]` framework",
+            ),
             (
                 "[tvm-ffi]",
-                r#"cuda-capabilities = ["9.0"]"#,
+                r#"tileiras-minver = "13.2"
+                cuda-capabilities = ["9.0"]"#,
                 "unknown field `cuda-capabilities`",
             ),
             (
                 "[tvm-ffi]",
-                r#"cxx-flags = ["-O3"]"#,
+                r#"tileiras-minver = "13.2"
+                cxx-flags = ["-O3"]"#,
                 "unknown field `cxx-flags`",
             ),
-            ("[tvm-ffi]", "depends = []", "unknown field `depends`"),
+            (
+                "[tvm-ffi]",
+                r#"tileiras-minver = "13.2"
+                depends = []"#,
+                "unknown field `depends`",
+            ),
+            ("[tvm-ffi]", "", "missing field `tileiras-minver`"),
+            (
+                "[tvm-ffi]",
+                r#"tileiras-minver = "13.1""#,
+                "`tileiras-minver` must be at least 13.2",
+            ),
+            (
+                "[tvm-ffi]",
+                r#"tileiras-minver = "13""#,
+                "Version has 1 components, expected 2",
+            ),
         ];
 
         for (framework, extra, expected) in cases {

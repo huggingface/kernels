@@ -268,6 +268,8 @@ fn render_kernel_component_xpu(
 
 #[cfg(test)]
 mod tests {
+    use kernels_common::version::Version;
+
     use super::*;
 
     #[test]
@@ -300,6 +302,7 @@ mod tests {
                 Kernel::RustCutile {
                     cargo_manifest: "host/Cargo.toml".into(),
                     src: vec![],
+                    tileiras_minver: Version::new([13, 2]),
                 },
                 "CUDA",
                 None,

@@ -177,6 +177,7 @@ pub enum Kernel {
     RustCutile {
         cargo_manifest: String,
         src: Vec<String>,
+        tileiras_minver: Version<2>,
     },
     #[serde(rename_all = "kebab-case")]
     CppCuda {
@@ -242,6 +243,17 @@ impl TryFrom<Build> for super::Build {
                     Err(ConfigError::InvalidKernel {
                         name,
                         reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
+                    })
+                }
+                Kernel::RustCutile {
+                    tileiras_minver, ..
+                } if tileiras_minver < super::MIN_TILEIRAS_VERSION => {
+                    Err(ConfigError::InvalidKernel {
+                        name,
+                        reason: format!(
+                            "`tileiras-minver` must be at least {}, the first CUDA version with cuTile",
+                            super::MIN_TILEIRAS_VERSION
+                        ),
                     })
                 }
                 kernel => Ok((name, kernel.into())),
@@ -412,9 +424,11 @@ impl From<Kernel> for super::Kernel {
             Kernel::RustCutile {
                 cargo_manifest,
                 src,
+                tileiras_minver,
             } => super::Kernel::RustCutile {
                 cargo_manifest,
                 src,
+                tileiras_minver,
             },
             Kernel::RustCpu {
                 cargo_manifest,
@@ -665,9 +679,11 @@ impl From<super::Kernel> for Kernel {
             super::Kernel::RustCutile {
                 cargo_manifest,
                 src,
+                tileiras_minver,
             } => Kernel::RustCutile {
                 cargo_manifest,
                 src,
+                tileiras_minver,
             },
             super::Kernel::CppCuda {
                 cuda_capabilities,

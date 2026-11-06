@@ -44,10 +44,10 @@ class FlashAttentionBenchmark(Benchmark):
     # Workload: small (B=2, S=128, H=8, D=64)
     def setup_small(self):
         B, S, H, D = 2, 128, 8, 64
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_small(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -58,10 +58,10 @@ class FlashAttentionBenchmark(Benchmark):
     # Workload: medium (B=4, S=512, H=16, D=64)
     def setup_medium(self):
         B, S, H, D = 4, 512, 16, 64
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_medium(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -72,10 +72,10 @@ class FlashAttentionBenchmark(Benchmark):
     # Workload: large (B=8, S=1024, H=32, D=128)
     def setup_large(self):
         B, S, H, D = 8, 1024, 32, 128
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_large(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -90,10 +90,10 @@ class FlashAttentionCausalBenchmark(Benchmark):
     # Workload: small (B=2, S=128, H=8, D=64)
     def setup_small(self):
         B, S, H, D = 2, 128, 8, 64
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_small(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -104,10 +104,10 @@ class FlashAttentionCausalBenchmark(Benchmark):
     # Workload: medium (B=4, S=512, H=16, D=64)
     def setup_medium(self):
         B, S, H, D = 4, 512, 16, 64
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_medium(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -118,10 +118,10 @@ class FlashAttentionCausalBenchmark(Benchmark):
     # Workload: large (B=8, S=1024, H=32, D=128)
     def setup_large(self):
         B, S, H, D = 8, 1024, 32, 128
-        self.q = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(B, S, H, D, device="cuda", dtype=torch.float16)
-        self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_large(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -139,16 +139,16 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         # Pack sequences of lengths [32, 48, 64]
         seqlens = [32, 48, 64]
         total = sum(seqlens)
-        self.q = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
         self.cu_seqlens = torch.tensor(
             [0] + list(torch.cumsum(torch.tensor(seqlens), 0)),
-            device="cuda",
+            device=self.device,
             dtype=torch.int32,
         )
         self.max_seqlen = max(seqlens)
-        self.out = torch.empty(total, H, D, device="cuda", dtype=torch.float16)
+        self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_small(self):
         self.out = _extract_output(
@@ -171,16 +171,16 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         H, D = 16, 64
         seqlens = [128, 192, 256, 200, 150]
         total = sum(seqlens)
-        self.q = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
         self.cu_seqlens = torch.tensor(
             [0] + list(torch.cumsum(torch.tensor(seqlens), 0)),
-            device="cuda",
+            device=self.device,
             dtype=torch.int32,
         )
         self.max_seqlen = max(seqlens)
-        self.out = torch.empty(total, H, D, device="cuda", dtype=torch.float16)
+        self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_medium(self):
         self.out = _extract_output(
@@ -203,16 +203,16 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         H, D = 32, 128
         seqlens = [256, 384, 512, 448, 320, 480, 400, 512]
         total = sum(seqlens)
-        self.q = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.k = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
-        self.v = torch.randn(total, H, D, device="cuda", dtype=torch.float16)
+        self.q = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.k = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
+        self.v = torch.randn(total, H, D, device=self.device, dtype=torch.float16)
         self.cu_seqlens = torch.tensor(
             [0] + list(torch.cumsum(torch.tensor(seqlens), 0)),
-            device="cuda",
+            device=self.device,
             dtype=torch.int32,
         )
         self.max_seqlen = max(seqlens)
-        self.out = torch.empty(total, H, D, device="cuda", dtype=torch.float16)
+        self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
 
     def benchmark_large(self):
         self.out = _extract_output(

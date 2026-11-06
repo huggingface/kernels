@@ -50,6 +50,10 @@ use std::path::{Path, PathBuf};
 pub struct Inputs {
     pub root: PathBuf,
     pub vendors: std::collections::BTreeMap<String, PathBuf>,
+    // Revision of a `--dir` without .git, vouched for by the caller.
+    pub source_rev: Option<String>,
+    // The same for `--vendor` trees, by vendor name.
+    pub vendor_revs: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Default)]

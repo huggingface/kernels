@@ -54,7 +54,8 @@ The [cookbook](#cookbook) is one such command per op.
 
 ```sh
 cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
-    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial]
+    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial] \
+    [--source-rev <sha>] [--vendor-rev name=sha]
 ```
 
 - `--dir` is the upstream checkout. It is read, never written.
@@ -64,6 +65,8 @@ cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
 - `--print` dumps every file in the resulting tree.
 - `--vendor name=dir` supplies a second pinned checkout for [`vendor`](#vendor).
 - `--partial` writes the state as of the last successful op to `--out`, to inspect what a failing op saw. The run still exits non-zero.
+- `--source-rev <sha>` states the revision of a `--dir` that has no `.git`, such as a Nix store path from a locked flake input, in place of asking git. It must equal the pin of [`source`](#source).
+- `--vendor-rev name=sha` does the same for a `--vendor` tree, and must equal the pin of that [`vendor`](#vendor).
 
 ## Ops
 
@@ -163,6 +166,8 @@ Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that
 source repo="https://github.com/rusty1s/pytorch_scatter" commit="f514c10f920b5aeed2eb162092f0ad20d3edee52"
 ```
 
+With [`--source-rev`](#running-a-real-port) none of the git checks run, and the given revision must equal `commit`.
+
 Fails when: `--dir` is not a git checkout, sits at a different commit, has a different origin, or has uncommitted or untracked changes.
 
 #### `vendor`
@@ -177,6 +182,8 @@ The same verification for a second repository, supplied on the command line as `
 vendor name="quack" repo="https://github.com/Dao-AILab/quack" commit="<sha>" \
     path="quack/cute" to="torch-ext/kernel/cute"
 ```
+
+With `--vendor-rev <id>=<sha>` none of the git checks run, as for `--source-rev`.
 
 Fails when: no `--vendor` was passed for that name, the checkout drifts from the pin, or `path` is not a directory in it.
 

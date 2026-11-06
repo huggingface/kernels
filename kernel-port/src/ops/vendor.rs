@@ -3,6 +3,7 @@ use super::{Facts, Inputs, copy_tree};
 use crate::recipe::Args;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Vendor {
@@ -24,22 +25,11 @@ impl Vendor {
         })
     }
 
-    pub(super) fn apply(
-        &self,
-        ws: &mut Workspace,
-        inputs: &Inputs,
-        facts: &mut Facts,
-    ) -> Result<String> {
-        let Some(checkout) = inputs.vendors.get(&self.name) else {
-            bail!(
-                "no checkout supplied for vendor {:?}; pass --vendor {}=<dir> on the CLI",
-                self.name,
-                self.name
-            );
-        };
+    fn verify_checkout(&self, checkout: &Path) -> Result<String> {
         let head = git(checkout, &["rev-parse", "HEAD"]).with_context(|| {
             format!(
-                "vendor {:?} must be a git checkout of {}",
+                "vendor {:?} must be a git checkout of {} (or pass --vendor-rev for \
+                 a tree without .git)",
                 self.name, self.repo
             )
         })?;
@@ -60,6 +50,36 @@ impl Vendor {
             );
         }
         check_clean_checkout(checkout, "vendor")?;
+        Ok(head)
+    }
+
+    pub(super) fn apply(
+        &self,
+        ws: &mut Workspace,
+        inputs: &Inputs,
+        facts: &mut Facts,
+    ) -> Result<String> {
+        let Some(checkout) = inputs.vendors.get(&self.name) else {
+            bail!(
+                "no checkout supplied for vendor {:?}; pass --vendor {}=<dir> on the CLI",
+                self.name,
+                self.name
+            );
+        };
+        // As with --source-rev: the caller vouches for a tree without .git.
+        let head = match inputs.vendor_revs.get(&self.name) {
+            Some(rev) => {
+                if rev != self.commit.as_str() {
+                    bail!(
+                        "--vendor-rev for {:?} is {rev} but this port is written against {}",
+                        self.name,
+                        self.commit
+                    );
+                }
+                rev.clone()
+            }
+            None => self.verify_checkout(checkout)?,
+        };
         facts.record_source(&self.name, &self.repo, self.commit.as_str());
 
         let src_root = checkout.join(&self.path);

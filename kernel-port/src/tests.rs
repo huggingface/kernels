@@ -1575,8 +1575,7 @@ fn verify_rejects_unresolved_relative_imports() {
             ws,
             &parsed.ops,
             Path::new("."),
-            Path::new("."),
-            BTreeMap::new(),
+            &ops::Inputs::default(),
             &mut |_, _| {},
         )
         .map(|_| ())
@@ -1614,8 +1613,7 @@ fn verify_checks_declared_signatures() {
             ws,
             &parsed.ops,
             Path::new("."),
-            Path::new("."),
-            BTreeMap::new(),
+            &ops::Inputs::default(),
             &mut |_, _| {},
         )
         .map(|_| ())

@@ -264,6 +264,61 @@ in the kernel directory:
     follows 'kernel-builder/nixpkgs'
 ```
 
+## Generating the kernel source at build time
+
+A kernel that is ported from an upstream repository with
+[`kernel-port`](https://github.com/huggingface/kernels/tree/main/kernel-port)
+does not have to commit the generated source. Commit the recipe and pass it to
+`genKernelFlakeOutputs` together with the upstream repository:
+
+```nix
+{
+  inputs = {
+    kernel-builder.url = "github:huggingface/kernels";
+    upstream = {
+      url = "github:org/repo/<commit>";
+      flake = false;
+    };
+  };
+
+  outputs =
+    {
+      self,
+      kernel-builder,
+      upstream,
+    }:
+    kernel-builder.lib.genKernelFlakeOutputs {
+      inherit self;
+      path = ./.;
+      port = {
+        recipe = ./port;
+        inherit upstream;
+      };
+    };
+}
+```
+
+- `recipe` is the directory with `port.kdl` and the files that it refers to.
+- `upstream` has to be at the commit that is pinned in the recipe, otherwise the
+  build fails.
+- Inputs for `vendor` operations are passed as `vendors = { <name> = <input>; };`.
+  Their commits are verified in the same way.
+- `build.toml` (and `kernels.lock` or `Cargo.lock`, if the kernel uses them) are
+  read during evaluation, so they stay committed in `path`.
+- `port-provenance.json` also stays committed in `path`. It records the recipe,
+  the sources and a hash of the generated tree, so a change to what the recipe
+  generates, including one caused by a new `kernel-port`, shows up as a diff.
+
+The build fails when `build.toml` or `port-provenance.json` differ from what the
+recipe generates. To update them after reviewing the change:
+
+```bash
+$ out=$(nix build --no-link --print-out-paths .#portedSrc)
+$ install -m 644 $out/build.toml $out/port-provenance.json .
+```
+
+The generated source is available as `.#portedSrc` for inspection.
+
 ## Skipping the `get_kernel` check
 
 `kernel-builder` verifies that a kernel can be

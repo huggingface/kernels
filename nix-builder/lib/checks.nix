@@ -35,6 +35,60 @@ let
     ];
   };
 
+  # Generate a kernel source with `kernel-port`.
+  mkPortedSrc = (builtins.head buildSets).pkgs.callPackage ./ported-src.nix { };
+  portedSrcFixture = ../tests/ported-src;
+  portedSrcArgs = {
+    path = portedSrcFixture;
+    recipe = portedSrcFixture + "/port";
+    upstream = {
+      outPath = portedSrcFixture + "/upstream";
+      rev = "0123456789abcdef0123456789abcdef01234567";
+    };
+  };
+  portedSrc = mkPortedSrc portedSrcArgs;
+
+  portedSrcCheck = runCommand "ported-src-check" { } ''
+    test -f ${portedSrc.generated}/torch-ext/pkg/py.typed
+    test -f ${portedSrc.verified}/torch-ext/pkg/__init__.py
+    # `source-set.nix` only keeps `pyext` files, generated sources should as well.
+    test ! -e ${portedSrc.verified}/torch-ext/pkg/py.typed
+    touch $out
+  '';
+
+  portedSrcStaleBuildTomlCheck = testers.testBuildFailure' {
+    drv = (mkPortedSrc (portedSrcArgs // { path = portedSrcFixture + "/stale"; })).verified;
+    expectedBuilderExitCode = 1;
+    expectedBuilderLogEntries = [
+      "Committed build.toml or port-provenance.json differs"
+    ];
+  };
+
+  # The hash of the generated tree is how a change in `kernel-port` output shows.
+  portedSrcStaleProvenanceCheck = testers.testBuildFailure' {
+    drv = (mkPortedSrc (portedSrcArgs // { path = portedSrcFixture + "/stale-provenance"; })).verified;
+    expectedBuilderExitCode = 1;
+    expectedBuilderLogEntries = [
+      "Committed build.toml or port-provenance.json differs"
+    ];
+  };
+
+  portedSrcWrongRevCheck = testers.testBuildFailure' {
+    drv =
+      (mkPortedSrc (
+        portedSrcArgs
+        // {
+          upstream = portedSrcArgs.upstream // {
+            rev = "ffffffffffffffffffffffffffffffffffffffff";
+          };
+        }
+      )).generated;
+    expectedBuilderExitCode = 2;
+    expectedBuilderLogEntries = [
+      "but this port is written against"
+    ];
+  };
+
   # Test the CUDA/ROCm arch intersection functions used by the CMake
   # templates. `utils.cmake` is passed explicitly since the test script is
   # copied to the store without its sibling files.
@@ -196,6 +250,10 @@ runCommand "builder-nix-checks"
       archIntersectionCheck
       badRegistrationCheck
       fetchFromHuggingFaceCheck
+      portedSrcCheck
+      portedSrcStaleBuildTomlCheck
+      portedSrcStaleProvenanceCheck
+      portedSrcWrongRevCheck
     ];
   }
   ''

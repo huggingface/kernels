@@ -18,9 +18,28 @@ impl Source {
     }
 
     pub(super) fn apply(&self, inputs: &Inputs, facts: &mut Facts) -> Result<String> {
+        // The caller vouches for the revision of a tree that has no .git, such
+        // as a Nix store path fetched by a locked flake input.
+        if let Some(rev) = &inputs.source_rev {
+            if rev != self.commit.as_str() {
+                bail!(
+                    "--source-rev is {rev} but this port is written against {} - \
+                     fetch the pinned commit, or re-verify the port and update the pin",
+                    self.commit
+                );
+            }
+            facts.record_source("upstream", &self.repo, rev);
+            return Ok(format!(
+                "{} @ {} (given by --source-rev)",
+                self.repo,
+                &rev[..12]
+            ));
+        }
+
         let head = git(&inputs.root, &["rev-parse", "HEAD"]).with_context(|| {
             format!(
-                "source pinning requires --dir to be a git checkout of {}",
+                "source pinning requires --dir to be a git checkout of {} \
+                 (or --source-rev for a tree without .git)",
                 self.repo
             )
         })?;

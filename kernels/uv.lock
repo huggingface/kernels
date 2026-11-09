@@ -1457,13 +1457,12 @@ wheels = [
 
 [[package]]
 name = "kernels"
-version = "0.18.2.dev0"
+version = "0.18.2"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "packaging" },
     { name = "pyyaml" },
-    { name = "sigstore" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "tomlkit" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
@@ -1490,6 +1489,9 @@ curated-xpu = [
 ]
 docs = [
     { name = "hf-doc-builder" },
+]
+sigstore = [
+    { name = "sigstore" },
 ]
 torch = [
     { name = "torch" },
@@ -1522,7 +1524,7 @@ requires-dist = [
     { name = "nvidia-cutlass-dsl", marker = "extra == 'curated'" },
     { name = "packaging", specifier = ">=20.0" },
     { name = "pyyaml", specifier = ">=6" },
-    { name = "sigstore", specifier = ">=4,<5" },
+    { name = "sigstore", marker = "extra == 'sigstore'", specifier = ">=4,<5" },
     { name = "tabulate", marker = "extra == 'benchmark'", specifier = ">=0.9.0" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tomlkit", specifier = ">=0.13.3" },
@@ -1530,7 +1532,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.0" },
 ]
-provides-extras = ["benchmark", "torch", "curated", "curated-xpu", "docs"]
+provides-extras = ["benchmark", "sigstore", "torch", "curated", "curated-xpu", "docs"]
 
 [package.metadata.requires-dev]
 dev = [

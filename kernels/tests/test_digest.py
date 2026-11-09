@@ -223,11 +223,24 @@ def test_digest_verification_does_not_need_sigstore():
         "import sys\n"
         # A `None` entry makes importing the module fail.
         "sys.modules['sigstore'] = None\n"
-        "import kernels.digest, kernels.validate\n"
+        "import kernels.cli, kernels.digest, kernels.validate\n"
         "from kernels.compat import has_sigstore\n"
         "assert not has_sigstore\n"
     )
     subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_verify_signature_command_needs_sigstore():
+    """Without `sigstore`, `kernels verify-signature` must fail with an actionable message."""
+    script = (
+        "import argparse, sys\n"
+        "sys.modules['sigstore'] = None\n"
+        "from kernels.cli.verify_signature import verify_signature\n"
+        "verify_signature(argparse.Namespace())\n"
+    )
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert 'pip install "kernels[sigstore]"' in result.stderr
 
 
 ALL_RESULTS = [

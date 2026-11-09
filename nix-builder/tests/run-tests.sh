@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Read-only GPU environment diagnostics for runner capability checks.
+( nvidia-smi -L || true ) 2>&1
+( nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true ) 2>&1
+
+
 # Expand to build variant directories.
 RELU_PATH=$(echo relu-kernel/torch*)
 RELU_TORCH_STABLE_ABI_PATH=$(echo relu-torch-stable-abi-kernel/torch*)

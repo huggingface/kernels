@@ -56,6 +56,17 @@ fn render_kernel_component(
                 )?;
             write.write_all(b"\n")?;
         }
+        Kernel::RustCutile { cargo_manifest, .. } => {
+            env.get_template("kernel-component/rust-cutile.cmake")?
+                .render_captured_to(
+                    context! {
+                        name => kernel_name,
+                        manifest_path => cargo_manifest,
+                    },
+                    &mut *write,
+                )?;
+            write.write_all(b"\n")?;
+        }
         Kernel::CppCuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
@@ -257,13 +268,15 @@ fn render_kernel_component_xpu(
 
 #[cfg(test)]
 mod tests {
+    use kernels_common::version::Version;
+
     use super::*;
 
     #[test]
     fn rust_components_render_for_their_backend() {
         let mut env = Environment::new();
         minijinja_embed::load_templates!(&mut env);
-        for (kernel, backend, capabilities) in [
+        for (kernel, backend, capabilities, frontend) in [
             (
                 Kernel::RustCpu {
                     cargo_manifest: "host/Cargo.toml".into(),
@@ -271,6 +284,7 @@ mod tests {
                     src: vec![],
                 },
                 "CPU",
+                None,
                 None,
             ),
             (
@@ -282,6 +296,17 @@ mod tests {
                 },
                 "CUDA",
                 Some("CUDA_CAPABILITIES 8.0 9.0"),
+                Some("CUDA_FRONTEND oxide"),
+            ),
+            (
+                Kernel::RustCutile {
+                    cargo_manifest: "host/Cargo.toml".into(),
+                    src: vec![],
+                    tileiras_minver: Version::new([13, 2]),
+                },
+                "CUDA",
+                None,
+                Some("CUDA_FRONTEND cutile"),
             ),
         ] {
             let mut rendered = vec![];
@@ -295,6 +320,10 @@ mod tests {
             );
             if let Some(capabilities) = capabilities {
                 assert!(rendered.contains(capabilities));
+            }
+            assert_eq!(rendered.contains("CUDA_FRONTEND"), frontend.is_some());
+            if let Some(frontend) = frontend {
+                assert!(rendered.contains(frontend));
             }
         }
     }

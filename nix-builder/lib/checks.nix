@@ -58,6 +58,7 @@ let
         flattenSystems
         validateFlatTorchVersion
         validateTorchVersion
+        validateUniqueTvmFfiVariants
         ;
       throws = expr: !(builtins.tryEval (builtins.deepSeq expr expr)).success;
       validVersion = {
@@ -130,9 +131,32 @@ let
         expr = throws (flattenSystems [ (validVersion // { cudaVerison = "13.0"; }) ]);
         expected = true;
       };
+      testUniqueTvmFfiVariantsValid = {
+        expr = validateUniqueTvmFfiVariants [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (flatVersion // { torchVersion = "2.12"; })
+        ];
+        expected = [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (flatVersion // { torchVersion = "2.12"; })
+        ];
+      };
+      testUniqueTvmFfiVariantsRejectsDuplicate = {
+        expr = throws (validateUniqueTvmFfiVariants [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (
+            flatVersion
+            // {
+              torchVersion = "2.12";
+              tvmFfiVersion = "0.1";
+            }
+          )
+        ]);
+        expected = true;
+      };
       # While at it, let's also validate `versions.nix`.
       testDefaultVersionsValid = {
-        expr = throws (flattenSystems (import ../versions.nix));
+        expr = throws (validateUniqueTvmFfiVariants (flattenSystems (import ../versions.nix)));
         expected = false;
       };
     };

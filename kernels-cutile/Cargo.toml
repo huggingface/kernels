@@ -1,0 +1,16 @@
+[package]
+name = "kernels-cutile"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Runtime support for kernel-builder's rust-cutile kernels"
+publish = false
+
+[dependencies]
+cuda-core = { git = "https://github.com/NVIDIA/cuda-rust.git", rev = "2378e98bfb24010258f7ec8c7227b957d376f5bb" }
+cutile = { git = "https://github.com/NVIDIA/cuda-rust.git", rev = "2378e98bfb24010258f7ec8c7227b957d376f5bb" }
+tvm-ffi = "=0.1.14-post1"
+tvm-ffi-sys = "=0.1.14-post1"
+
+# Kernel crates depend on cuda-rust, so keep it out of the root workspace.
+[workspace]

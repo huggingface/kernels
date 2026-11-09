@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1.4
+# Tests kernels that require CUDA 13 (currently Rust CUDA and cuTile kernels).
+ARG PYTHON_VERSION=3.10
+ARG CUDA_VERSION=13.2.1
+ARG UBI_VERSION=8
+ARG TORCH_VERSION=2.13.0
+
+FROM nvidia/cuda:${CUDA_VERSION}-base-ubi${UBI_VERSION} as base
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:/root/.cargo/bin:${PATH}" \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Install uv and Rust toolchain (Rust is needed to build kernels from source, which
+# bundles a maturin/pyo3 extension module). We disable the CUDA repo, because we
+# don't need it for curl and it reduces the chance of transient errors when
+# installing.
+RUN dnf install -y --allowerasing --disablerepo=cuda curl gcc && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+    dnf clean all
+
+# Set working directory
+WORKDIR /app
+
+# Need to re-declare ARG after FROM for use in RUN
+ARG CUDA_VERSION
+ARG TORCH_VERSION
+ARG PYTHON_VERSION
+
+# Initialize uv and create virtual env
+RUN uv init --app kernel-test --python "${PYTHON_VERSION}"
+
+# Move into the app
+WORKDIR /app/kernel-test
+
+RUN uv add "torch==${TORCH_VERSION}"
+
+RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
+    uv add "apache-tvm-ffi~=0.1.9" numpy pytest "nvidia-cuda-tileiras==${CUDA_MAJOR_MINOR}.*"
+
+# Copy the Cargo workspace root plus the members needed to build the
+# `kernels` Python package, preserving their relative layout.
+COPY Cargo.toml Cargo.lock ./kernels-workspace/
+COPY kernel-abi-check ./kernels-workspace/kernel-abi-check
+COPY kernel-builder ./kernels-workspace/kernel-builder
+COPY kernel-port ./kernels-workspace/kernel-port
+COPY kernels-common ./kernels-workspace/kernels-common
+COPY kernels ./kernels-workspace/kernels
+
+# Install kernels (Rust/maturin package) from source.
+RUN uv add ./kernels-workspace/kernels
+
+# Copy kernels and tests
+COPY relu-rust-cuda-kernel ./relu-rust-cuda-kernel
+COPY relu-rust-cutile-kernel ./relu-rust-cutile-kernel
+COPY examples/kernels/relu-rust-cuda/tests ./relu_rust_cuda_tests
+COPY examples/kernels/relu-rust-cutile/tests ./relu_rust_cutile_tests
+
+# Run tests
+ADD nix-builder/tests/run-tests-cuda13.sh ./run-tests.sh
+CMD ["sh", "run-tests.sh"]

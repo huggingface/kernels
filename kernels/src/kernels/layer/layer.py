@@ -566,8 +566,6 @@ def use_kernelized_func(*args: Callable):
                 assert name is not None
 
                 hidden_kernels[name] = type(fn)()
-                # dynamo specializes on the implementation
-                hidden_kernels[name]._kernel_compile_fn = None
 
         @functools.wraps(orig_forward)
         def new_forward(self, *args, **kwargs):
@@ -578,7 +576,8 @@ def use_kernelized_func(*args: Callable):
                 name = getattr(fn, "__name__", None) or getattr(fn, "kernel_layer_name", None)
                 assert name is not None
 
-                active_kernel_funcs[id(fn)] = self._kernel_funcs[name]
+                kernel_func = self._kernel_funcs[name]
+                active_kernel_funcs[id(fn)] = (kernel_func, kernel_func.forward.__func__)
 
             token = _ACTIVE_KERNEL_FUNCS.set(active_kernel_funcs)
             try:
@@ -775,9 +774,6 @@ def _replace_forward(
 ):
     module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
 
-    # keep compile-time implementation in sync with the selected forward
-    if hasattr(module, "_kernel_compile_fn"):
-        module._kernel_compile_fn = None if layer.forward is type(module).forward else layer.forward
     if repo is None:
         # No repository, typically when reverting to the original forward.
         module.__dict__.pop("_kernel_repo", None)
@@ -844,11 +840,12 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
         def forward(self, *args, **kwargs):
             # Dispatch global calls to the active model's private wrapper
             if (active_kernel_funcs := _ACTIVE_KERNEL_FUNCS.get()) is not None:
-                if (kernel_func := active_kernel_funcs.get(id(self))) is not None:
+                if (active_kernel_func := active_kernel_funcs.get(id(self))) is not None:
+                    kernel_func, forward_func = active_kernel_func
+
                     if torch.compiler.is_compiling():
-                        # avoid guards on individual wrapper identities (== recompile each time)
-                        if (compile_func := kernel_func._kernel_compile_fn) is not None:
-                            return compile_func(self, *args, **kwargs)
+                        if forward_func is not type(self).forward:
+                            return forward_func(self, *args, **kwargs)
                     else:
                         return kernel_func(*args, **kwargs)
 

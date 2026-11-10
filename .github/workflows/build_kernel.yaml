@@ -66,6 +66,8 @@ jobs:
             relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
+            relu-rust-cuda-kernel
+            relu-rust-cutile-kernel
             relu-triton-kernel
             silu-and-mul-kernel
 
@@ -98,3 +100,33 @@ jobs:
       - name: Run Tests
         run: |
           docker run --gpus all kernel-builder:ubi${{ matrix.ubi_version }}
+
+  test-cuda13:
+    permissions:
+      contents: read
+    name: Test CUDA 13 kernels (UBI ${{ matrix.ubi_version }})
+    needs: build
+    strategy:
+      matrix:
+        ubi_version: [8, 9]
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download kernel artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: built-kernels-x86_64-linux
+          path: .
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t kernel-builder-cuda13:ubi${{ matrix.ubi_version }} \
+            --build-arg UBI_VERSION=${{ matrix.ubi_version }} \
+            -f nix-builder/tests/Dockerfile.test-kernel-cuda13 .
+
+      - name: Run Tests
+        run: |
+          docker run --gpus all kernel-builder-cuda13:ubi${{ matrix.ubi_version }}

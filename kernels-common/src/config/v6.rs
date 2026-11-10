@@ -174,6 +174,12 @@ pub enum Kernel {
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
+    RustCutile {
+        cargo_manifest: String,
+        src: Vec<String>,
+        tileiras_minver: Version<2>,
+    },
+    #[serde(rename_all = "kebab-case")]
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
@@ -231,10 +237,23 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } if !tvm_ffi => {
+                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. }
+                    if !tvm_ffi =>
+                {
                     Err(ConfigError::InvalidKernel {
                         name,
                         reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
+                    })
+                }
+                Kernel::RustCutile {
+                    tileiras_minver, ..
+                } if tileiras_minver < super::MIN_TILEIRAS_VERSION => {
+                    Err(ConfigError::InvalidKernel {
+                        name,
+                        reason: format!(
+                            "`tileiras-minver` must be at least {}, the first CUDA version with cuTile",
+                            super::MIN_TILEIRAS_VERSION
+                        ),
                     })
                 }
                 kernel => Ok((name, kernel.into())),
@@ -401,6 +420,15 @@ impl From<Kernel> for super::Kernel {
                 cuda_capabilities,
                 depends,
                 src,
+            },
+            Kernel::RustCutile {
+                cargo_manifest,
+                src,
+                tileiras_minver,
+            } => super::Kernel::RustCutile {
+                cargo_manifest,
+                src,
+                tileiras_minver,
             },
             Kernel::RustCpu {
                 cargo_manifest,
@@ -647,6 +675,15 @@ impl From<super::Kernel> for Kernel {
                 cuda_capabilities,
                 depends,
                 src,
+            },
+            super::Kernel::RustCutile {
+                cargo_manifest,
+                src,
+                tileiras_minver,
+            } => Kernel::RustCutile {
+                cargo_manifest,
+                src,
+                tileiras_minver,
             },
             super::Kernel::CppCuda {
                 cuda_capabilities,

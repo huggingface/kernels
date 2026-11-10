@@ -25,15 +25,29 @@ This fetches version `1` of the kernel `kernels-community/activation`.
 Kernels are versioned using a major version number. Using `version=1` will
 get the latest kernel build from the `v1` branch.
 
-You can check whether a kernel was downloaded with `hf cache ls`:
+You can check which kernels and build variants are cached with
+[`kernels cache ls`](cli-cache.md):
 
 ```bash
-# pip install hf
-$ hf cache ls
-ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS
------------------------------------ ---- -------------- -------------- ----
-kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago     
+kernels cache ls
 ```
+
+Example output (the values depend on your cache):
+
+```text
+ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  VERSION VARIANTS
+----------------------------------- ---- -------------- -------------- ------- --------------------------------
+kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago v1      torch28-cxx11-cu126-x86_64-linux
+                                                                               torch28-cxx11-cu128-x86_64-linux
+                                                                               torch28-cxx11-cu129-x86_64-linux
+kernel/kernels-community/activation 2.6M 23 minutes ago 23 minutes ago v2      torch28-cxx11-cu126-x86_64-linux
+                                                                               torch28-cxx11-cu128-x86_64-linux
+                                                                               torch28-cxx11-cu129-x86_64-linux
+```
+
+Each version has its own row, with its cached variants listed on separate lines.
+Use `kernels cache ls --no-truncate` or `--json` to see full values when the
+table is shortened to fit your terminal.
 
 Kernels within a version branch must never break the API or remove builds
 for older PyTorch versions. This ensures that your code will continue to work.

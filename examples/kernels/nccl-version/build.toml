@@ -1,0 +1,20 @@
+[general]
+name = "nccl-version"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "kernels-test/nccl-version"
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.nccl_version]
+language = "cpp-cuda"
+depends = ["torch"]
+src = ["nccl_version_cuda/nccl_version.cu"]

@@ -12,17 +12,16 @@ let
 
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend
-    flattenSystems
+    validateFlatTorchVersion
+    validateUniqueTvmFfiVariants
     ;
 
-  # All build configurations supported by Torch.
+  # All build configurations. `torchVersions` must be flattened
+  # by system.
   buildConfigs =
     torchVersions: system:
     let
-      filterMap = f: xs: builtins.filter (x: x != null) (builtins.map f xs);
-      systemBuildConfigs = filterMap (version: if version.system == system then version else null) (
-        flattenSystems torchVersions
-      );
+      systemBuildConfigs = builtins.filter (version: version.system == system) torchVersions;
     in
     builtins.map (buildConfig: buildConfig // { backend = backend buildConfig; }) systemBuildConfigs;
 
@@ -42,9 +41,10 @@ let
 in
 rec {
   mkBuildSets =
-    torchVersions: systems:
+    extraOverlays: torchVersions: systems:
     let
-      configs = lib.concatMap (buildConfigs torchVersions) systems;
+      validatedTorchVersions = validateUniqueTvmFfiVariants (map validateFlatTorchVersion torchVersions);
+      configs = lib.concatMap (buildConfigs validatedTorchVersions) systems;
       # Multiple builsets can share the same nixpkgs instance, for example:
       #
       # - All Torch CPU buildsets.
@@ -57,7 +57,7 @@ rec {
       pkgsByKey = builtins.listToAttrs (
         map (buildConfig: {
           name = pkgsKey buildConfig;
-          value = mkPkgs buildConfig;
+          value = mkPkgs extraOverlays buildConfig;
         }) configs
       );
     in

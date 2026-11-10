@@ -5,7 +5,6 @@
   stdenv,
   symlinkJoin,
   buildPythonPackage,
-  fetchFromGitHub,
 
   fetchPypi,
   fetchurl,
@@ -21,6 +20,7 @@
   # Native build inputs
   autoAddDriverRunpath,
   autoPatchelfHook,
+  patchelf-old,
   python,
   pythonKernelImportsCheckHook,
   pythonRelaxWheelDepsHook,
@@ -28,6 +28,7 @@
 
   # Build inputs
   cudaPackages,
+  nccl,
   numactl,
   rocmPackages,
   xpuPackages,
@@ -81,7 +82,7 @@ let
       triton;
 
   # For the required version see:
-  # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
+  # https://github.com/pytorch/pytorch/blob/v2.15.0/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
     "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;
@@ -211,6 +212,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     pythonWheelDepsCheckHook
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
+    patchelf-old
     autoPatchelfHook
   ]
   ++ lib.optionals cudaSupport [
@@ -237,23 +239,9 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         libcusolver
         libcusparse
         libcusparse_lt
-        # NCCL in nixpkgs is too old.
-        (nccl.overrideAttrs (
-          finalAttrs: prevAttrs: {
-            version = "2.30.4-1";
-            src = fetchFromGitHub {
-              owner = "NVIDIA";
-              repo = "nccl";
-              tag = "v${finalAttrs.version}";
-              hash = "sha256-rgOZTJ8iSYHXzk9lyUElvbw8IysauPJJZyQxhhRZNz4=";
-            };
-            postPatch = prevAttrs.postPatch + ''
-              patchShebangs ./src/misc/generate_git_version.py
-            '';
-          }
-        ))
       ]
     )
+    ++ lib.optionals cudaSupport [ nccl ]
     ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [
       cudaPackages.libnvshmem
     ]
@@ -404,7 +392,8 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
       # This keeps the outputs lean and requires downstream to specify
       # dependencies.
       rm -rf $out/${python.sitePackages}/torch/lib/{libamd*,libaotriton*,libdrm*,libelf*,libgomp*,libhip*,libhsa*,libMIOpen*,libnuma*,librccl*,libroc*,libtinfo*}.so*
-      rm -rf $out/${python.sitePackages}/torch/lib/{rocblas,hipblaslt,hipsparselt}
+      rm -rf $out/${python.sitePackages}/torch/lib/{rocblas,hipblaslt,hipsparselt,aotriton.images}
+      rm -rf $out/${python.sitePackages}/torch/share/miopen
     '';
 
   autoPatchelfIgnoreMissingDeps = lib.optionals stdenv.hostPlatform.isLinux [

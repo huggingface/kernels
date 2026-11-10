@@ -43,6 +43,10 @@
       # - checkSymbols: optional attrset `{ functions = [ ... ]; layers = [ ... ]; }`.
       #        When set, every build variant must contain a symbols.json with
       #        exactly these public function and layer names.
+      # - checkNeeded: optional list of sonames (e.g. "libnccl.so.2"). When set,
+      #        every kernel dylib must have a NEEDED entry for each of them.
+      # - checkNotNeeded: optional list of sonames. When set, no kernel dylib
+      #        may have a NEEDED entry for any of them.
       ciKernels = [
         {
           name = "cpp20-symbols-kernel";
@@ -55,6 +59,8 @@
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           checkSymbols = reluSymbols;
+          # Kernels that do not use NCCL must not link against it.
+          checkNotNeeded = [ "libnccl.so.2" ];
           checkCudaCapabilities = [
             "7.0"
             "7.2"
@@ -134,6 +140,22 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-rust-cuda-kernel";
+          path = ./relu-rust-cuda;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
+        }
+        {
+          name = "relu-rust-cutile-kernel";
+          path = ./relu-rust-cutile;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
+          checkSymbols = {
+            functions = [ "relu" ];
+            layers = [ ];
+          };
+        }
+        {
           name = "relu-kernel-cpu";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
@@ -168,10 +190,13 @@
             {
               torchVersion = "2.13";
               cudaVersion = "12.6";
-              systems = [
-                "x86_64-linux"
-                "aarch64-linux"
-              ];
+              system = "x86_64-linux";
+              bundleBuild = true;
+            }
+            {
+              torchVersion = "2.13";
+              cudaVersion = "12.6";
+              system = "aarch64-linux";
               bundleBuild = true;
             }
           ];
@@ -219,14 +244,32 @@
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
         {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
-        }
-        {
           name = "kernel-deps-kernel";
           path = ./kernel-deps;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
+        # NCCL is a Torch dependency, so its headers must be available to
+        # kernels and kernels that use NCCL must link against it. NCCL differs
+        # per CUDA major version, so check CUDA 12 and CUDA 13.
+        {
+          name = "nccl-version-kernel";
+          path = ./nccl-version;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = {
+            functions = [
+              "nccl_header_version"
+              "nccl_runtime_version"
+            ];
+            layers = [ ];
+          };
+          checkNeeded = [ "libnccl.so.2" ];
+        }
+        {
+          name = "nccl-version-kernel-cu13";
+          path = ./nccl-version;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cuda13Version}-${sys}"};
+          checkNeeded = [ "libnccl.so.2" ];
         }
       ];
 
@@ -235,11 +278,6 @@
         {
           name = "relu-triton-kernel";
           path = ./relu-triton;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
-        }
-        {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
           drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
         }
         {
@@ -340,11 +378,6 @@
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
           checkSymbols = reluSymbols;
-        }
-        {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
         }
         {
           name = "relu-kernel";
@@ -568,6 +601,55 @@
                 ln -s ${drv} $out
               '';
 
+          # Check that every *.so in the output of `drv` has a NEEDED entry for
+          # each soname in `needed` and none for the sonames in `notNeeded`. On
+          # success, the output is a symlink to `drv`.
+          checkNeededLibs =
+            drv:
+            {
+              needed ? [ ],
+              notNeeded ? [ ],
+            }:
+            pkgs.runCommand "${drv.name}-check-needed"
+              {
+                nativeBuildInputs = [ pkgs.binutils ];
+                needed = lib.concatLines needed;
+                notNeeded = lib.concatLines notNeeded;
+                passAsFile = [
+                  "needed"
+                  "notNeeded"
+                ];
+              }
+              ''
+                kernelLibs=$(find ${drv}/ -name '*.so')
+                if [ -z "$kernelLibs" ]; then
+                  echo "no *.so files found in ${drv}" >&2
+                  exit 1
+                fi
+
+                for so in $kernelLibs; do
+                  readelf -d "$so" | sed -n 's/.*(NEEDED).*Shared library: \[\(.*\)\]/\1/p' | sort -u > actual
+
+                  while read -r soname; do
+                    [ -z "$soname" ] && continue
+                    if ! grep -qxF "$soname" actual; then
+                      echo "$so does not have a NEEDED entry for $soname" >&2
+                      exit 1
+                    fi
+                  done < "$neededPath"
+
+                  while read -r soname; do
+                    [ -z "$soname" ] && continue
+                    if grep -qxF "$soname" actual; then
+                      echo "$so unexpectedly has a NEEDED entry for $soname" >&2
+                      exit 1
+                    fi
+                  done < "$notNeededPath"
+                done
+
+                ln -s ${drv} $out
+              '';
+
           checkRocmArchs =
             drv: expectedArchs:
             checkKernelArchs drv expectedArchs
@@ -603,6 +685,14 @@
                       checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
                     else
                       baseDrv;
+                  neededDrv =
+                    if kernel ? checkNeeded || kernel ? checkNotNeeded then
+                      checkNeededLibs archsDrv {
+                        needed = kernel.checkNeeded or [ ];
+                        notNeeded = kernel.checkNotNeeded or [ ];
+                      }
+                    else
+                      archsDrv;
                 in
                 if kernel.assertFail or false then
                   pkgs.testers.testBuildFailure' {
@@ -610,9 +700,9 @@
                     expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
                   }
                 else if kernel ? checkSymbols then
-                  checkSymbols archsDrv kernel.checkSymbols
+                  checkSymbols neededDrv kernel.checkSymbols
                 else
-                  archsDrv;
+                  neededDrv;
             }) kernelOutputsList;
 
           mkCiBuild =

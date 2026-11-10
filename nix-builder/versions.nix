@@ -334,15 +334,7 @@
     ];
     bundleBuild = true;
   }
-  {
-    torchVersion = "2.15";
-    cudaVersion = "13.0";
-    systems = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
+
   {
     torchVersion = "2.15";
     cudaVersion = "13.2";

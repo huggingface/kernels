@@ -256,12 +256,14 @@ def kernelize(
         _validate_device_type(device)
         device_type = Device(type=device)
     else:
-        device_type = Device(device.type)
+        device_type = _device_type_from_torch(device.type)
 
     assert isinstance(device_type, Device)
 
     if isinstance(use_fallback, bool):
         use_fallback = KernelizeFallback.DEFAULT if use_fallback else KernelizeFallback.NONE
+
+    device_index = None if device is None or isinstance(device, str) else device.index
 
     for _, module in model.named_modules():
         module_class = type(module)
@@ -273,6 +275,7 @@ def kernelize(
                 mode=mode,
                 device_type=device_type,
                 use_fallback=use_fallback,
+                device_index=device_index,
             )
 
         if hasattr(module_class, "kernel_layer_name"):
@@ -285,7 +288,13 @@ def kernelize(
                 )
                 continue
 
-            kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
+            kernelize_layer(
+                module,
+                mode=mode,
+                device_type=device_type,
+                use_fallback=use_fallback,
+                device_index=device_index,
+            )
 
     return model
 
@@ -305,9 +314,12 @@ def _find_device(model: "nn.Module") -> Device:
     except StopIteration:
         raise ValueError("Cannot determine model device, provide as `device` argument to `kernelize`.")
 
-    dev_type = param.device.type
+    return _device_type_from_torch(param.device.type)
+
+
+def _device_type_from_torch(dev_type: str) -> Device:
+    """Map a Torch device type to a kernels device type. ROCm devices use the `cuda` device type in Torch."""
     if dev_type == "cuda":
-        # Refine based on actual platform
         if _is_rocm_platform():
             return Device(type="rocm")
         elif _is_cuda_platform():

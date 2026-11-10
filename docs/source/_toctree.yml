@@ -33,6 +33,8 @@
 - sections:
     - local: cli
       title: Overview
+    - local: cli-cache
+      title: kernels cache ls
     - local: cli-info
       title: kernels info
     - local: cli-describe-api

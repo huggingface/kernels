@@ -3,6 +3,7 @@
   autoPatchelfHook,
   callPackage,
   fetchurl,
+  patchelf-old,
   stdenv,
   rpmextract,
   rsync,
@@ -25,6 +26,7 @@ stdenv.mkDerivation rec {
   inherit pname version srcs;
 
   nativeBuildInputs = [
+    patchelf-old
     autoPatchelfHook
     rpmextract
     rsync

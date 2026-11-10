@@ -7,21 +7,25 @@ import pytest
 import torch
 
 import kernels
+import kernels.digest as digest_module
 import kernels.validate as validate_module
 import kernels.verify as verify_module
-from kernels._rust import KernelLocation, Metadata, Oid, Version
+from kernels._rust import DigestViolation, KernelLocation, Metadata, Oid, Version
 from kernels.deps import DepTreeNode
+from kernels.digest import DigestVerificationResult
 from kernels.resolver import LocalKernel, RemoteKernel
 from kernels.validate import (
     ArchValidator,
+    DigestValidator,
     DirtyValidator,
     MinverValidator,
     SignatureValidator,
     _installed_version,
+    default_kernel_validators,
     default_metadata_validators,
 )
 from kernels.variants import parse_variant
-from kernels.verify import VerificationResult
+from kernels.verify import SignatureVerificationResult
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -233,15 +237,15 @@ def _hub_kernel(tmp_path, metadata) -> LocalKernel:
 
 @pytest.fixture
 def recorded_verifications(monkeypatch):
-    """Record `verify_variant` calls and control the result it returns."""
+    """Record `verify_signature` calls and control the result it returns."""
     calls = []
     results = []
 
-    def fake_verify_variant(variant_path, *, location, policy=None, cache=True):
+    def fake_verify_signature(variant_path, *, location, policy=None, cache=True):
         calls.append({"variant_path": variant_path, "policy": policy, "location": location, "cache": cache})
-        return results.pop(0) if results else VerificationResult.Success()
+        return results.pop(0) if results else SignatureVerificationResult.Success()
 
-    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+    monkeypatch.setattr(verify_module, "verify_signature", fake_verify_signature)
     return calls, results
 
 
@@ -290,13 +294,11 @@ def test_signature_validator_is_quiet_on_success(tmp_path, make_metadata, record
 @pytest.mark.parametrize(
     "result",
     [
-        VerificationResult.SignatureBundleMissing(),
-        VerificationResult.SignatureBundleInvalid(reason="bad bundle"),
-        VerificationResult.SignatureVerificationFailure(reason="bad signature"),
-        VerificationResult.MetadataInvalid(reason="bad metadata"),
-        VerificationResult.MetadataMissing(),
-        VerificationResult.DigestMissing(),
-        VerificationResult.DigestVerificationFailure(violations=[]),
+        SignatureVerificationResult.SignatureBundleMissing(),
+        SignatureVerificationResult.SignatureBundleInvalid(reason="bad bundle"),
+        SignatureVerificationResult.SignatureVerificationFailure(reason="bad signature"),
+        SignatureVerificationResult.MetadataInvalid(reason="bad metadata"),
+        SignatureVerificationResult.MetadataMissing(),
     ],
 )
 def test_signature_validator_warns_but_does_not_raise(tmp_path, make_metadata, recorded_verifications, caplog, result):
@@ -311,3 +313,95 @@ def test_signature_validator_warns_but_does_not_raise(tmp_path, make_metadata, r
     # it applies to, so the wording is asserted where it is defined.
     assert str(result) in caplog.text
     assert "test-kernel" in caplog.text
+
+
+@pytest.fixture
+def recorded_digest_verifications(monkeypatch):
+    """Record `verify_digest` calls and control the result it returns."""
+    calls = []
+    results = []
+
+    def fake_verify_digest(variant_path, *, metadata, location, cache=True):
+        calls.append({"variant_path": variant_path, "metadata": metadata, "location": location, "cache": cache})
+        return results.pop(0) if results else DigestVerificationResult.Success()
+
+    monkeypatch.setattr(digest_module, "verify_digest", fake_verify_digest)
+    return calls, results
+
+
+def test_digest_validator_verifies_local_kernels_without_location(
+    tmp_path, make_metadata, recorded_digest_verifications
+):
+    calls, _ = recorded_digest_verifications
+    metadata = make_metadata("cuda", None)
+    kernel = LocalKernel(variant_path=tmp_path / "torch-cuda", metadata=metadata)
+
+    DigestValidator().validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["variant_path"] == kernel.variant_path
+    assert call["metadata"] is metadata
+    # Local kernels may change, so they are always hashed.
+    assert call["location"] is None
+
+
+def test_digest_validator_identifies_hub_kernel_by_origin(tmp_path, make_metadata, recorded_digest_verifications):
+    calls, _ = recorded_digest_verifications
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    DigestValidator().validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["location"] == KernelLocation.remote(_SIGNED_REPO_ID, _SIGNED_REVISION, "torch-cuda")
+    # Loading a kernel must reuse a previous verification.
+    assert call["cache"] is True
+
+
+def test_digest_validator_does_not_need_sigstore(tmp_path, make_metadata, recorded_digest_verifications, monkeypatch):
+    calls, _ = recorded_digest_verifications
+    monkeypatch.setattr(validate_module, "has_sigstore", False)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    DigestValidator().validate_kernel(kernel=kernel)
+
+    assert len(calls) == 1
+
+
+def test_digest_validator_is_quiet_on_success(tmp_path, make_metadata, recorded_digest_verifications, caplog):
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+    assert caplog.text == ""
+
+
+def test_digest_validator_warns_on_missing_digest(tmp_path, make_metadata, recorded_digest_verifications, caplog):
+    _, results = recorded_digest_verifications
+    result = DigestVerificationResult.DigestMissing()
+    results.append(result)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+    assert str(result) in caplog.text
+    assert "test-kernel" in caplog.text
+
+
+def test_digest_validator_raises_on_mismatch(tmp_path, make_metadata, recorded_digest_verifications):
+    _, results = recorded_digest_verifications
+    result = DigestVerificationResult.DigestVerificationFailure(violations=[DigestViolation.MissingFile("kernel.py")])
+    results.append(result)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        DigestValidator().validate_kernel(kernel=kernel)
+
+    assert str(result) in str(exc_info.value)
+    assert "test-kernel" in str(exc_info.value)
+
+
+def test_default_kernel_validators_check_signature_and_digest():
+    validators = default_kernel_validators()
+    assert [type(validator) for validator in validators] == [SignatureValidator, DigestValidator]

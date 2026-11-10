@@ -1,6 +1,5 @@
 import sys
 from abc import ABC, abstractmethod
-from functools import lru_cache
 from typing import TYPE_CHECKING, Protocol, Type
 
 from ._interval_tree import IntervalTree
@@ -42,11 +41,14 @@ class DeviceRepos(ABC):
         else:
             raise ValueError(f"Unknown device type: {device.type}")
 
-    @property
     @abstractmethod
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None: ...
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
+        """
+        Get the repositories for a specific device index.
+
+        `None` selects the current device.
+        """
+        ...
 
     @abstractmethod
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -63,10 +65,7 @@ class _CPURepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -83,10 +82,7 @@ class _XPURepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -103,10 +99,7 @@ class _NeuronRepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -123,10 +116,7 @@ class _TPURepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -143,10 +133,7 @@ class _NPURepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -163,10 +150,7 @@ class _MPSRepos(DeviceRepos):
         super().__init__()
         self._repos = {}
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -183,11 +167,8 @@ class _CUDARepos(DeviceRepos):
         super().__init__()
         self.repos_by_capability = IntervalTree()
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
-        capability = _find_capability()
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
+        capability = _find_capability(device_index)
         return self.repos_by_capability.find_smallest_interval(capability)
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -206,11 +187,8 @@ class _ROCMRepos(DeviceRepos):
         super().__init__()
         self.repos_by_capability = IntervalTree()
 
-    @property
-    def repos(
-        self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
-        capability = _find_capability()
+    def repos_for_device(self, device_index: int | None = None) -> dict[Mode, RepositoryProtocol] | None:
+        capability = _find_capability(device_index)
         return self.repos_by_capability.find_smallest_interval(capability)
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
@@ -266,9 +244,11 @@ def _select_repository(
     return None
 
 
-@lru_cache
-def _find_capability() -> int:
+def _find_capability(device_index: int | None = None) -> int:
+    """
+    Find the compute capability of a device. `None` selects the current device.
+    """
     import torch
 
-    major, minor = torch.cuda.get_device_capability(device=None)
+    major, minor = torch.cuda.get_device_capability(device=device_index)
     return major * 10 + minor

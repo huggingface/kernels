@@ -229,6 +229,20 @@ fn default_user_agent() -> String {
     }
 }
 
+/// The Hub endpoint, resolved the same way as for Hub clients.
+///
+/// For Hub API calls that `hf-hub` does not cover.
+pub fn hub_endpoint() -> String {
+    select_endpoint(None, env_string("HF_ENDPOINT"))
+}
+
+/// The Hub token, resolved the same way as for Hub clients.
+///
+/// For Hub API calls that `hf-hub` does not cover.
+pub fn hub_token() -> Option<String> {
+    resolve_token(None)
+}
+
 /// Select the endpoint to use.
 fn select_endpoint(explicit: Option<String>, hf_endpoint: Option<String>) -> String {
     explicit

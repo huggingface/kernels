@@ -56,7 +56,9 @@ let
     let
       inherit (import ./torch-version-utils.nix { inherit lib; })
         flattenSystems
+        validateFlatTorchVersion
         validateTorchVersion
+        validateUniqueTvmFfiVariants
         ;
       throws = expr: !(builtins.tryEval (builtins.deepSeq expr expr)).success;
       validVersion = {
@@ -66,6 +68,12 @@ let
           "x86_64-linux"
           "aarch64-linux"
         ];
+        bundleBuild = true;
+      };
+      flatVersion = {
+        torchVersion = "2.13";
+        cudaVersion = "13.0";
+        system = "x86_64-linux";
         bundleBuild = true;
       };
     in
@@ -84,6 +92,22 @@ let
       };
       testValidateUnknownAttr = {
         expr = throws (validateTorchVersion (validVersion // { cudaVerison = "13.0"; }));
+        expected = true;
+      };
+      testValidateFlatValid = {
+        expr = validateFlatTorchVersion flatVersion;
+        expected = flatVersion;
+      };
+      testValidateFlatRejectsSystems = {
+        expr = throws (validateFlatTorchVersion validVersion);
+        expected = true;
+      };
+      testValidateFlatMissingSystem = {
+        expr = throws (validateFlatTorchVersion (builtins.removeAttrs flatVersion [ "system" ]));
+        expected = true;
+      };
+      testValidateRejectsSystem = {
+        expr = throws (validateTorchVersion flatVersion);
         expected = true;
       };
       testFlattenSystems = {
@@ -107,9 +131,32 @@ let
         expr = throws (flattenSystems [ (validVersion // { cudaVerison = "13.0"; }) ]);
         expected = true;
       };
+      testUniqueTvmFfiVariantsValid = {
+        expr = validateUniqueTvmFfiVariants [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (flatVersion // { torchVersion = "2.12"; })
+        ];
+        expected = [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (flatVersion // { torchVersion = "2.12"; })
+        ];
+      };
+      testUniqueTvmFfiVariantsRejectsDuplicate = {
+        expr = throws (validateUniqueTvmFfiVariants [
+          (flatVersion // { tvmFfiVersion = "0.1"; })
+          (
+            flatVersion
+            // {
+              torchVersion = "2.12";
+              tvmFfiVersion = "0.1";
+            }
+          )
+        ]);
+        expected = true;
+      };
       # While at it, let's also validate `versions.nix`.
       testDefaultVersionsValid = {
-        expr = throws (flattenSystems (import ../versions.nix));
+        expr = throws (validateUniqueTvmFfiVariants (flattenSystems (import ../versions.nix)));
         expected = false;
       };
     };

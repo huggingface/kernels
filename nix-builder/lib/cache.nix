@@ -20,6 +20,8 @@
           inherit (buildSet) overrideTorch;
           isLinux = stdenv.hostPlatform.isLinux;
           cudaSupport = config.cudaSupport;
+          # Rust CUDA kernels are only built for CUDA 13.0 and later.
+          rustCudaSupport = cudaSupport && lib.versionAtLeast buildSet.buildConfig.cudaVersion "13.0";
           xpuSupport = config.xpuSupport or false;
         in
         (
@@ -34,6 +36,8 @@
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ allOutputs ruff
           ++ lib.optionals (isLinux && cudaSupport) (allOutputs manylinux_2_28.cudaBackendStdenv)
+          ++ lib.optionals (isLinux && rustCudaSupport) (allOutputs cuda-oxide.toolchain)
+          ++ lib.optionals (isLinux && rustCudaSupport) (allOutputs cuda-oxide.backend)
           ++ lib.optionals (isLinux && !config.cudaSupport) (allOutputs manylinux_2_28.stdenv)
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (

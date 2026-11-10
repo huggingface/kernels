@@ -7,13 +7,10 @@ In case that does not hold, it will print missing dependencies and
 violated version constraints.
 """
 
-
 import importlib.metadata
 import re
 import sys
-import tempfile
 from argparse import ArgumentParser
-from zipfile import ZipFile
 
 from packaging.metadata import Metadata, parse_email
 from packaging.requirements import Requirement
@@ -64,9 +61,9 @@ def test_requirement(requirement: Requirement) -> bool:
         return False
 
     # Allow prereleases, to give to give us some wiggle-room
-    requirement.specifier.prereleases = True
-
-    if requirement.specifier and package.version not in requirement.specifier:
+    if requirement.specifier and not requirement.specifier.contains(
+        package.version, prereleases=True
+    ):
         error(
             f"{package_name}{requirement.specifier} not satisfied by version {package.version}"
         )

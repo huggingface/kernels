@@ -13,6 +13,7 @@
   cargo,
   cmake,
   cmakeNvccThreadsHook,
+  cuda-oxide,
   cuda_nvcc,
   generate-symbols-hook,
   get-kernel-check,
@@ -64,6 +65,9 @@
 
   # Fixed-output hashes for Git dependencies in Cargo.lock.
   rustGitHashes ? { },
+
+  # Whether the Rust kernels are built with the cuda-oxide codegen backend.
+  cudaOxide ? false,
 
   nvccThreads,
 
@@ -136,6 +140,19 @@ let
   metalSupport = buildConfig.metal or false;
 
   rustSupport = cargoLock != null;
+
+  cudaOxideSupport = rustSupport && cudaSupport && cudaOxide;
+
+  # cuda-bindings runs bindgen against a single CUDA include directory that
+  # must provide both `cuda.h` and `curand.h` (and include crt headers).
+  rustCudaToolkit = pkgs.symlinkJoin {
+    name = "rust-cuda-toolkit";
+    paths = with cudaPackages; [
+      (lib.getInclude cuda_crt)
+      (lib.getInclude cuda_cudart)
+      (lib.getInclude libcurand)
+    ];
+  };
 
   # rpaths are stripped from kernels to make them portable, but that
   # also means that in a Nix environment the CUDA/ROCm/oneAPI dependencies
@@ -253,8 +270,18 @@ stdenv.mkDerivation (
     ]
     ++ lib.optionals rustSupport [
       rustPlatform.cargoSetupHook
+    ]
+    ++ lib.optionals (rustSupport && !cudaOxideSupport) [
       cargo
       rustc
+    ]
+    # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
+    ++ lib.optionals cudaOxideSupport [
+      cuda-oxide.toolchain
+    ]
+    # libclang for the cuda-bindings build script (cuda-oxide and cuTile).
+    ++ lib.optionals (rustSupport && cudaSupport) [
+      rustPlatform.bindgenHook
     ];
 
     buildInputs = [
@@ -305,6 +332,9 @@ stdenv.mkDerivation (
     // lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
     }
+    // lib.optionalAttrs (rustSupport && cudaSupport) {
+      CUDA_TOOLKIT_PATH = "${rustCudaToolkit}";
+    }
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;
       SYCL_ROOT = oneapi-torch-dev;
@@ -338,6 +368,9 @@ stdenv.mkDerivation (
     ++ lib.optionals cudaSupport [
       (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
       (lib.cmakeFeature "GPU_LANG" "CUDA")
+    ]
+    ++ lib.optionals cudaOxideSupport [
+      (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${cuda-oxide.backend}/lib/librustc_codegen_cuda.so")
     ]
     ++ lib.optionals rocmSupport [
       # Ensure sure that we use HIP from our CLR override and not HIP from
@@ -380,6 +413,9 @@ stdenv.mkDerivation (
       inherit dependencies;
       inherit (python3.pkgs.tvm-ffi) variant;
       archVariant = python3.pkgs.tvm-ffi.variant;
+    }
+    // lib.optionalAttrs (rustSupport && cudaSupport) {
+      inherit rustCudaToolkit;
     };
   }
   // lib.optionalAttrs rustSupport {

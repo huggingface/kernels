@@ -9,13 +9,14 @@ let
 
 in
 rec {
-  # Validate that a Torch version entry from `versions.nix` has all required
-  # attributes and no unknown attributes. Returns the entry if it is valid.
-  validateTorchVersion =
-    version:
+  # Validate that a Torch version entry from `versions.nix` or its
+  # system-flattened version has all required attributes and no
+  # unknown attributes. Returns the entry if it is valid.
+  validateTorchVersion' =
+    systemAttr: version:
     let
       required = [
-        "systems"
+        systemAttr
         "torchVersion"
       ];
       optional = [
@@ -40,6 +41,37 @@ rec {
           "Torch version has unknown attribute(s) ${lib.concatStringsSep ", " unknownAttrs}: ${context}"
           version
       );
+
+  # Validate a nested Torch version entry (with `systems`).
+  validateTorchVersion = validateTorchVersion' "systems";
+
+  # Validate a flattened Torch version entry (with `system`).
+  validateFlatTorchVersion = validateTorchVersion' "system";
+
+  # Validate that there is only one system-flattened Torch version maps
+  # to a particula tvm-ffi build variant. E.g. if Torch 2.11 and 2.12
+  # both have tvm-ffi enabled for CUDA 13.0, this check will fail.
+  validateUniqueTvmFfiVariants =
+    versions:
+    let
+      variantName =
+        version:
+        (import ./variants/tvm-ffi.nix {
+          inherit lib;
+          buildConfig = version // {
+            backend = backend version;
+          };
+        }).arch;
+      # Group all tvm-ffi versions by their variant name.
+      byVariant = lib.groupBy variantName (builtins.filter (version: version ? tvmFfiVersion) versions);
+      duplicates = lib.filterAttrs (_: group: builtins.length group > 1) byVariant;
+      describe =
+        variant: group:
+        "${variant} (Torch ${lib.concatMapStringsSep ", " (version: version.torchVersion) group})";
+    in
+    lib.throwIf (duplicates != { })
+      "Multiple Torch versions enable tvm-ffi for the same variant: ${lib.concatStringsSep "; " (lib.mapAttrsToList describe duplicates)}"
+      versions;
 
   # Expand { systems = [ a b ]; .. } to [ { system = a; ..} { system = b; .. } ]
   flattenSystems =

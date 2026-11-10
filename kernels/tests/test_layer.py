@@ -1,6 +1,9 @@
+import copy
 import logging
+import pickle
 import sys
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,15 +16,23 @@ from kernels import (
     CUDAProperties,
     Device,
     FuncRepository,
+    KernelizedFunc,
+    KernelizedLayer,
+    KernelizedLayers,
     KernelizeFallback,
     LayerRepository,
     LocalLayerRepository,
+    LockedFuncRepository,
+    LockedLayerRepository,
     Mode,
+    get_kernelized_layers,
     kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
     use_kernel_mapping,
+    use_kernelized_func,
 )
+from kernels._rust import KernelDependency, KernelLock, KernelLocks, KernelVersion
 from kernels.install import (
     install_kernel,
 )
@@ -365,8 +376,8 @@ def test_rocm_kernel_mapping(device):
         # Verify the repository is correctly stored
         rocm_repos = mapping["SiluAndMul"]["rocm"]
         assert rocm_repos is not None
-        assert rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
-        assert rocm_repos.repos[Mode.FALLBACK].layer_name == "SiluAndMul"
+        assert rocm_repos.repos_for_device()[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert rocm_repos.repos_for_device()[Mode.FALLBACK].layer_name == "SiluAndMul"
 
 
 @pytest.mark.cuda_only
@@ -659,7 +670,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -670,14 +681,17 @@ def test_mapping_contexts():
             "LigerRMSNorm",
             "TestKernel",
         }
-        assert _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
+            == "kernels-test/silu-and-mul"
+        )
 
         with use_kernel_mapping(extra_mapping2, inherit_mapping=False):
             assert set(_KERNEL_MAPPING.get().keys()) == {
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -688,7 +702,10 @@ def test_mapping_contexts():
             "LigerRMSNorm",
             "TestKernel",
         }
-        assert _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
+            == "kernels-test/silu-and-mul"
+        )
 
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
@@ -1414,3 +1431,230 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
             f"kernels-test/silu-and-mul={str(local_kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
         kernelize(model, device="cuda", mode=Mode.INFERENCE)
+
+
+class _KernelizedStub(nn.Module):
+    can_torch_compile = True
+    has_backward = True
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return input + 1
+
+
+@use_kernel_forward_from_hub("StubLayer")
+class StubLayer(nn.Module):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return input
+
+
+@use_kernel_forward_from_hub("StubFunc")
+def stub_func(input: torch.Tensor) -> torch.Tensor:
+    return input
+
+
+@use_kernelized_func(stub_func)
+class ModelUsingStubFunc(nn.Module):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return stub_func(input)
+
+
+@pytest.fixture
+def stub_kernel(monkeypatch):
+    """Replace kernel loading by a stub layer, so that the tests run offline."""
+
+    def _get_layer_memoize(repo, module_class):
+        return _KernelizedStub
+
+    monkeypatch.setattr("kernels.layer.layer._get_layer_memoize", _get_layer_memoize)
+
+
+def _stub_repo(layer_name: str) -> LayerRepository:
+    return LayerRepository(repo_id="kernels-test/stub", layer_name=layer_name, version=1)
+
+
+def test_get_kernelized_layers(stub_kernel):
+    model = nn.Sequential(nn.Linear(4, 4), StubLayer(), nn.Sequential(StubLayer()))
+    repo = _stub_repo("StubLayer")
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        layers={"1": KernelizedLayer(model[1], repo), "2.0": KernelizedLayer(model[2][0], repo)}
+    )
+
+
+def test_get_kernelized_layers_fallback(stub_kernel):
+    model = nn.Sequential(StubLayer())
+
+    # No mapping for the CPU, so the layer falls back to its original forward.
+    with use_kernel_mapping({"StubLayer": {"cuda": _stub_repo("StubLayer")}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers()
+
+
+def test_get_kernelized_layers_cleared_on_rekernelize(stub_kernel):
+    repo = _stub_repo("StubLayer")
+    model = nn.Sequential(StubLayer())
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+    assert get_kernelized_layers(model) == KernelizedLayers(layers={"0": KernelizedLayer(model[0], repo)})
+
+    with use_kernel_mapping({}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+    assert get_kernelized_layers(model) == KernelizedLayers()
+
+
+def test_get_kernelized_layers_func(stub_kernel):
+    repo = _stub_repo("StubFunc")
+    model = nn.Sequential(ModelUsingStubFunc())
+
+    with use_kernel_mapping({"StubFunc": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        funcs={("0", "StubFunc"): KernelizedFunc(model[0]._kernel_funcs["StubFunc"], repo)}
+    )
+
+
+@pytest.fixture
+def heterogeneous_gpus(monkeypatch):
+    """Pretend that we are on CUDA, device 0 has capability 7.5, device 1 has 9.0, and the current device is 0."""
+    state = {"current": 0}
+    capabilities = {0: (7, 5), 1: (9, 0)}
+
+    def get_device_capability(device=None):
+        return capabilities[state["current"] if device is None else device]
+
+    monkeypatch.setattr(torch.version, "hip", None)
+    monkeypatch.setattr(torch.version, "cuda", "12.8")
+    monkeypatch.setattr(torch.cuda, "get_device_capability", get_device_capability)
+    return state
+
+
+def _capability_mapping(repo_sm75: LayerRepository, repo_sm90: LayerRepository):
+    return {
+        "StubLayer": {
+            Device(type="cuda", properties=CUDAProperties(min_capability=70, max_capability=79)): repo_sm75,
+            Device(type="cuda", properties=CUDAProperties(min_capability=90, max_capability=99)): repo_sm90,
+        }
+    }
+
+
+def test_capability_is_not_cached(heterogeneous_gpus):
+    repo_sm75 = LayerRepository(repo_id="kernels-test/sm75", layer_name="StubLayer", version=1)
+    repo_sm90 = LayerRepository(repo_id="kernels-test/sm90", layer_name="StubLayer", version=1)
+
+    with use_kernel_mapping(_capability_mapping(repo_sm75, repo_sm90), inherit_mapping=False):
+        cuda_repos = _KERNEL_MAPPING.get()["StubLayer"]["cuda"]
+
+        assert cuda_repos.repos_for_device()[Mode.FALLBACK] == repo_sm75
+        heterogeneous_gpus["current"] = 1
+        assert cuda_repos.repos_for_device()[Mode.FALLBACK] == repo_sm90
+
+        # An explicit device index takes precedence over the current device.
+        assert cuda_repos.repos_for_device(0)[Mode.FALLBACK] == repo_sm75
+        assert cuda_repos.repos_for_device(1)[Mode.FALLBACK] == repo_sm90
+
+
+def test_kernelize_device_index(stub_kernel, heterogeneous_gpus):
+    repo_sm75 = LayerRepository(repo_id="kernels-test/sm75", layer_name="StubLayer", version=1)
+    repo_sm90 = LayerRepository(repo_id="kernels-test/sm90", layer_name="StubLayer", version=1)
+    mapping = _capability_mapping(repo_sm75, repo_sm90)
+
+    # Without an index, the current device is used.
+    for current, expected in ((0, repo_sm75), (1, repo_sm90)):
+        heterogeneous_gpus["current"] = current
+        model = nn.Sequential(StubLayer())
+        with use_kernel_mapping(mapping, inherit_mapping=False):
+            kernelize(model, mode=Mode.INFERENCE, device="cuda")
+        assert model[0]._kernel_repo == expected
+
+    # An explicit index takes precedence over the current device.
+    heterogeneous_gpus["current"] = 0
+    for index, expected in ((0, repo_sm75), (1, repo_sm90)):
+        model = nn.Sequential(StubLayer())
+        with use_kernel_mapping(mapping, inherit_mapping=False):
+            kernelize(model, mode=Mode.INFERENCE, device=torch.device("cuda", index))
+        assert model[0]._kernel_repo == expected
+
+
+@pytest.mark.parametrize("is_rocm", [False, True])
+def test_kernelize_torch_device_rocm(stub_kernel, monkeypatch, is_rocm):
+    monkeypatch.setattr(torch.version, "hip", "7.0" if is_rocm else None)
+    monkeypatch.setattr(torch.version, "cuda", None if is_rocm else "12.8")
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (9, 4))
+
+    repo_cuda = LayerRepository(repo_id="kernels-test/cuda", layer_name="StubLayer", version=1)
+    repo_rocm = LayerRepository(repo_id="kernels-test/rocm", layer_name="StubLayer", version=1)
+    mapping = {"StubLayer": {"cuda": repo_cuda, "rocm": repo_rocm}}
+
+    # ROCm devices use the `cuda` device type in Torch.
+    model = nn.Sequential(StubLayer())
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        kernelize(model, mode=Mode.INFERENCE, device=torch.device("cuda", 0))
+    assert model[0]._kernel_repo == (repo_rocm if is_rocm else repo_cuda)
+
+
+def test_locked_repositories_are_picklable():
+    lockfile = Path(__file__).parent / "layer_locking" / "kernels.lock"
+    layer_repo = LockedLayerRepository("kernels-test/versions", layer_name="Version", lockfile=lockfile)
+    func_repo = LockedFuncRepository("kernels-test/versions", func_name="version", lockfile=lockfile)
+
+    for repo in (layer_repo, func_repo):
+        for restore in (copy.deepcopy, lambda repo: pickle.loads(pickle.dumps(repo))):
+            restored = restore(repo)
+            assert restored == repo
+            assert str(restored) == str(repo)
+
+
+def test_locked_repository_restores_rust_objects(tmp_path):
+    target = KernelDependency("kernels-test/target", KernelVersion.Version(3))
+    other_version = KernelDependency("kernels-test/other", KernelVersion.Version(1))
+    other_revision = KernelDependency("kernels-test/revision", KernelVersion.Revision("main"))
+    locks = KernelLocks(
+        {
+            other_version: KernelLock("a" * 40),
+            target: KernelLock("b" * 40),
+            other_revision: KernelLock("c" * 40),
+        }
+    )
+    lockfile = tmp_path / "kernels.lock"
+    lockfile.write_text(locks.to_json())
+
+    repo = LockedLayerRepository("kernels-test/target", layer_name="Layer", lockfile=lockfile)
+    restored = pickle.loads(pickle.dumps(repo))
+
+    assert restored.kernel_dep == target
+    assert restored.kernel_locks == locks
+    assert restored.kernel_locks[target] == KernelLock("b" * 40)
+
+
+def test_get_kernelized_layers_locked_repo_serialization(stub_kernel):
+    repo = LockedLayerRepository(
+        "kernels-test/versions",
+        layer_name="Version",
+        lockfile=Path(__file__).parent / "layer_locking" / "kernels.lock",
+    )
+    model = nn.Sequential(StubLayer())
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    for restore in (copy.deepcopy, lambda model: pickle.loads(pickle.dumps(model))):
+        restored = restore(model)
+        assert get_kernelized_layers(restored) == KernelizedLayers(layers={"0": KernelizedLayer(restored[0], repo)})
+
+    # The restored model must still report the original repository type.
+    assert isinstance(get_kernelized_layers(pickle.loads(pickle.dumps(model))).layers["0"].repo, LockedLayerRepository)
+
+
+@pytest.mark.cuda_only
+def test_get_kernelized_layers_hub():
+    model = kernelize(SiluAndMulWithKernel(), device="cuda", mode=Mode.INFERENCE)
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        layers={"": KernelizedLayer(model, kernel_layer_mapping["SiluAndMul"][Device(type="cuda")])},
+    )

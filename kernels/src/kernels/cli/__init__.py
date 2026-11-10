@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from kernels.cli.cache import print_cached_kernels
 from kernels.cli.describe_api import print_kernel_api
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
@@ -15,6 +16,17 @@ from kernels.cli.versions import print_kernel_versions
 def main():
     parser = argparse.ArgumentParser(prog="kernel", description="Manage compute kernels")
     subparsers = parser.add_subparsers(required=True)
+
+    cache_parser = subparsers.add_parser("cache", help="Inspect cached kernels")
+    cache_subparsers = cache_parser.add_subparsers(required=True)
+    cache_ls_parser = cache_subparsers.add_parser("ls", help="List cached kernel versions and their build variants")
+    cache_ls_parser.add_argument("--cache-dir", type=Path, help="Inspect a specific cache directory")
+    cache_ls_parser.add_argument("--json", action="store_true", help="Print cached kernel information as JSON")
+    cache_ls_parser.add_argument("--show-warnings", action="store_true", help="Show details of cache inconsistencies")
+    cache_ls_parser.add_argument(
+        "--no-truncate", action="store_true", help="Display full values regardless of terminal width"
+    )
+    cache_ls_parser.set_defaults(func=kernel_cache_ls)
 
     check_parser = subparsers.add_parser("check", help="Check a kernel for compliance")
     check_parser.add_argument("repo_id", type=str, nargs="?")
@@ -176,6 +188,15 @@ def kernel_info(args):
         revision=args.revision,
         version=args.version,
         json_output=args.json,
+    )
+
+
+def kernel_cache_ls(args):
+    print_cached_kernels(
+        cache_dir=args.cache_dir,
+        json_output=args.json,
+        show_warnings=args.show_warnings,
+        no_truncate=args.no_truncate,
     )
 
 

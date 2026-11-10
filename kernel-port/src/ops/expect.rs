@@ -12,11 +12,35 @@ pub struct Expect {
 enum ExpectKind {
     Text { find: String, count: usize },
     FileCount(usize),
+    // The one matched file has this git blob id: an overlay copy was made
+    // from exactly this upstream file.
+    Blob(String),
+}
+
+/// The id git gives a file with these contents.
+pub(crate) fn git_blob_id(bytes: &[u8]) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(format!("blob {}\0", bytes.len()).as_bytes());
+    hasher.update(bytes);
+    crate::hex(&hasher.finalize())
 }
 
 impl Expect {
     pub(super) fn build(args: &mut Args) -> Result<Self> {
         let pattern = args.take("in")?.parse()?;
+        if let Some(blob) = args.take_opt("blob") {
+            if args.take_opt("find").is_some() || args.take_opt("files").is_some() {
+                bail!("blob= cannot be combined with find= or files=");
+            }
+            if blob.len() != 40 || !blob.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')) {
+                bail!("blob must be a full 40-character lowercase git blob id, got {blob:?}");
+            }
+            return Ok(Self {
+                pattern,
+                kind: ExpectKind::Blob(blob),
+            });
+        }
         let kind = match (args.take_opt("find"), args.take_usize_opt("files")?) {
             (Some(find), None) => {
                 if find.is_empty() {
@@ -66,6 +90,25 @@ impl Expect {
                     );
                 }
                 Ok(format!("{found} occurrence(s), as expected"))
+            }
+            ExpectKind::Blob(expected) => {
+                let [path] = files.as_slice() else {
+                    bail!(
+                        "blob= needs {:?} to match exactly one file, found {}",
+                        self.pattern,
+                        files.len()
+                    );
+                };
+                let actual = git_blob_id(ws.current_bytes(path).unwrap_or_default());
+                if actual != *expected {
+                    bail!(
+                        "{path} is no longer the upstream file its overlay copy was made from \
+                         (blob {expected}, now {actual}) - see what changed with `git diff \
+                         {expected} {actual}` in the upstream checkout, carry it into the \
+                         overlay copy, and update blob="
+                    );
+                }
+                Ok(format!("{path} is blob {}", &actual[..12]))
             }
         }
     }

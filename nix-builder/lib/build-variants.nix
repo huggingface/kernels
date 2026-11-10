@@ -2,7 +2,7 @@
 let
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend
-    flattenSystems
+    validateFlatTorchVersion
     ;
 in
 rec {
@@ -34,7 +34,8 @@ rec {
     else
       "torch${flattenVersion version.torchVersion}-${computeString version}-${version.system}";
 
-  # Build variants included in bundle builds.
+  # All build configurations. `torchVersions` must be flattened
+  # by system.
   buildVariants =
     torchVersions:
     let
@@ -50,5 +51,5 @@ rec {
         pathVersions = lib.attrByPath path [ ] acc ++ [ (buildName version) ];
       in
       lib.recursiveUpdate acc (lib.setAttrByPath path pathVersions)
-    ) { } (flattenSystems (bundleBuildVersions torchVersions));
+    ) { } (bundleBuildVersions (map validateFlatTorchVersion torchVersions));
 }

@@ -39,6 +39,9 @@ final: prev:
     };
   };
 
+  # cuda-oxide toolchain and codegen backend for Rust CUDA kernels.
+  cuda-oxide = final.callPackage ./pkgs/cuda-oxide { };
+
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   # Make the source for a package from our cargo workspace.
@@ -61,27 +64,19 @@ final: prev:
 
   torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
 
-  # Temporary: update the CA bundle to NSS 3.131.1, which removes the
-  # compromised eMudhra intermediates' roots. Remove once nixpkgs ships
-  # cacert >= 3.131.1 in our channel.
-  # https://emudhra.we-have-a-problem.com/
-  cacert = prev.cacert.overrideAttrs (
-    finalAttrs: _: {
-      version = "3.131.1";
-      src = prev.fetchurl {
-        urls =
-          let
-            file = "lib/ckfw/builtins/certdata.txt";
-            tag = "NSS_${prev.lib.replaceStrings [ "." ] [ "_" ] finalAttrs.version}_RTM";
-          in
-          [
-            "https://hg-edge.mozilla.org/projects/nss/raw-file/${tag}/${file}"
-            "https://raw.githubusercontent.com/nss-dev/nss/refs/tags/${tag}/${file}"
-          ];
-        hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
+  # Temporary: revert patchelf 0.15.2 -> 0.19.2 (NixOS/nixpkgs#569010), which
+  # causes segfaults (e.g. cc1plus) in binaries patched by autoPatchelfHook.
+  # Remove once nixpkgs ships a fixed patchelf. Can possibly be removed once
+  # https://github.com/NixOS/patchelf/pull/672 propagates to the channels.
+  patchelf-old =
+    (prev.patchelf.override (old: {
+      fetchurl =
+        args: old.fetchurl (args // { hash = "sha256-F3RfVkFZyOIo/EEtplogSLhGxLa0Igt3y/IkFuAvLXw="; });
+    })).overrideAttrs
+      {
+        version = "0.15.2";
+        __intentionallyOverridingVersion = true;
       };
-    }
-  );
 
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
@@ -126,6 +121,11 @@ final: prev:
         triton = callPackage ./pkgs/python-modules/triton { };
         triton-rocm = callPackage ./pkgs/python-modules/triton-rocm { };
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
+
+        byCudaMajor =
+          packages:
+          packages."cuda${final.cudaPackages.cudaMajorVersion}"
+            or (throw "No package available for CUDA ${final.cudaPackages.cudaMajorVersion}");
       in
       {
         inherit (triton)
@@ -275,6 +275,10 @@ final: prev:
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_27_5;
+            cuda13 = final.nccl_2_28_9;
+          };
           triton-cuda = triton_3_6_0;
           triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_6_0;
@@ -283,6 +287,10 @@ final: prev:
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_28_9;
+            cuda13 = final.nccl_2_28_9;
+          };
           triton-cuda = triton_3_6_0;
           triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
@@ -291,6 +299,10 @@ final: prev:
 
         torch-bin_2_12 = mkTorch {
           version = "2.12";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_29_7;
+          };
           triton-cuda = triton_3_7_0;
           triton-rocm = triton-rocm_3_7_0;
           triton-xpu = triton-xpu_3_7_1;
@@ -299,6 +311,10 @@ final: prev:
 
         torch-bin_2_13 = mkTorch {
           version = "2.13";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_29_7;
+          };
           triton-cuda = triton_3_7_1;
           triton-rocm = triton-rocm_3_7_1;
           triton-xpu = triton-xpu_3_7_2;
@@ -307,6 +323,10 @@ final: prev:
 
         torch-bin_2_14 = mkTorch {
           version = "2.14";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_30_7;
+          };
           triton-cuda = triton_3_8_0;
           triton-rocm = triton-rocm_3_8_0;
           triton-xpu = triton-xpu_3_8_0;
@@ -315,24 +335,14 @@ final: prev:
 
         torch-bin_2_15 = mkTorch {
           version = "2.15";
+          nccl = byCudaMajor {
+            cuda13 = final.nccl_2_30_7;
+          };
           triton-cuda = triton_3_9_0;
           triton-rocm = triton-rocm_3_9_0;
           triton-xpu = triton-xpu_3_9_0;
           xpuPackages = final.xpuPackages_2026_1_2;
         };
-
-        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
-          version = "5.3.0";
-          src = python-super.fetchPypi {
-            pname = "transformers";
-            inherit version;
-            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
-          };
-
-          dependencies = (prevAttrs.dependencies or [ ]) ++ [
-            python-self.typer
-          ];
-        });
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
@@ -344,6 +354,22 @@ final: prev:
   xpuPackages = final.xpuPackages_2025_3_2;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (import ./pkgs/nccl { inherit (final) callPackage; })
+// (
+  # libnvshmem builds are very slow. Use binraries instead.
+  let
+    inherit (prev) lib;
+    isCudaPackageSet = name: builtins.match "cudaPackages_[0-9]+_[0-9]+" name != null;
+  in
+  lib.mapAttrs (
+    _: cudaPackages:
+    cudaPackages.overrideScope (
+      finalScope: _: {
+        libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
+      }
+    )
+  ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
+)
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];

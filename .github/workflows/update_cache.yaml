@@ -44,6 +44,9 @@ jobs:
       - name: Build the outputs to be cached.
         run: nix build -L .#forCache
 
+      - name: Build the development shell to be cached.
+        run: nix build -L .#devShells.${{ matrix.arch }}.default
+
   build-darwin:
     permissions:
       contents: read
@@ -64,3 +67,6 @@ jobs:
 
       - name: Build the outputs to be cached.
         run: nix build -L .#forCache
+
+      - name: Build the development shell to be cached.
+        run: nix build -L .#devShells.aarch64-darwin.default

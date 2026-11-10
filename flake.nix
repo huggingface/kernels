@@ -50,9 +50,13 @@
         x86_64-linux
       ];
 
-      torchVersions' = import ./nix-builder/versions.nix;
+      inherit (import ./nix-builder/lib/torch-version-utils.nix { inherit (nixpkgs) lib; })
+        flattenSystems
+        ;
 
-      defaultBuildSets = mkBuildSets torchVersions' systems;
+      torchVersions' = flattenSystems (import ./nix-builder/versions.nix);
+
+      defaultBuildSets = mkBuildSets [ ] torchVersions' systems;
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
@@ -97,15 +101,20 @@
             # fail in a GPU-less sandbox. Even in that case, it's better to lazily
             # load the part with this functionality.
             doGetKernelCheck ? true,
+
             pythonCheckInputs ? pkgs: [ ],
             pythonNativeCheckInputs ? pkgs: [ ],
             torchVersions ? _: torchVersions',
+
+            # Additional nixpkgs overlays for the package sets that the kernel
+            # is built with. They are applied after the standard builder overlays.
+            overlays ? [ ],
           }:
           assert
             (builtins.isFunction torchVersions)
-            || abort "`torchVersions` must be a function taking one argument (the default version set)";
+            || abort "`torchVersions` must be a function taking one argument (the default version set, flattened to one entry per system)";
           let
-            buildSets = mkBuildSets (torchVersions torchVersions') systems;
+            buildSets = mkBuildSets overlays (torchVersions torchVersions') systems;
             buildSetsPerSystem = partitionBuildSetsBySystem buildSets;
           in
           flake-utils.lib.eachSystem systems (

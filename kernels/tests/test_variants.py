@@ -84,43 +84,43 @@ NOARCH_VARIANT_STRINGS = [
 
 SUPERSET_VARIANT_STRINGS = [
     "torch210-cpu-aarch64-darwin",
-    "torch210-cxx11-cpu-aarch64-linux",
-    "torch210-cxx11-cpu-x86_64-linux",
-    "torch210-cxx11-cu126-aarch64-linux",
-    "torch210-cxx11-cu126-x86_64-linux",
-    "torch210-cxx11-cu128-aarch64-linux",
-    "torch210-cxx11-cu128-x86_64-linux",
-    "torch210-cxx11-cu130-aarch64-linux",
-    "torch210-cxx11-cu130-x86_64-linux",
-    "torch210-cxx11-rocm70-x86_64-linux",
-    "torch210-cxx11-rocm71-x86_64-linux",
-    "torch210-cxx11-xpu20253-x86_64-linux",
+    "torch210-cpu-aarch64-linux",
+    "torch210-cpu-x86_64-linux",
+    "torch210-cu126-aarch64-linux",
+    "torch210-cu126-x86_64-linux",
+    "torch210-cu128-aarch64-linux",
+    "torch210-cu128-x86_64-linux",
+    "torch210-cu130-aarch64-linux",
+    "torch210-cu130-x86_64-linux",
+    "torch210-rocm70-x86_64-linux",
+    "torch210-rocm71-x86_64-linux",
+    "torch210-xpu20253-x86_64-linux",
     "torch210-metal-aarch64-darwin",
     "torch211-cpu-aarch64-darwin",
-    "torch211-cxx11-cpu-aarch64-linux",
-    "torch211-cxx11-cpu-x86_64-linux",
-    "torch211-cxx11-cu126-aarch64-linux",
-    "torch211-cxx11-cu126-x86_64-linux",
-    "torch211-cxx11-cu128-aarch64-linux",
-    "torch211-cxx11-cu128-x86_64-linux",
-    "torch211-cxx11-cu130-aarch64-linux",
-    "torch211-cxx11-cu130-x86_64-linux",
-    "torch211-cxx11-rocm71-x86_64-linux",
-    "torch211-cxx11-rocm72-x86_64-linux",
-    "torch211-cxx11-xpu20253-x86_64-linux",
+    "torch211-cpu-aarch64-linux",
+    "torch211-cpu-x86_64-linux",
+    "torch211-cu126-aarch64-linux",
+    "torch211-cu126-x86_64-linux",
+    "torch211-cu128-aarch64-linux",
+    "torch211-cu128-x86_64-linux",
+    "torch211-cu130-aarch64-linux",
+    "torch211-cu130-x86_64-linux",
+    "torch211-rocm71-x86_64-linux",
+    "torch211-rocm72-x86_64-linux",
+    "torch211-xpu20253-x86_64-linux",
     "torch211-metal-aarch64-darwin",
     "torch212-cpu-aarch64-darwin",
-    "torch212-cxx11-cpu-aarch64-linux",
-    "torch212-cxx11-cpu-x86_64-linux",
-    "torch212-cxx11-cu126-aarch64-linux",
-    "torch212-cxx11-cu126-x86_64-linux",
-    "torch212-cxx11-cu130-aarch64-linux",
-    "torch212-cxx11-cu130-x86_64-linux",
-    "torch212-cxx11-cu132-aarch64-linux",
-    "torch212-cxx11-cu132-x86_64-linux",
-    "torch212-cxx11-rocm71-x86_64-linux",
-    "torch212-cxx11-rocm72-x86_64-linux",
-    "torch212-cxx11-xpu20253-x86_64-linux",
+    "torch212-cpu-aarch64-linux",
+    "torch212-cpu-x86_64-linux",
+    "torch212-cu126-aarch64-linux",
+    "torch212-cu126-x86_64-linux",
+    "torch212-cu130-aarch64-linux",
+    "torch212-cu130-x86_64-linux",
+    "torch212-cu132-aarch64-linux",
+    "torch212-cu132-x86_64-linux",
+    "torch212-rocm71-x86_64-linux",
+    "torch212-rocm72-x86_64-linux",
+    "torch212-xpu20253-x86_64-linux",
     "torch212-metal-aarch64-darwin",
 ]
 
@@ -263,6 +263,42 @@ def test_resolve_rocm(linux_abi):
     assert result[0].variant_str == f"torch210{linux_abi}-rocm70-x86_64-linux"
     assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
     assert {vs.variant for vs in trace} == set(variants)
+
+
+ROCM_VARIANTS = [
+    parse_variant(f"torch215-cxx11-{rocm}-x86_64-linux") for rocm in ["rocm72", "rocm100", "rocm101", "rocm102"]
+]
+
+
+def _resolve_rocm(rocm_version: str):
+    return _resolve_variant_for_system(
+        variants=ROCM_VARIANTS,
+        selected_backend=ROCm(Version(rocm_version)),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.15"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+
+
+def test_resolve_rocm_best_older_minor():
+    # Newest minor that is not newer than the system, same major only.
+    result, _ = _resolve_rocm("10.1")
+    assert [v.variant_str for v in result] == [
+        "torch215-cxx11-rocm101-x86_64-linux",
+        "torch215-cxx11-rocm100-x86_64-linux",
+    ]
+
+
+def test_resolve_rocm_no_different_major():
+    result, _ = _resolve_rocm("7.2")
+    assert [v.variant_str for v in result] == ["torch215-cxx11-rocm72-x86_64-linux"]
+
+
+def test_resolve_rocm_no_newer_minor():
+    result, _ = _resolve_rocm("10.0")
+    assert [v.variant_str for v in result] == ["torch215-cxx11-rocm100-x86_64-linux"]
 
 
 def test_resolve_cpu_linux(linux_abi):

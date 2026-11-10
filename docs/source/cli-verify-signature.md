@@ -3,6 +3,9 @@
 Use `kernels verify-signature` to verify the metadata signature and check
 that kernel files match the digest embedded in the metadata.
 
+This command requires the `sigstore` package, which is installed with the
+`sigstore` extra: `pip install "kernels[sigstore]"`.
+
 ## Usage
 
 ```bash
@@ -37,9 +40,9 @@ kernels verify-signature kernels-community/relu 1 --all-variants
 
 ```bash
 $ kernels verify-signature kernels-community/relu 1
-✅ torch211-cxx11-cu126-x86_64-linux: kernel metadata is correctly signed
+✅ torch211-cxx11-cu126-x86_64-linux: the metadata is correctly signed and the files match the digest in the metadata
 $ kernels verify-signature kernels-community/flash-attn2 1
-❌ torch211-cxx11-cu126-x86_64-linux: cannot verify kernel integrity, signature not found
+❌ torch211-cxx11-cu126-x86_64-linux: not signed, so its integrity cannot be verified
 ```
 
 ## Options

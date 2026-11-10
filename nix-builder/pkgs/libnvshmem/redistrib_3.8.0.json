@@ -1,0 +1,67 @@
+{
+    "release_date": "2026-09-22",
+    "release_label": "3.8.0",
+    "release_product": "nvshmem",
+    "libnvshmem": {
+        "name": "NVIDIA nvshmem",
+        "license": "nvshmem",
+        "license_path": "libnvshmem/LICENSE.txt",
+        "version": "3.8.0",
+        "linux-x86_64": {
+            "cuda12": {
+                "relative_path": "libnvshmem/linux-x86_64/libnvshmem-linux-x86_64-3.8.0_cuda12-archive.tar.xz",
+                "sha256": "328461eef448a2c7daa02efb36ff839d7811f1f563782979052b75796656b4cf",
+                "md5": "70368f1a4a83141d3fb5819a6b2683cf",
+                "size": "547534924"
+            },
+            "cuda13": {
+                "relative_path": "libnvshmem/linux-x86_64/libnvshmem-linux-x86_64-3.8.0_cuda13-archive.tar.xz",
+                "sha256": "254f6df1e9860d44b0d8a88f0a779f3881213031547cf28d71bb6d40e821e6ae",
+                "md5": "cc62a45cf232330828332ff7f83f8c34",
+                "size": "484957044"
+            }
+        },
+        "cuda_variant": [
+            "12",
+            "13"
+        ],
+        "linux-sbsa": {
+            "cuda12": {
+                "relative_path": "libnvshmem/linux-sbsa/libnvshmem-linux-sbsa-3.8.0_cuda12-archive.tar.xz",
+                "sha256": "31f61615ec521b65d3ec6ae03c63a985b5eead7a8e906eea913b3d5bddbe021d",
+                "md5": "81d419e9fea97627ea3fd71828d4caf7",
+                "size": "545243060"
+            },
+            "cuda13": {
+                "relative_path": "libnvshmem/linux-sbsa/libnvshmem-linux-sbsa-3.8.0_cuda13-archive.tar.xz",
+                "sha256": "949de817686f8d65c278c5e644c86c69271d63945db2ca71a40c2f7db9b134f6",
+                "md5": "13b70acce87683a8106aca4b7c771631",
+                "size": "477160292"
+            }
+        }
+    },
+    "nvshmem_python": {
+        "name": "NVIDIA nvshmem",
+        "license": "nvshmem",
+        "license_path": "nvshmem_python/LICENSE.txt",
+        "version": "0.4.0.38976383",
+        "source": {
+            "cuda13": {
+                "relative_path": "nvshmem_python/source/nvshmem_python-source-0.4.0.38966635_cuda13-archive.tar.xz",
+                "sha256": "19b9a2bd67e3d9615f3d082b5f4319a8acb83140a56868a9db5a77b9c1221064",
+                "md5": "3e6ca3801f1f1406c922445f78dc9e6e",
+                "size": "845464"
+            },
+            "cuda12": {
+                "relative_path": "nvshmem_python/source/nvshmem_python-source-0.4.0.38976383_cuda12-archive.tar.xz",
+                "sha256": "38455f031095d4a65e7d669a27cdabb4c8cd19550a74e4b433e0e45a33f7b57b",
+                "md5": "5b8d983b3d401a7cf1558a8046fada97",
+                "size": "872732"
+            }
+        },
+        "cuda_variant": [
+            "13",
+            "12"
+        ]
+    }
+}

@@ -2,10 +2,11 @@ import json
 import re
 from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from huggingface_hub.errors import IncompleteSnapshotError
-from huggingface_hub.hf_api import GitRefInfo
+from huggingface_hub.hf_api import GitRefInfo, HfApi
 
 import kernels.resolver as resolver_module
 from kernels._rust import (
@@ -152,6 +153,45 @@ def test_remote_kernel_is_immutable():
         kernel.revision = "cafef00d"
     with pytest.raises(FrozenInstanceError):
         kernel.variant = parse_variant("torch-cuda")
+
+
+def test_local_kernel_get_file(tmp_path):
+    api = Mock(spec=HfApi)
+    variant_path = _write_variant(tmp_path)
+    kernel = LocalKernel(variant_path=variant_path, metadata=_metadata())
+
+    assert kernel.get_file("metadata.json", api=api) == variant_path / "metadata.json"
+    assert api.mock_calls == []
+
+
+@pytest.mark.parametrize("custom_cache", [False, True])
+def test_remote_kernel_get_file(monkeypatch, tmp_path, custom_cache):
+    cache_dir = str(tmp_path / "cache") if custom_cache else None
+    if custom_cache:
+        monkeypatch.setenv("KERNELS_CACHE", cache_dir)
+    else:
+        monkeypatch.delenv("KERNELS_CACHE", raising=False)
+
+    downloaded_path = tmp_path / "symbols.json"
+    api = Mock(spec=HfApi)
+    api.hf_hub_download.return_value = str(downloaded_path)
+    kernel = RemoteKernel(
+        repo_id="test/kernel",
+        revision=Oid.from_str("a" * 40),
+        variant=_variant(),
+        metadata=_metadata(),
+    )
+
+    assert kernel.get_file("symbols.json", api=api) == downloaded_path
+    api.hf_hub_download.assert_called_once_with(
+        "test/kernel",
+        repo_type="kernel",
+        filename="build/torch-cpu/symbols.json",
+        cache_dir=cache_dir,
+        revision="a" * 40,
+        local_files_only=False,
+    )
+    api.snapshot_download.assert_not_called()
 
 
 def test_noop_resolver_never_resolves(api):

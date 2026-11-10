@@ -19,12 +19,12 @@ let
       hash = "sha256-xXAxIDBesjDDOIa6/YsGznyW+5+NpaO1L96lBuqRzrk=";
     };
     "2026.0" = {
-      version = "0.9.2";
-      hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
+      version = "0.9.3";
+      hash = "sha256-HOUvysPiTdsJaP2gxfq0MTVOyJF4wmZ7wHDUrIfzlSE=";
     };
     "2026.1" = {
-      version = "0.9.2";
-      hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
+      version = "0.9.3";
+      hash = "sha256-HOUvysPiTdsJaP2gxfq0MTVOyJF4wmZ7wHDUrIfzlSE=";
     };
   };
   syclTlaVersion =

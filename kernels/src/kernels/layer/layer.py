@@ -24,6 +24,7 @@ from ..load import (
     get_local_kernel,
 )
 from ..locking import (
+    _get_locked_kernel_revision,
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
@@ -308,6 +309,24 @@ class LockedLayerRepository:
         commit = self.kernel_locks[self.kernel_dep].commit
         return f"`{self._repo_id}` (revision: {commit}), layer `{self.layer_name}`)"
 
+    def __getstate__(self):
+        # `kernel_locks` is a Rust object that does not support pickling. So,
+        # serialize it through JSON. `kernel_dep` is derived from it.
+        return {
+            "repo_id": self._repo_id,
+            "lockfile": self._lockfile,
+            "layer_name": self.layer_name,
+            "trust_remote_code": self._trust_remote_code,
+            "kernel_locks": self.kernel_locks.to_json(),
+        }
+
+    def __setstate__(self, state: dict):
+        self._repo_id = state["repo_id"]
+        self._lockfile = state["lockfile"]
+        self.layer_name = state["layer_name"]
+        self._trust_remote_code = state["trust_remote_code"]
+        self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
+
 
 def replace_kernel_forward_from_hub(cls, layer_name: str, condition: Callable[["nn.Module"], bool] | None = None):
     """
@@ -353,6 +372,18 @@ def use_kernel_forward_from_hub(layer_name: str, condition: Callable[["nn.Module
     Since `nn.Module` also implements the `__call__` method, the module can still be
     used as if it was a function. Note that a decorated function is only visible to
     [`~kernels.kernelize`] if it is attached to a module using [`~kernels.use_kernelized_func`].
+
+    <Tip warning>
+
+    Decorating functions is mainly intended for compatibility cases, such as in
+    `transformers`, where a function cannot be converted into a module. If you
+    control the model code, prefer converting the function to an `nn.Module` and
+    decorating that class with [`~kernels.use_kernel_forward_from_hub`]. In the
+    parent module's `__init__`, assign an instance of the decorated class to an
+    attribute, such as `self.activation = MyActivation()`. PyTorch then registers
+    it as a submodule, making it part of the model graph.
+
+    </Tip>
 
     Args:
         layer_name (`str`):
@@ -465,6 +496,18 @@ def use_kernelized_func(*args: Callable):
     attribute (not as a submodule). This makes the function visible to
     [`~kernels.kernelize`].
 
+    <Tip warning>
+
+    This decorator is mainly intended for compatibility cases, such as in
+    `transformers`, where a function cannot be converted into a module. If you
+    control the model code, prefer converting the function to an `nn.Module` and
+    decorating that class with [`~kernels.use_kernel_forward_from_hub`]. In the
+    parent module's `__init__`, assign an instance of the decorated class to an
+    attribute, such as `self.activation = MyActivation()`. PyTorch then registers
+    it as a submodule, making it part of the model graph.
+
+    </Tip>
+
     Args:
         *args (`Callable`):
             Kernel functions to attach to the module.
@@ -550,7 +593,14 @@ def use_kernelized_func(*args: Callable):
     return decorator
 
 
-def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback: KernelizeFallback):
+def kernelize_layer(
+    module: "nn.Module",
+    *,
+    mode: Mode,
+    device_type: Device,
+    use_fallback: KernelizeFallback,
+    device_index: int | None = None,
+):
     module_class = type(module)
     layer_name = module_class.kernel_layer_name  # type: ignore[attr-defined]
 
@@ -581,7 +631,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
         _replace_forward(module, module_class)
         return
 
-    repos = property_repos.repos
+    repos = property_repos.repos_for_device(device_index)
 
     if repos is None:
         if KernelizeFallback.NO_COMPATIBLE_PROPERTIES not in use_fallback:
@@ -628,6 +678,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
         module=module,
         layer=layer,
         mode=mode,
+        repo=repo,
         use_fallback=use_fallback,
     )
 
@@ -690,6 +741,7 @@ def _conditionally_replace_forward(
     module: "nn.Module",
     layer: Type["nn.Module"],
     mode: Mode,
+    repo: RepositoryProtocol,
     use_fallback: KernelizeFallback,
 ):
     module_class = type(module)
@@ -712,15 +764,25 @@ def _conditionally_replace_forward(
         else:
             raise ValueError(f"Available kernel does not support mode: {mode}")
     else:
-        _replace_forward(module, layer)
+        _replace_forward(module, layer, repo=repo)
 
 
-def _replace_forward(module: "nn.Module", layer: Type["nn.Module"]):
+def _replace_forward(
+    module: "nn.Module",
+    layer: Type["nn.Module"],
+    *,
+    repo: RepositoryProtocol | None = None,
+):
     module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
 
     # keep compile-time implementation in sync with the selected forward
     if hasattr(module, "_kernel_compile_fn"):
         module._kernel_compile_fn = None if layer.forward is type(module).forward else layer.forward
+    if repo is None:
+        # No repository, typically when reverting to the original forward.
+        module.__dict__.pop("_kernel_repo", None)
+    else:
+        module.__dict__["_kernel_repo"] = repo
 
 
 def _validate_layer_has_mode(

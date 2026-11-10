@@ -567,10 +567,18 @@ function (define_gpu_extension_target GPU_MOD_NAME)
 
   target_link_libraries(${GPU_MOD_NAME} PRIVATE torch ${GPU_LIBRARIES})
 
-  # Don't use `TORCH_LIBRARIES` for CUDA since it pulls in a bunch of
-  # dependencies that are not necessary and may not be installed.
   if (GPU_LANGUAGE STREQUAL "CUDA")
+    # Don't use `TORCH_LIBRARIES` for CUDA since it pulls in a bunch of
+    # dependencies that are not necessary and may not be installed.
     target_link_libraries(${GPU_MOD_NAME} PRIVATE CUDA::cudart)
+
+    # Torch has a mandatory dependency on NCCL, so kernels can always use
+    # it. Link only as needed to avoid false dependencies.
+    find_library(NCCL_LIBRARY NAMES nccl)
+    if (NCCL_LIBRARY)
+      target_link_libraries(${GPU_MOD_NAME} PRIVATE
+        "-Wl,--push-state,--as-needed" ${NCCL_LIBRARY} "-Wl,--pop-state")
+    endif()
   else()
     target_link_libraries(${GPU_MOD_NAME} PRIVATE ${TORCH_LIBRARIES})
   endif()

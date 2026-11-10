@@ -344,19 +344,6 @@ final: prev:
           xpuPackages = final.xpuPackages_2026_1_2;
         };
 
-        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
-          version = "5.3.0";
-          src = python-super.fetchPypi {
-            pname = "transformers";
-            inherit version;
-            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
-          };
-
-          dependencies = (prevAttrs.dependencies or [ ]) ++ [
-            python-self.typer
-          ];
-        });
-
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
       }

@@ -2,7 +2,7 @@ import ctypes
 import ctypes.util
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar, Optional, Protocol, runtime_checkable
 
 from huggingface_hub.dataclasses import strict
@@ -11,6 +11,28 @@ from packaging.version import Version
 from kernels.compat import has_torch
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, legacy: bool) -> Version | None:
+    """
+    Parse a versioned variant string with the regex for the legacy or the new
+    variant string format. Both regexes capture the major and minor version.
+    """
+    m = (legacy_regex if legacy else new_regex).fullmatch(s)
+    if not m:
+        return None
+    return Version(f"{m.group(1)}.{m.group(2)}")
+
+
+def _format_version(legacy_prefix: str, new_prefix: str, version: Version, legacy: bool) -> str:
+    """
+    Format a version for a variant string: `{legacy_prefix}{major}{minor}`
+    in the legacy format (e.g. `cu128`) and `{new_prefix}{major}.{minor}` in
+    the new format (e.g. `cuda-12.8`).
+    """
+    if legacy:
+        return f"{legacy_prefix}{version.major}{version.minor}"
+    return f"{new_prefix}{version.major}.{version.minor}"
 
 
 @runtime_checkable
@@ -25,17 +47,20 @@ class Backend(Protocol):
     @property
     def variant_str(self) -> str:
         """
-        The name of the backend as used in a build variant, e.g. `cu128`
-        for CUDA 12.8.
+        The name of the backend as used in a build variant, e.g. `cuda-12.8`
+        for CUDA 12.8 (`cu128` in the legacy variant format).
         """
         ...
 
 
 @dataclass(unsafe_hash=True)
 class CANN:
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
+    # Legacy variant string: `cannxy`, new variant string: `cann-x.y`.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann-(\d+)\.(\d+)")
 
     version: Version
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def name(self) -> str:
@@ -43,14 +68,14 @@ class CANN:
 
     @property
     def variant_str(self) -> str:
-        return f"cann{self.version.major}{self.version.minor}"
+        return _format_version("cann", "cann-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "CANN":
-        m = CANN._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "CANN":
+        version = _parse_version(CANN._LEGACY_VARIANT_REGEX, CANN._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid CANN variant string: {s!r}")
-        return CANN(version=Version(f"{m.group(1)}.{m.group(2)}"))
+        return CANN(version=version, legacy=legacy)
 
 
 @strict
@@ -73,9 +98,12 @@ class CPU:
 
 @dataclass(unsafe_hash=True)
 class CUDA:
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
+    # Legacy variant string: `cuxy`, new variant string: `cuda-x.y`.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cuda-(\d+)\.(\d+)")
 
     version: Version
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def name(self) -> str:
@@ -83,14 +111,14 @@ class CUDA:
 
     @property
     def variant_str(self) -> str:
-        return f"cu{self.version.major}{self.version.minor}"
+        return _format_version("cu", "cuda-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "CUDA":
-        m = CUDA._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "CUDA":
+        version = _parse_version(CUDA._LEGACY_VARIANT_REGEX, CUDA._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid CUDA variant string: {s!r}")
-        return CUDA(version=Version(f"{m.group(1)}.{m.group(2)}"))
+        return CUDA(version=version, legacy=legacy)
 
 
 @strict
@@ -131,9 +159,12 @@ class Neuron:
 
 @dataclass(unsafe_hash=True)
 class ROCm:
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
+    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm-(\d+)\.(\d+)")
 
     version: Version
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def name(self) -> str:
@@ -141,14 +172,14 @@ class ROCm:
 
     @property
     def variant_str(self) -> str:
-        return f"rocm{self.version.major}{self.version.minor}"
+        return _format_version("rocm", "rocm-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "ROCm":
-        m = ROCm._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "ROCm":
+        version = _parse_version(ROCm._LEGACY_VARIANT_REGEX, ROCm._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid ROCm variant string: {s!r}")
-        return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
+        return ROCm(version=version, legacy=legacy)
 
 
 @strict
@@ -171,9 +202,12 @@ class TPU:
 
 @dataclass(unsafe_hash=True)
 class XPU:
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
+    # Legacy variant string: `xpuxy`, new variant string: `xpu-x.y`.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu-(\d+)\.(\d+)")
 
     version: Version
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def name(self) -> str:
@@ -181,36 +215,66 @@ class XPU:
 
     @property
     def variant_str(self) -> str:
-        return f"xpu{self.version.major}{self.version.minor}"
+        return _format_version("xpu", "xpu-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "XPU":
-        m = XPU._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "XPU":
+        version = _parse_version(XPU._LEGACY_VARIANT_REGEX, XPU._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid XPU variant string: {s!r}")
-        return XPU(version=Version(f"{m.group(1)}.{m.group(2)}"))
+        return XPU(version=version, legacy=legacy)
 
 
-def parse_backend(s: str) -> Backend:
-    """Parse a backend variant string (e.g. 'cu128', 'rocm61', 'cpu') into a Backend."""
-    if s == "cpu":
-        return CPU.parse(s)
-    elif s == "metal":
-        return Metal.parse(s)
-    elif s == "neuron":
-        return Neuron.parse(s)
-    elif s == "tpu":
-        return TPU.parse(s)
-    elif s.startswith("cu"):
-        return CUDA.parse(s)
-    elif s.startswith("rocm"):
-        return ROCm.parse(s)
-    elif s.startswith("xpu"):
-        return XPU.parse(s)
-    elif s.startswith("cann"):
-        return CANN.parse(s)
-    else:
+_UNVERSIONED_BACKENDS: dict[str, type[CPU] | type[Metal] | type[Neuron] | type[TPU]] = {
+    "cpu": CPU,
+    "metal": Metal,
+    "neuron": Neuron,
+    "tpu": TPU,
+}
+
+_VERSIONED_BACKENDS: dict[str, type[CANN] | type[CUDA] | type[ROCm] | type[XPU]] = {
+    "cann": CANN,
+    "cuda": CUDA,
+    "rocm": ROCm,
+    "xpu": XPU,
+}
+
+# Names of backends that have a version token in the new variant format.
+VERSIONED_BACKEND_NAMES = frozenset(_VERSIONED_BACKENDS)
+
+
+def parse_backend(s: str, *, legacy: bool = True) -> Backend:
+    """
+    Parse a backend variant string into a Backend. In the legacy variant
+    format, versions are part of a single token (e.g. `cu128`, `rocm61`,
+    `cpu`). In the new variant format, the backend is written out in full and
+    the version is separated by a dash (e.g. `cuda-12.8`, `rocm-6.1`, `cpu`).
+    """
+    if legacy:
+        if s == "cpu":
+            return CPU.parse(s)
+        elif s == "metal":
+            return Metal.parse(s)
+        elif s == "neuron":
+            return Neuron.parse(s)
+        elif s == "tpu":
+            return TPU.parse(s)
+        elif s.startswith("cu"):
+            return CUDA.parse(s)
+        elif s.startswith("rocm"):
+            return ROCm.parse(s)
+        elif s.startswith("xpu"):
+            return XPU.parse(s)
+        elif s.startswith("cann"):
+            return CANN.parse(s)
         raise ValueError(f"Unknown backend variant string: {s!r}")
+
+    name = s.partition("-")[0]
+    if name in _UNVERSIONED_BACKENDS:
+        return _UNVERSIONED_BACKENDS[name].parse(s)
+    elif name in _VERSIONED_BACKENDS:
+        return _VERSIONED_BACKENDS[name].parse(s, legacy=False)
+    raise ValueError(f"Unknown backend variant string: {s!r}")
 
 
 def _backend() -> Backend:

@@ -2,7 +2,7 @@ import pytest
 from huggingface_hub import HfApi
 from packaging.version import Version
 
-from kernels.backends import CPU, CUDA, Metal, ROCm
+from kernels.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
 from kernels.variants import (
     Variant,
     VariantAccepted,
@@ -78,7 +78,7 @@ NOARCH_VARIANT_STRINGS = [
     "torch-rocm",
     "torch-tpu",
     "torch-xpu",
-    "torch-npu",
+    "torch-cann",
     "torch-universal",
 ]
 
@@ -141,6 +141,186 @@ def test_stable_abi_variants(variant_str: str):
 def test_noarch_variants(variant_str: str):
     # Roundtrip parse and generate variant string.
     assert parse_variant(variant_str).variant_str == variant_str
+
+
+NEW_FORMAT_VARIANT_STRINGS = (
+    [
+        f"torch-{version}{abi}-{backend}-{system}"
+        for version in ["2.5", "2.10", "2.12"]
+        for abi in ["", "-cxx98", "-cxx11"]
+        for backend in ["cpu", "cuda-12.6", "cuda-13.0", "rocm-6.3", "rocm-10.0", "xpu-2025.2"]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+    + [
+        f"{framework}-{backend}-aarch64-darwin"
+        for framework in ["torch-2.10", "tvm-ffi-0.1"]
+        for backend in ["cpu", "metal"]
+    ]
+    + [
+        f"tvm-ffi-0.1-{backend}-{system}"
+        for backend in ["cpu", "cuda-12.8", "rocm-6.4", "xpu-2025.2", "cann-8.1"]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+    + [
+        f"torch-stable-abi-{abi_ver}-{backend}-{system}"
+        for abi_ver in ["2.9", "2.11"]
+        for backend in ["cpu", "cuda-12.8", "rocm-6.4", "xpu-2025.2"]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+    + ["torch-2.10-cann-8.1-aarch64-linux"]
+)
+
+
+@pytest.mark.parametrize("variant_str", NEW_FORMAT_VARIANT_STRINGS)
+def test_new_format_variants(variant_str: str):
+    # Roundtrip parse and generate variant string.
+    variant = parse_variant(variant_str)
+    assert variant.variant_str == variant_str
+    assert not variant.framework.legacy
+
+
+@pytest.mark.parametrize("variant_str", VARIANT_STRINGS + STABLE_ABI_VARIANT_STRINGS)
+def test_legacy_variants_are_legacy(variant_str: str):
+    variant = parse_variant(variant_str)
+    assert variant.framework.legacy
+    assert getattr(variant.arch.backend, "legacy", True)
+
+
+@pytest.mark.parametrize(
+    "variant_str",
+    [
+        # Mixing formats is not allowed.
+        "torch-2.10-cu128-x86_64-linux",
+        "torch210-cuda-12.8-x86_64-linux",
+        "torch-2.10-cxx11-rocm71-x86_64-linux",
+        "torch210-cxx11-rocm-7.1-x86_64-linux",
+        "torch-stable-abi-2.11-cu128-x86_64-linux",
+        "torch-stable-abi211-cuda-12.8-x86_64-linux",
+        "tvm-ffi-0.1-xpu20253-x86_64-linux",
+        "tvm-ffi01-xpu-2025.3-x86_64-linux",
+        # Abbreviated backend name in the new format.
+        "torch-2.10-cu-12.8-x86_64-linux",
+        # Missing or superfluous backend version in the new format.
+        "torch-2.10-cuda-x86_64-linux",
+        "torch-2.10-cpu-12.8-x86_64-linux",
+        # Malformed versions.
+        "torch-2.-cpu-x86_64-linux",
+        "torch-2.10.1-cpu-x86_64-linux",
+        "torch-stable-abi-2-cpu-x86_64-linux",
+        "tvm-ffi-0-cpu-x86_64-linux",
+    ],
+)
+def test_variants_reject_mixed_or_malformed_formats(variant_str: str):
+    with pytest.raises(ValueError):
+        parse_variant(variant_str)
+
+
+def test_new_format_variant_equals_legacy_variant():
+    new = parse_variant("torch-2.10-cxx11-cuda-12.8-x86_64-linux")
+    legacy = parse_variant("torch210-cxx11-cu128-x86_64-linux")
+    assert new == legacy
+    assert hash(new) == hash(legacy)
+    assert new.variant_str == "torch-2.10-cxx11-cuda-12.8-x86_64-linux"
+    assert legacy.variant_str == "torch210-cxx11-cu128-x86_64-linux"
+
+
+@pytest.mark.parametrize(
+    "legacy_str,new_str,backend",
+    [
+        ("cu128", "cuda-12.8", CUDA(Version("12.8"))),
+        ("rocm71", "rocm-7.1", ROCm(Version("7.1"))),
+        ("xpu20253", "xpu-2025.3", XPU(Version("2025.3"))),
+        ("cann81", "cann-8.1", CANN(Version("8.1"))),
+    ],
+)
+def test_parse_backend_formats(legacy_str: str, new_str: str, backend):
+    legacy = parse_backend(legacy_str)
+    new = parse_backend(new_str, legacy=False)
+
+    # The format does not take part in equality and hashing.
+    assert legacy == new == backend
+    assert hash(legacy) == hash(new)
+
+    # Variant strings roundtrip in their own format.
+    assert legacy.variant_str == legacy_str
+    assert new.variant_str == new_str
+
+    # The formats are not interchangeable.
+    with pytest.raises(ValueError):
+        parse_backend(new_str)
+    with pytest.raises(ValueError):
+        parse_backend(legacy_str, legacy=False)
+
+
+@pytest.mark.parametrize("backend_str", ["cpu", "metal", "neuron", "tpu"])
+def test_parse_unversioned_backend_formats(backend_str: str):
+    assert parse_backend(backend_str).variant_str == backend_str
+    assert parse_backend(backend_str, legacy=False).variant_str == backend_str
+
+
+def test_new_format_resolves_legacy_ambiguity():
+    # The legacy format splits greedily: the last digit is the minor
+    # version. The new format can express larger minor versions.
+    assert parse_backend("cu1300").version == Version("130.0")
+    assert parse_backend("cuda-13.0", legacy=False).version == Version("13.0")
+    assert parse_backend("cuda-12.10", legacy=False).version == Version("12.10")
+
+
+def test_resolve_new_format_cuda():
+    variants = [
+        parse_variant(s)
+        for s in [
+            "torch-2.10-cuda-12.8-x86_64-linux",
+            "torch-2.10-cuda-12.6-x86_64-linux",
+            "torch-2.10-cuda-13.0-x86_64-linux",
+            "torch-2.10-cpu-x86_64-linux",
+        ]
+    ]
+    result, _ = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result[0].variant_str == "torch-2.10-cuda-12.8-x86_64-linux"
+
+
+def test_resolve_new_format_other_backend():
+    # Backends other than CUDA/ROCm are compared by equality, regardless of
+    # the notation used in the variant.
+    variants = [parse_variant("torch-2.10-xpu-2025.3-x86_64-linux"), parse_variant("torch210-xpu20252-x86_64-linux")]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=XPU(Version("2025.3")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert [v.variant_str for v in result] == ["torch-2.10-xpu-2025.3-x86_64-linux"]
+    rejected = {vs.variant.variant_str for vs in trace if isinstance(vs, VariantRejected)}
+    assert rejected == {"torch210-xpu20252-x86_64-linux"}
+
+
+def test_resolve_noarch_cann():
+    # Noarch variants use the backend name, which is `cann` for CANN.
+    variants = [parse_variant("torch-cann"), parse_variant("torch-npu")]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CANN(Version("8.1")),
+        cpu="aarch64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert [v.variant_str for v in result] == ["torch-cann"]
+    rejected = {vs.variant.variant_str for vs in trace if isinstance(vs, VariantRejected)}
+    assert rejected == {"torch-npu"}
 
 
 def test_get_variants():

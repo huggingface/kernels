@@ -140,6 +140,22 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-rust-cuda-kernel";
+          path = ./relu-rust-cuda;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
+        }
+        {
+          name = "relu-rust-cutile-kernel";
+          path = ./relu-rust-cutile;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
+          checkSymbols = {
+            functions = [ "relu" ];
+            layers = [ ];
+          };
+        }
+        {
           name = "relu-kernel-cpu";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};

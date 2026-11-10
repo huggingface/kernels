@@ -1,4 +1,6 @@
-use super::{Facts, KernelSection, check_include_dir, comma_list, glob_list, glob_union};
+use super::{
+    Facts, KernelSection, check_include_dir, comma_list, glob_list, glob_union, source_files,
+};
 use crate::recipe::Args;
 use crate::workspace::{Pattern, Workspace};
 use anyhow::{Result, bail};
@@ -16,6 +18,7 @@ pub struct Kernel {
     cuda_minver: Option<String>,
     rocm_archs: Vec<String>,
     repeat_src: Vec<String>,
+    follow_includes: bool,
 }
 
 impl Kernel {
@@ -32,6 +35,7 @@ impl Kernel {
             cuda_minver: args.take_opt("cuda_minver"),
             rocm_archs: comma_list(&args.take_opt("rocm_archs").unwrap_or_default()),
             repeat_src: comma_list(&args.take_opt("repeat_src").unwrap_or_default()),
+            follow_includes: args.take_bool("follow_includes")?,
         })
     }
 
@@ -39,7 +43,9 @@ impl Kernel {
         if facts.kernels.iter().any(|k| k.name == self.name) {
             bail!("kernel section {:?} already declared", self.name);
         }
-        let mut src = glob_union(ws, &self.src, "src")?;
+        let listed = glob_union(ws, &self.src, "src")?.len();
+        let mut src = source_files(ws, &self.src, "src", &self.include, self.follow_includes)?;
+        let found = src.len() - listed;
         for path in &self.repeat_src {
             if !src.contains(path) {
                 bail!("repeat_src path {path:?} is not selected by src globs");
@@ -63,8 +69,13 @@ impl Kernel {
             capabilities: self.capabilities.clone(),
             src,
         });
+        let found = if self.follow_includes {
+            format!(", {found} found through #includes")
+        } else {
+            String::new()
+        };
         Ok(format!(
-            "declared [kernel.{}] with {n} src file(s)",
+            "declared [kernel.{}] with {n} src file(s){found}",
             self.name
         ))
     }

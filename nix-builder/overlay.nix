@@ -39,6 +39,9 @@ final: prev:
     };
   };
 
+  # cuda-oxide toolchain and codegen backend for Rust CUDA kernels.
+  cuda-oxide = final.callPackage ./pkgs/cuda-oxide { };
+
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   # Make the source for a package from our cargo workspace.
@@ -340,19 +343,6 @@ final: prev:
           triton-xpu = triton-xpu_3_9_0;
           xpuPackages = final.xpuPackages_2026_1_2;
         };
-
-        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
-          version = "5.3.0";
-          src = python-super.fetchPypi {
-            pname = "transformers";
-            inherit version;
-            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
-          };
-
-          dependencies = (prevAttrs.dependencies or [ ]) ++ [
-            python-self.typer
-          ];
-        });
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };

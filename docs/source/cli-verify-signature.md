@@ -3,6 +3,9 @@
 Use `kernels verify-signature` to verify the metadata signature and check
 that kernel files match the digest embedded in the metadata.
 
+This command requires the `sigstore` package, which is installed with the
+`sigstore` extra: `pip install "kernels[sigstore]"`.
+
 ## Usage
 
 ```bash

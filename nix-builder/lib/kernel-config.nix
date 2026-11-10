@@ -12,9 +12,21 @@ let
 
   # Edition 6 tags kernels with `language = "<language>-<backend>"`.
   kernelLanguage = kernel: lib.head (lib.splitString "-" kernel.language);
-  kernelBackend = kernel: lib.last (lib.splitString "-" kernel.language);
+  kernelBackend =
+    kernel:
+    let
+      backendPart = lib.last (lib.splitString "-" kernel.language);
+    in
+    {
+      cutile = "cuda";
+    }
+    .${backendPart} or backendPart;
 
   toml = validate (readToml (path + "/build.toml"));
+
+  kernels = lib.attrValues (toml.kernel or { });
+  cudaKernels = lib.filter (kernel: kernelBackend kernel == "cuda") kernels;
+  cutileKernels = lib.filter (kernel: kernel.language == "rust-cutile") kernels;
 
   # Torch stable ABI version for a backend, or null if it does not use the stable
   # ABI. `stable-abi` is either a single version string (all backends) or a
@@ -76,6 +88,26 @@ in
       };
     in
     lib.foldl (backends: kernel: backends // { ${kernelBackend kernel} = true; }) init kernels;
+
+  # Does the kernel have Rust CUDA (cuda-oxide) components.
+  usesRustCuda = lib.any (kernel: kernel.language == "rust-cuda") (
+    lib.attrValues (toml.kernel or { })
+  );
+  usesRustCutile = cutileKernels != [ ];
+
+  # Are all CUDA kernels cuTile kernels.
+  cutileOnlyCuda =
+    cudaKernels != [ ] && lib.all (kernel: kernel.language == "rust-cutile") cudaKernels;
+
+  # Strictest `tileiras-minver` of the cuTile kernels, null without cuTile
+  # kernels. A missing `tileiras-minver` is reported by kernel-builder.
+  tileirasMinver = lib.foldl (
+    minver: kernel:
+    let
+      kernelMinver = kernel.tileiras-minver or "13.2";
+    in
+    if minver == null || lib.versionOlder minver kernelMinver then kernelMinver else minver
+  ) null cutileKernels;
 
   name = toml.general.name;
 }

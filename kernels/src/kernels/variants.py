@@ -253,7 +253,41 @@ class NoarchVariant:
         return f"{self.framework.variant_str}-{self.arch.variant_str}"
 
 
-Variant = ArchVariant | NoarchVariant
+@strict
+@dataclass(unsafe_hash=True)
+class Sdk:
+    """Framework-less marker for SDK variants."""
+
+    @property
+    def variant_str(self) -> str:
+        return "sdk"
+
+
+@strict
+@dataclass(unsafe_hash=True)
+class SdkVariant:
+    """SDK build variant.
+
+    SDK variants have no framework. They only use the new variant string
+    format. There are three forms:
+
+    - `sdk`: framework and backend-agnostic (`arch` is `None`).
+    - `sdk-<backend>`: SDK for a specific backend (`arch` is `Noarch`).
+    - `sdk-<backend>[-<version>]-<abi>-<platform>-<os>`: SDK with compiled
+      parts (`arch` is `Arch`), e.g. `sdk-cuda-12.8-abi3-x86_64-linux`.
+    """
+
+    framework: Sdk
+    arch: Arch | Noarch | None
+
+    @property
+    def variant_str(self) -> str:
+        if self.arch is None:
+            return self.framework.variant_str
+        return f"{self.framework.variant_str}-{self.arch.variant_str}"
+
+
+Variant = ArchVariant | NoarchVariant | SdkVariant
 
 
 @dataclass(unsafe_hash=True)
@@ -275,9 +309,11 @@ Decision = VariantAccepted | VariantRejected
 
 
 def parse_variant(variant_str: str) -> Variant:
-    """Parse a variant string into an ArchVariant or NoarchVariant."""
+    """Parse a variant string into an ArchVariant, NoarchVariant or SdkVariant."""
     parts = variant_str.split("-")
 
+    if parts[0] == "sdk":
+        return parse_sdk_variant(variant_str)
     if variant_str.startswith("torch-stable-abi"):
         # Legacy: `torch-stable-abi211-...`, new: `torch-stable-abi-2.11-...`.
         legacy = not (len(parts) > 3 and parts[2] == "abi")
@@ -315,6 +351,24 @@ def parse_variant(variant_str: str) -> Variant:
         )
     else:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
+
+
+def parse_sdk_variant(variant_str: str) -> SdkVariant:
+    """Parse a variant string into an SdkVariant."""
+    parts = variant_str.split("-")
+
+    if parts[0] != "sdk":
+        raise ValueError(f"Not an SDK variant string: {variant_str!r}")
+
+    arch: Arch | Noarch | None
+    if len(parts) == 1:
+        arch = None
+    elif len(parts) == 2:
+        arch = Noarch.parse(parts[1])
+    else:
+        arch = Arch.parse(parts[1:], legacy=False)
+
+    return SdkVariant(framework=Sdk(), arch=arch)
 
 
 def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
@@ -464,6 +518,44 @@ def _python_abi_mismatch(python_abi: str, python_version: Version, free_threaded
     return None
 
 
+def _platform_mismatch(arch: Arch, cpu: str, os: str) -> str | None:
+    """Return the reason if the arch's CPU or OS does not match the system."""
+    if arch.platform != cpu:
+        return f"CPU ({arch.platform}) does not match system CPU ({cpu})"
+    if arch.os != os:
+        return f"OS ({arch.os}) does not match system OS ({os})"
+    return None
+
+
+def _backend_mismatch(backend: Backend, selected_backend: Backend, macos_version: Version | None) -> str | None:
+    """Return the reason if the variant's backend is not compatible with the
+    selected backend."""
+    # Given a system CUDA version of x.y, only CUDA versions x.z,
+    # where z <= y qualify. Otherwise, the backend + version (if present)
+    # must match.
+    if isinstance(selected_backend, CUDA) and isinstance(backend, CUDA):
+        if (
+            backend.version.major != selected_backend.version.major
+            or backend.version.minor > selected_backend.version.minor
+        ):
+            return f"CUDA version ({backend.version}) is not compatible with system CUDA version ({selected_backend.version})"
+    # Same for ROCm: given a system ROCm version of x.y, only ROCm
+    # versions x.z, where z <= y qualify.
+    elif isinstance(selected_backend, ROCm) and isinstance(backend, ROCm):
+        if (
+            backend.version.major != selected_backend.version.major
+            or backend.version.minor > selected_backend.version.minor
+        ):
+            return f"ROCm version ({backend.version}) is not compatible with system ROCm version ({selected_backend.version})"
+    elif backend != selected_backend:
+        return f"backend ({backend.variant_str}) does not match selected backend ({selected_backend.variant_str})"
+    elif isinstance(backend, Metal) and (macos_version is None or macos_version < _METAL_MIN_MACOS_VERSION):
+        return (
+            f"Metal kernels require macOS {_METAL_MIN_MACOS_VERSION} or later, system macOS version is {macos_version}"
+        )
+    return None
+
+
 def _check_variants(
     variants: list[Variant],
     selected_backend: Backend,
@@ -487,21 +579,9 @@ def _check_variants(
                 continue
 
             # Skip non-matching CPU or OS.
-            if v.arch.platform != cpu:
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason=f"CPU ({v.arch.platform}) does not match system CPU ({cpu})",
-                    )
-                )
-                continue
-            if v.arch.os != os:
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason=f"OS ({v.arch.os}) does not match system OS ({os})",
-                    )
-                )
+            reason = _platform_mismatch(v.arch, cpu, os)
+            if reason is not None:
+                result.append(VariantRejected(variant=v, reason=reason))
                 continue
             # If the variant is a Torch or tvm-ffi variant, check that it has the
             # correct version and ABI.
@@ -540,52 +620,9 @@ def _check_variants(
                         )
                     )
                     continue
-            # Given a system CUDA version of x.y, only CUDA versions x.z,
-            # where z <= y qualify. Otherwise, the backend + version (if present)
-            # must match.
-            if isinstance(selected_backend, CUDA) and isinstance(v.arch.backend, CUDA):
-                if (
-                    v.arch.backend.version.major != selected_backend.version.major
-                    or v.arch.backend.version.minor > selected_backend.version.minor
-                ):
-                    result.append(
-                        VariantRejected(
-                            variant=v,
-                            reason=f"CUDA version ({v.arch.backend.version}) is not compatible with system CUDA version ({selected_backend.version})",
-                        )
-                    )
-                    continue
-            # Same for ROCm: given a system ROCm version of x.y, only ROCm
-            # versions x.z, where z <= y qualify.
-            elif isinstance(selected_backend, ROCm) and isinstance(v.arch.backend, ROCm):
-                if (
-                    v.arch.backend.version.major != selected_backend.version.major
-                    or v.arch.backend.version.minor > selected_backend.version.minor
-                ):
-                    result.append(
-                        VariantRejected(
-                            variant=v,
-                            reason=f"ROCm version ({v.arch.backend.version}) is not compatible with system ROCm version ({selected_backend.version})",
-                        )
-                    )
-                    continue
-            elif v.arch.backend != selected_backend:
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason=f"backend ({v.arch.backend.variant_str}) does not match selected backend ({selected_backend.variant_str})",
-                    )
-                )
-                continue
-            elif isinstance(v.arch.backend, Metal) and (
-                macos_version is None or macos_version < _METAL_MIN_MACOS_VERSION
-            ):
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason=f"Metal kernels require macOS {_METAL_MIN_MACOS_VERSION} or later, system macOS version is {macos_version}",
-                    )
-                )
+            reason = _backend_mismatch(v.arch.backend, selected_backend, macos_version)
+            if reason is not None:
+                result.append(VariantRejected(variant=v, reason=reason))
                 continue
         elif isinstance(v, NoarchVariant):
             # Only noarch variants with a matching backend or "universal"
@@ -599,6 +636,28 @@ def _check_variants(
                     )
                 )
                 continue
+        elif isinstance(v, SdkVariant):
+            if v.arch is None:
+                # Framework and backend-agnostic.
+                pass
+            elif isinstance(v.arch, Noarch):
+                if v.arch.backend_name != selected_backend.name:
+                    result.append(
+                        VariantRejected(
+                            variant=v,
+                            reason=f"backend ({v.arch.backend_name}) does not match system backend ({selected_backend.name})",
+                        )
+                    )
+                    continue
+            else:
+                reason = (
+                    _python_abi_mismatch(v.arch.python_abi, python_version, free_threaded)
+                    or _platform_mismatch(v.arch, cpu, os)
+                    or _backend_mismatch(v.arch.backend, selected_backend, macos_version)
+                )
+                if reason is not None:
+                    result.append(VariantRejected(variant=v, reason=reason))
+                    continue
         result.append(VariantAccepted(variant=v))
     return result
 
@@ -613,8 +672,11 @@ def _sort_variants(
        then highest compatible CUDA version.
     2. Torch arch kernels (tagless before C++ ABI-tagged) with the highest compatible CUDA version.
     3. tvm-ffi arch kernels with with the highest compatible CUDA version.
-    4. Torch noarch kernels.
-    5. Old Torch universal kernels.
+    4. SDK arch kernels with the highest compatible CUDA version.
+    5. Torch noarch kernels.
+    6. Old Torch universal kernels.
+    7. SDK kernels for a specific backend.
+    8. SDK kernels that are framework and backend-agnostic.
 
     Arch kernels that are otherwise equal are ordered by Python ABI: abi3
     before abi3t, since GIL-enabled builds prefer abi3 (abi3 variants are never
@@ -647,10 +709,20 @@ def _sort_variants(
                 backend_order = 0
             python_abi_order = _PYTHON_ABIS.index(v.arch.python_abi)
             return (decision_order, framework_order, *abi_version_order, backend_order, python_abi_order)
+        elif isinstance(v, SdkVariant):
+            if isinstance(v.arch, Arch):
+                backend_order = (
+                    -v.arch.backend.version.minor if isinstance(v.arch.backend, (CUDA, ROCm, XPU, CANN)) else 0
+                )
+                python_abi_order = _PYTHON_ABIS.index(v.arch.python_abi)
+                return (decision_order, 3, 0, 0, backend_order, python_abi_order)
+            elif isinstance(v.arch, Noarch):
+                return (decision_order, 5, 0, 0, 0, 0)
+            return (decision_order, 6, 0, 0, 0, 0)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.arch.backend_name == "universal" else 0
-            return (decision_order, 2, 0, 0, universal_order, 0)
+            return (decision_order, 4, 0, 0, universal_order, 0)
 
     return sorted(variants, key=sort_key)
 

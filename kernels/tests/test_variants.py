@@ -5,11 +5,15 @@ from packaging.version import Version
 from kernels.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
 from kernels.variants import (
     Arch,
+    Noarch,
+    Sdk,
+    SdkVariant,
     Variant,
     VariantAccepted,
     VariantRejected,
     _resolve_variant_for_system,
     get_variants,
+    parse_sdk_variant,
     parse_variant,
 )
 
@@ -82,6 +86,22 @@ NOARCH_VARIANT_STRINGS = [
     "torch-cann",
     "torch-universal",
 ]
+
+SDK_VARIANT_STRINGS = (
+    ["sdk"]
+    + [f"sdk-{backend}" for backend in ["cpu", "cuda", "metal", "rocm", "xpu", "cann"]]
+    + [
+        f"sdk-{backend}-{python_abi}-{system}"
+        for backend in ["cpu", "cuda-12.6", "cuda-13.0", "rocm-6.3", "rocm-6.4", "xpu-2025.2", "cann-8.1"]
+        for python_abi in ["abi3", "abi3t"]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+    + [
+        f"sdk-{backend}-{python_abi}-aarch64-darwin"
+        for backend in ["cpu", "metal"]
+        for python_abi in ["abi3", "abi3t"]
+    ]
+)
 
 SUPERSET_VARIANT_STRINGS = [
     "torch210-cpu-aarch64-darwin",
@@ -459,6 +479,231 @@ def test_resolve_python_abi_preference():
         "torch-2.10-cuda-12.6-abi3-x86_64-linux",
         "torch-2.10-cuda-12.6-abi3t-x86_64-linux",
     ]
+
+
+@pytest.mark.parametrize("variant_str", SDK_VARIANT_STRINGS)
+def test_sdk_variants(variant_str: str):
+    # Roundtrip parse and generate variant string.
+    variant = parse_sdk_variant(variant_str)
+    assert variant.variant_str == variant_str
+    if isinstance(variant.arch, Arch):
+        assert not getattr(variant.arch.backend, "legacy", False)
+        assert not variant.arch.legacy
+        assert f"-{variant.arch.python_abi}-" in variant_str
+
+
+def test_sdk_variant_forms():
+    assert parse_sdk_variant("sdk") == SdkVariant(framework=Sdk(), arch=None)
+    assert parse_sdk_variant("sdk-cuda") == SdkVariant(framework=Sdk(), arch=Noarch(backend_name="cuda"))
+    assert parse_sdk_variant("sdk-cpu") == SdkVariant(framework=Sdk(), arch=Noarch(backend_name="cpu"))
+    assert parse_sdk_variant("sdk-cuda-12.8-abi3-x86_64-linux") == SdkVariant(
+        framework=Sdk(),
+        arch=Arch(backend=CUDA(version=Version("12.8")), platform="x86_64", os="linux"),
+    )
+    assert parse_sdk_variant("sdk-cuda-12.8-abi3t-x86_64-linux") == SdkVariant(
+        framework=Sdk(),
+        arch=Arch(
+            backend=CUDA(version=Version("12.8")), platform="x86_64", os="linux", python_abi="abi3t", legacy=False
+        ),
+    )
+    assert parse_sdk_variant("sdk-cpu-abi3-x86_64-linux") == SdkVariant(
+        framework=Sdk(),
+        arch=Arch(backend=CPU(), platform="x86_64", os="linux"),
+    )
+    # The Python ABI distinguishes variants.
+    assert parse_sdk_variant("sdk-cuda-12.8-abi3-x86_64-linux") != parse_sdk_variant(
+        "sdk-cuda-12.8-abi3t-x86_64-linux"
+    )
+
+
+@pytest.mark.parametrize(
+    "variant_str",
+    [
+        # Wrong number of parts.
+        "sdk-cuda-12.8",
+        "sdk-cuda-12.8-abi3",
+        "sdk-cuda-12.8-abi3-x86_64",
+        "sdk-cuda-12.8-abi3-x86_64-linux-extra",
+        "sdk-cpu-abi3-x86_64",
+        # Missing Python ABI tag.
+        "sdk-cuda-12.8-x86_64-linux",
+        "sdk-cpu-x86_64-linux",
+        # Unknown Python ABI tag, or the tag in the wrong place.
+        "sdk-cuda-12.8-abi4-x86_64-linux",
+        "sdk-cuda-12.8-x86_64-linux-abi3",
+        "sdk-abi3-cuda-12.8-x86_64-linux",
+        # SDK variants only use the new format.
+        "sdk-cu128-abi3-x86_64-linux",
+        "sdk-rocm63-abi3-x86_64-linux",
+        "sdk-xpu20252-abi3-x86_64-linux",
+        # Missing, superfluous or malformed backend version.
+        "sdk-cuda-abi3-x86_64-linux",
+        "sdk-cpu-12.8-abi3-x86_64-linux",
+        "sdk-cuda-12-abi3-x86_64-linux",
+        # Unknown backend in arch form.
+        "sdk-unknown-abi3-x86_64-linux",
+        # Not an SDK variant.
+        "torch-cpu",
+        "torch-2.10-cpu-abi3-x86_64-linux",
+        "sdkfoo",
+        "",
+    ],
+)
+def test_sdk_variants_invalid(variant_str: str):
+    with pytest.raises(ValueError):
+        parse_sdk_variant(variant_str)
+
+
+@pytest.mark.parametrize("variant_str", SDK_VARIANT_STRINGS)
+def test_parse_variant_sdk(variant_str: str):
+    # SDK variants are parsed by the generic parser, so that they can be
+    # resolved like other variants.
+    variant = parse_variant(variant_str)
+    assert isinstance(variant, SdkVariant)
+    assert variant == parse_sdk_variant(variant_str)
+    assert variant.variant_str == variant_str
+
+
+SDK_RESOLVE_VARIANTS = [
+    parse_variant(s)
+    for s in [
+        "sdk",
+        "sdk-cuda",
+        "sdk-cpu",
+        "sdk-cuda-12.8-abi3-x86_64-linux",
+        "sdk-cuda-12.8-abi3t-x86_64-linux",
+        "sdk-cuda-12.6-abi3-x86_64-linux",
+        "sdk-cuda-13.0-abi3-x86_64-linux",
+        "sdk-cuda-12.8-abi3-aarch64-linux",
+        "sdk-rocm-6.3-abi3-x86_64-linux",
+        "sdk-metal-abi3-aarch64-darwin",
+        "torch-2.10-cuda-12.8-abi3-x86_64-linux",
+    ]
+]
+
+
+def test_resolve_sdk_without_framework():
+    # SDK variants do not need a framework to be installed.
+    result, trace = _resolve_variant_for_system(
+        variants=SDK_RESOLVE_VARIANTS,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+    )
+    # Highest compatible CUDA version first (abi3 before abi3t), then backend
+    # SDKs, then the backend-agnostic SDK.
+    assert [v.variant_str for v in result] == [
+        "sdk-cuda-12.8-abi3-x86_64-linux",
+        "sdk-cuda-12.8-abi3t-x86_64-linux",
+        "sdk-cuda-12.6-abi3-x86_64-linux",
+        "sdk-cuda",
+        "sdk",
+    ]
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(SDK_RESOLVE_VARIANTS)
+
+    rejected = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
+    assert set(rejected) == {
+        "sdk-cpu",
+        "sdk-cuda-13.0-abi3-x86_64-linux",
+        "sdk-cuda-12.8-abi3-aarch64-linux",
+        "sdk-rocm-6.3-abi3-x86_64-linux",
+        "sdk-metal-abi3-aarch64-darwin",
+        "torch-2.10-cuda-12.8-abi3-x86_64-linux",
+    }
+    assert "does not match system backend" in rejected["sdk-cpu"]
+    assert "CUDA version (13.0)" in rejected["sdk-cuda-13.0-abi3-x86_64-linux"]
+    assert "does not match system CPU" in rejected["sdk-cuda-12.8-abi3-aarch64-linux"]
+    assert "does not match selected backend" in rejected["sdk-rocm-6.3-abi3-x86_64-linux"]
+
+
+def test_resolve_sdk_preference_order():
+    # Framework-specific arch variants are preferred over SDK variants, SDK
+    # arch variants over Torch noarch, and the backend-agnostic SDK is last.
+    expected = [
+        "torch-stable-abi-2.10-cuda-12.8-abi3-x86_64-linux",
+        "torch-2.10-cuda-12.8-abi3-x86_64-linux",
+        "tvm-ffi-0.1-cuda-12.8-abi3-x86_64-linux",
+        "sdk-cuda-12.8-abi3-x86_64-linux",
+        "torch-cuda",
+        "torch-universal",
+        "sdk-cuda",
+        "sdk",
+    ]
+    variants = [parse_variant(s) for s in reversed(expected)]
+    result, _ = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=Version("0.1"),
+    )
+    assert [v.variant_str for v in result] == expected
+
+
+@pytest.mark.parametrize(
+    "python_version,free_threaded,expected",
+    [
+        # GIL builds before 3.15 cannot load abi3t.
+        ("3.14", False, ["sdk-cuda-12.8-abi3-x86_64-linux", "sdk-cuda", "sdk"]),
+        # GIL builds from 3.15 load both, abi3 is preferred.
+        (
+            "3.15",
+            False,
+            ["sdk-cuda-12.8-abi3-x86_64-linux", "sdk-cuda-12.8-abi3t-x86_64-linux", "sdk-cuda", "sdk"],
+        ),
+        # Free-threaded builds cannot load abi3.
+        ("3.15", True, ["sdk-cuda-12.8-abi3t-x86_64-linux", "sdk-cuda", "sdk"]),
+        # Variants without compiled parts do not depend on the Python ABI.
+        ("3.14", True, ["sdk-cuda", "sdk"]),
+    ],
+)
+def test_resolve_sdk_python_abi(python_version: str, free_threaded: bool, expected: list[str]):
+    variants = [
+        parse_variant(s)
+        for s in [
+            "sdk",
+            "sdk-cuda",
+            "sdk-cuda-12.8-abi3-x86_64-linux",
+            "sdk-cuda-12.8-abi3t-x86_64-linux",
+        ]
+    ]
+    result, _ = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+        python_version=Version(python_version),
+        free_threaded=free_threaded,
+    )
+    assert [v.variant_str for v in result] == expected
+
+
+@pytest.mark.parametrize("macos_version,accepted", [(None, False), (Version("25.4"), False), (Version("26.0"), True)])
+def test_resolve_sdk_metal_macos(macos_version, accepted: bool):
+    variants = [parse_variant("sdk-metal-abi3-aarch64-darwin")]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+        macos_version=macos_version,
+    )
+    assert (result == variants) == accepted
+    if not accepted:
+        assert isinstance(trace[0], VariantRejected)
+        assert "require macOS 26.0" in trace[0].reason
 
 
 def test_get_variants():

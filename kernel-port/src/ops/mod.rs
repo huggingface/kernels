@@ -2,7 +2,8 @@ mod convert_import;
 mod delete;
 mod ensure_import;
 mod ensure_init;
-mod expect;
+pub(crate) mod expect;
+mod extension;
 mod git;
 mod kernel;
 mod kernelize_imports;
@@ -14,6 +15,7 @@ mod prune;
 mod relativize_imports;
 mod remap_module;
 mod replace;
+mod rewrite;
 mod source;
 mod strip_suffix;
 mod vendor;
@@ -23,6 +25,7 @@ pub use delete::Delete;
 pub use ensure_import::EnsureImport;
 pub use ensure_init::EnsureInit;
 pub use expect::Expect;
+pub use extension::Extension;
 pub use kernel::Kernel;
 pub use kernelize_imports::KernelizeImports;
 pub use manifest::Manifest;
@@ -33,6 +36,7 @@ pub use prune::Prune;
 pub use relativize_imports::RelativizeImports;
 pub use remap_module::RemapModule;
 pub use replace::Replace;
+pub use rewrite::Rewrite;
 pub use source::Source;
 pub use strip_suffix::StripSuffix;
 pub use vendor::Vendor;
@@ -267,6 +271,27 @@ fn glob_union(ws: &Workspace, globs: &[Pattern], what: &str) -> Result<Vec<Strin
     Ok(union.into_iter().collect())
 }
 
+// The files a src list selects; with `follow_includes`, also every file they
+// reach through #includes, searched for in `include` (relative to the root).
+fn source_files(
+    ws: &Workspace,
+    globs: &[Pattern],
+    what: &str,
+    include: &[String],
+    follow_includes: bool,
+) -> Result<Vec<String>> {
+    let src = glob_union(ws, globs, what)?;
+    if !follow_includes {
+        return Ok(src);
+    }
+    let dirs: Vec<String> = include
+        .iter()
+        .map(|d| d.trim_matches('/').trim_start_matches("./").to_string())
+        .map(|d| if d == "." { String::new() } else { d })
+        .collect();
+    Ok(ws.include_closure(&src, &dirs).into_iter().collect())
+}
+
 // An include directory is named, not globbed, so a typo would otherwise
 // surface at build time rather than here.
 fn check_include_dir(ws: &Workspace, dir: &str) -> Result<()> {
@@ -288,8 +313,10 @@ pub enum Op {
     Delete(Delete),
     Move(Move),
     Replace(Replace),
+    Rewrite(Rewrite),
     StripSuffix(StripSuffix),
     Expect(Expect),
+    Extension(Extension),
     Overlay(Overlay),
     Prune(Prune),
     Kernel(Kernel),
@@ -311,8 +338,10 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "delete" => Op::Delete(Delete::build(&mut args)?),
         "move" => Op::Move(Move::build(&mut args)?),
         "replace" => Op::Replace(Replace::build(&mut args)?),
+        "rewrite" => Op::Rewrite(Rewrite::build(&mut args)?),
         "strip_suffix" => Op::StripSuffix(StripSuffix::build(&mut args)?),
         "expect" => Op::Expect(Expect::build(&mut args)?),
+        "extension" => Op::Extension(Extension::build(&mut args)?),
         "overlay" => Op::Overlay(Overlay::build(&mut args, recipe_dir)?),
         "prune" => Op::Prune(Prune::build(&mut args)?),
         "kernel" => Op::Kernel(Kernel::build(&mut args)?),
@@ -338,8 +367,10 @@ impl Op {
             Self::Delete(op) => op.apply(ws),
             Self::Move(op) => op.apply(ws, facts),
             Self::Replace(op) => op.apply(ws),
+            Self::Rewrite(op) => op.apply(ws),
             Self::StripSuffix(op) => op.apply(ws),
             Self::Expect(op) => op.apply(ws),
+            Self::Extension(op) => op.apply(ws),
             Self::Overlay(op) => op.apply(ws),
             Self::Prune(op) => op.apply(ws),
             Self::Kernel(op) => op.apply(ws, facts),

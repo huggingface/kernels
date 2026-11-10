@@ -11,6 +11,7 @@ pub struct KernelizeImports {
     binding: String,
     kernel: String,
     version: usize,
+    check_arch: bool,
     changes: Option<usize>,
 }
 
@@ -26,12 +27,21 @@ impl KernelizeImports {
             bail!("kernel must not be empty");
         }
         let binding = args.take_opt("binding").unwrap_or_else(|| package.clone());
+        // `get_kernel` checks the device architecture by default; kernels
+        // built only for newer devices skip it so their tests can be
+        // collected, and gated, everywhere.
+        let check_arch = match args.take_opt("check_arch").as_deref() {
+            None | Some("true") => true,
+            Some("false") => false,
+            Some(other) => bail!("check_arch must be #true or #false, got {other:?}"),
+        };
         Ok(Self {
             pattern: args.take("in")?.parse()?,
             package,
             binding,
             kernel,
             version: args.take_usize("version")?,
+            check_arch,
             changes: args.take_usize_opt("changes")?,
         })
     }
@@ -50,6 +60,7 @@ impl KernelizeImports {
                     &self.binding,
                     &self.kernel,
                     self.version,
+                    self.check_arch,
                 )
             },
         )

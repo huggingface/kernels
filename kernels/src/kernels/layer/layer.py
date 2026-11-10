@@ -576,6 +576,7 @@ def use_kernelized_func(*args: Callable):
                 name = getattr(fn, "__name__", None) or getattr(fn, "kernel_layer_name", None)
                 assert name is not None
 
+                # Private wrapper for eager, selected forward for compile
                 kernel_func = self._kernel_funcs[name]
                 active_kernel_funcs[id(fn)] = (kernel_func, kernel_func.forward.__func__)
 
@@ -841,8 +842,8 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
             # Dispatch global calls to the active model's private wrapper
             if (active_kernel_funcs := _ACTIVE_KERNEL_FUNCS.get()) is not None:
                 if (active_kernel_func := active_kernel_funcs.get(id(self))) is not None:
+                    # Call the selected forward directly to avoid dynamo guards (private wrapper ids)
                     kernel_func, forward_func = active_kernel_func
-
                     if torch.compiler.is_compiling():
                         if forward_func is not type(self).forward:
                             return forward_func(self, *args, **kwargs)

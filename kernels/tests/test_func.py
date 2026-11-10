@@ -338,6 +338,7 @@ def test_kernel_func_compile_reuses_forward_across_instances():
 
     # Catch the graphs dynamo would create (including new ones created during recompiles)
     graphs = []
+
     def backend(gm, inputs):
         graphs.append(gm)
         return gm.forward

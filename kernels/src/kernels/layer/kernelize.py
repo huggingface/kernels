@@ -256,7 +256,7 @@ def kernelize(
         _validate_device_type(device)
         device_type = Device(type=device)
     else:
-        device_type = Device(device.type)
+        device_type = _device_type_from_torch(device.type)
 
     assert isinstance(device_type, Device)
 
@@ -314,9 +314,12 @@ def _find_device(model: "nn.Module") -> Device:
     except StopIteration:
         raise ValueError("Cannot determine model device, provide as `device` argument to `kernelize`.")
 
-    dev_type = param.device.type
+    return _device_type_from_torch(param.device.type)
+
+
+def _device_type_from_torch(dev_type: str) -> Device:
+    """Map a Torch device type to a kernels device type. ROCm devices use the `cuda` device type in Torch."""
     if dev_type == "cuda":
-        # Refine based on actual platform
         if _is_rocm_platform():
             return Device(type="rocm")
         elif _is_cuda_platform():

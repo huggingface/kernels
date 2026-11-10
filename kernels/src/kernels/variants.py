@@ -5,7 +5,7 @@ import sys
 import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal, get_args
 
 from huggingface_hub import HfApi, constants
 from huggingface_hub.dataclasses import strict
@@ -35,6 +35,18 @@ logger = logging.getLogger(__name__)
 # variant, reject Metal arch variants on older systems, since they fail to
 # load at runtime.
 _METAL_MIN_MACOS_VERSION = Version("26.0")
+
+# Python ABI of the compiled parts of a kernel:
+#
+# - `abi3`: stable ABI, for Python builds with a GIL.
+# - `abi3t`: stable ABI for Python >= 3.15 free-threaded builds (PEP 803).
+#            Also works with >= 3.15 GIL-enabled builds.
+#
+# Variants in the legacy variant string format do not have a Python ABI tag
+# and are always `abi3`.
+PythonAbi = Literal["abi3", "abi3t"]
+_PYTHON_ABIS: tuple[str, ...] = get_args(PythonAbi)
+_ABI3T_MIN_PYTHON_VERSION = Version("3.15")
 
 
 @dataclass(unsafe_hash=True)
@@ -156,28 +168,47 @@ class Arch:
     backend: Backend
     platform: str
     os: str
+    python_abi: PythonAbi = "abi3"
+    # Whether to use the legacy variant string format, which does not have a
+    # Python ABI tag (the ABI is implicitly `abi3`). Does not take part in
+    # comparisons.
+    legacy: bool = field(default=True, compare=False)
+
+    def __post_init__(self):
+        if self.legacy and self.python_abi != "abi3":
+            raise ValueError(f"The legacy variant string format only supports abi3, not {self.python_abi}")
 
     @property
     def variant_str(self) -> str:
-        return f"{self.backend.variant_str}-{self.platform}-{self.os}"
+        if self.legacy:
+            return f"{self.backend.variant_str}-{self.platform}-{self.os}"
+        return f"{self.backend.variant_str}-{self.python_abi}-{self.platform}-{self.os}"
 
     @staticmethod
     def parse(parts: list[str], *, legacy: bool = True) -> "Arch":
         """
-        Parse arch parts: backend, platform and OS. In the legacy format, the
-        backend (including its version) is a single part (`cu128`). In the new
-        format, the backend name and the version are separate parts
-        (`cuda`, `12.8`), unless the backend does not have a version.
+        Parse arch parts: backend, Python ABI tag (new format only), platform
+        and OS. In the legacy format, the backend (including its version) is a
+        single part (`cu128`). In the new format, the backend name and the
+        version are separate parts (`cuda`, `12.8`), unless the backend does
+        not have a version, and the backend is followed by the Python ABI tag
+        (`abi3` or `abi3t`).
         """
         backend_len = 2 if not legacy and parts and parts[0] in VERSIONED_BACKEND_NAMES else 1
-        if len(parts) != backend_len + 2:
+        abi_len = 0 if legacy else 1
+        if len(parts) != backend_len + abi_len + 2:
             raise ValueError(f"Invalid arch variant parts: {parts!r}")
 
         backend = parse_backend("-".join(parts[:backend_len]), legacy=legacy)
-        platform = parts[backend_len]
-        os = parts[backend_len + 1]
+        python_abi = "abi3"
+        if not legacy:
+            python_abi = parts[backend_len]
+            if python_abi not in _PYTHON_ABIS:
+                raise ValueError(f"Invalid Python ABI tag {python_abi!r} in arch variant parts: {parts!r}")
+        platform = parts[backend_len + abi_len]
+        os = parts[backend_len + abi_len + 1]
 
-        return Arch(backend=backend, platform=platform, os=os)
+        return Arch(backend=backend, platform=platform, os=os, python_abi=python_abi, legacy=legacy)  # type: ignore[arg-type]
 
 
 @strict
@@ -375,6 +406,8 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
         torch_cxx11_abi=torch_cxx11_abi,
         tvm_ffi_version=tvm_ffi_version,
         macos_version=macos_version,
+        python_version=Version(f"{sys.version_info.major}.{sys.version_info.minor}"),
+        free_threaded=_is_free_threaded_build(),
     )
 
 
@@ -387,8 +420,13 @@ def _resolve_variant_for_system(
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
     macos_version: Version | None = None,
+    python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
+    free_threaded: bool = False,
 ) -> tuple[list[Variant], list[Decision]]:
     """Resolve the best matching variant given explicit system parameters.
+
+    The Python version and free-threaded state default to a GIL-enabled
+    Python 3.15, which supports both abi3 and abi3t variants.
 
     Returns the preference-sorted list of accepted variants and a trace of
     the acceptance/rejection decision for each variant."""
@@ -401,6 +439,8 @@ def _resolve_variant_for_system(
         torch_cxx11_abi,
         tvm_ffi_version,
         macos_version,
+        python_version,
+        free_threaded,
     )
     trace = _sort_variants(trace)
 
@@ -408,10 +448,20 @@ def _resolve_variant_for_system(
     return applicable, trace
 
 
-def _is_unsupported_free_threaded_build() -> bool:
-    """Check if the Python interpreter is a free-threaded build that does not
-    support ABI3."""
-    return sys.version_info < (3, 15) and bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+def _is_free_threaded_build() -> bool:
+    """Check if the Python interpreter is a free-threaded build."""
+    return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
+def _python_abi_mismatch(python_abi: str, python_version: Version, free_threaded: bool) -> str | None:
+    """Return the reason if the Python ABI is not supported by the interpreter."""
+    if python_abi == "abi3":
+        # Free-threaded builds do not load abi3 extensions.
+        if free_threaded:
+            return "abi3 is not supported on free-threaded Python, abi3t is required"
+    elif python_version < _ABI3T_MIN_PYTHON_VERSION:
+        return f"abi3t requires Python {_ABI3T_MIN_PYTHON_VERSION} or later, system Python version is {python_version}"
+    return None
 
 
 def _check_variants(
@@ -423,30 +473,17 @@ def _check_variants(
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
     macos_version: Version | None = None,
+    python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
+    free_threaded: bool = False,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
-    is_unsupported_free_threaded = _is_unsupported_free_threaded_build()
-    # Prefilter all arch kernels on free-threaded Python pre-3.15, since
-    # they do not support the stable ABI.
-    if is_unsupported_free_threaded:
-        logger.warning(
-            "Arch kernels use the stable ABI, which is not supported on free-threaded "
-            "Python before version 3.15. Arch kernels will not be used. Consider using "
-            "a non-free-threaded interpreter, or upgrade to Python 3.15+.",
-            stacklevel=2,
-        )
-        variants = [v for v in variants if not isinstance(v, ArchVariant)]
-
     result: list[Decision] = []
     for v in variants:
         if isinstance(v, ArchVariant):
-            if is_unsupported_free_threaded:
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason="arch kernel not supported on free-threaded Python <3.15",
-                    )
-                )
+            # Skip variants with a Python ABI that the interpreter cannot load.
+            reason = _python_abi_mismatch(v.arch.python_abi, python_version, free_threaded)
+            if reason is not None:
+                result.append(VariantRejected(variant=v, reason=reason))
                 continue
 
             # Skip non-matching CPU or OS.
@@ -578,6 +615,10 @@ def _sort_variants(
     3. tvm-ffi arch kernels with with the highest compatible CUDA version.
     4. Torch noarch kernels.
     5. Old Torch universal kernels.
+
+    Arch kernels that are otherwise equal are ordered by Python ABI: abi3
+    before abi3t, since GIL-enabled builds prefer abi3 (abi3 variants are never
+    accepted on free-threaded builds).
     """
 
     def sort_key(vs: Decision) -> tuple[int, ...]:
@@ -604,11 +645,12 @@ def _sort_variants(
                 backend_order = -v.arch.backend.version.minor
             else:
                 backend_order = 0
-            return (decision_order, framework_order, *abi_version_order, backend_order)
+            python_abi_order = _PYTHON_ABIS.index(v.arch.python_abi)
+            return (decision_order, framework_order, *abi_version_order, backend_order, python_abi_order)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.arch.backend_name == "universal" else 0
-            return (decision_order, 2, 0, 0, universal_order)
+            return (decision_order, 2, 0, 0, universal_order, 0)
 
     return sorted(variants, key=sort_key)
 

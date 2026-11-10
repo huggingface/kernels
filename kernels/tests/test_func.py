@@ -319,8 +319,9 @@ def test_kernel_func_nested_compile_context(monkeypatch, num_inner, expected):
         _bind_forward(inner._kernel_funcs["double_me"], TimesThree.forward)
 
     # Mimic different compiled boundaries
-    # (outer has 5 checks (get/set/reset + 2 dispatches); each inner has 4 checks (get/set/reset + 1 dispatch))
-    compiling = iter([True] * (4 * num_inner + 4) + [False])  # last one introduces the boundary
+    # > Outer: 5 checks (get/set/reset + 2 dispatches); each Inner: 4 (get/set/reset + 1 dispatch)
+    # > Each final boundary is set to false (last inner, outer dispatch, outer reset)
+    compiling = iter([True] * (4 * num_inner + 2) + [False] * 3)
     monkeypatch.setattr(torch.compiler, "is_compiling", lambda: next(compiling))
 
     # Same as in `test_kernel_func_nested_dispatch` (just *3 once or twice)

@@ -266,6 +266,10 @@ in the kernel directory:
 
 ## Generating the kernel source at build time
 
+> [!WARNING]
+> `kernel-port` is experimental. Its recipes and the `port` argument may still
+> change without notice.
+
 A kernel that is ported from an upstream repository with
 [`kernel-port`](https://github.com/huggingface/kernels/tree/main/kernel-port)
 does not have to commit the generated source. Commit the recipe and pass it to

@@ -146,16 +146,15 @@ let
         inherit (port) recipe upstream;
         vendors = port.vendors or { };
       };
-  portedSrc = if ported == null then null else ported.verified;
+  kernelBuild = if ported == null then build else build.override { portedSrc = ported.verified; };
 in
 {
   devShells = rec {
     default = devShells.${bestVariant};
     test = testShells.${bestVariant};
-    devShells = build.mkDevShells {
+    devShells = kernelBuild.mkDevShells {
       inherit
         path
-        portedSrc
         doGetKernelCheck
         pythonCheckInputs
         pythonNativeCheckInputs
@@ -163,10 +162,9 @@ in
       buildSets = applicableBuildSets;
       rev = revUnderscored;
     };
-    testShells = build.torchExtensionShells {
+    testShells = kernelBuild.torchExtensionShells {
       inherit
         path
-        portedSrc
         doGetKernelCheck
         pythonCheckInputs
         pythonNativeCheckInputs
@@ -177,20 +175,14 @@ in
   };
   packages =
     let
-      bundle = build.mkExtensionBundle {
-        inherit
-          path
-          portedSrc
-          doGetKernelCheck
-          kernelProvenance
-          ;
+      bundle = kernelBuild.mkExtensionBundle {
+        inherit path doGetKernelCheck kernelProvenance;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
-      ciTests = build.mkCiTests {
+      ciTests = kernelBuild.mkCiTests {
         inherit
           path
-          portedSrc
           doGetKernelCheck
           pythonCheckInputs
           kernelProvenance
@@ -210,13 +202,8 @@ in
         builtins.listToAttrs (
           builtins.map (backend: {
             name = backend;
-            value = build.mkExtensionBundle {
-              inherit
-                path
-                portedSrc
-                doGetKernelCheck
-                kernelProvenance
-                ;
+            value = kernelBuild.mkExtensionBundle {
+              inherit path doGetKernelCheck kernelProvenance;
               buildSets = builtins.filter (
                 set: buildConfigBackend set.buildConfig == backend
               ) applicableBuildSets;
@@ -291,13 +278,8 @@ in
             ++ (headOrEmpty (setsWithFramework "tpu"))
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
-        build.mkExtensionBundle {
-          inherit
-            path
-            portedSrc
-            doGetKernelCheck
-            kernelProvenance
-            ;
+        kernelBuild.mkExtensionBundle {
+          inherit path doGetKernelCheck kernelProvenance;
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
@@ -309,13 +291,8 @@ in
         builtins.listToAttrs (
           builtins.map (backend: {
             name = backend;
-            value = build.mkExtensionBundle {
-              inherit
-                path
-                portedSrc
-                doGetKernelCheck
-                kernelProvenance
-                ;
+            value = kernelBuild.mkExtensionBundle {
+              inherit path doGetKernelCheck kernelProvenance;
               # It is too costly to build all variants in CI, so we just build one per framework.
               buildSets = headOrEmpty (
                 builtins.filter (set: set.buildConfig.framework == backend) buildSetsSorted
@@ -350,13 +327,8 @@ in
         }) applicableBuildSets
       );
 
-      redistributable = build.mkDistTorchExtensions {
-        inherit
-          path
-          portedSrc
-          doGetKernelCheck
-          kernelProvenance
-          ;
+      redistributable = kernelBuild.mkDistTorchExtensions {
+        inherit path doGetKernelCheck kernelProvenance;
         bundleOnly = false;
         rev = revUnderscored;
         buildSets = applicableBuildSets;
@@ -377,8 +349,7 @@ in
       inherit (pkgs) hash-rust;
     }
     // lib.optionalAttrs (ported != null) {
-      # The `kernel-port` output, without the check against the committed
-      # files, so that stale files can be refreshed from it.
+      # Unverified, so that stale committed files can be refreshed from it.
       portedSrc = ported.generated;
     };
 }

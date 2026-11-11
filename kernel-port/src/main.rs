@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use kernel_port::{provenance_json, recipe, run_pipeline, workspace::Workspace};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -34,8 +33,8 @@ struct Cli {
     partial: bool,
     #[arg(long, value_name = "SHA", value_parser = parse_rev)]
     source_rev: Option<String>,
-    #[arg(long = "vendor-rev", value_name = "NAME=SHA")]
-    vendor_rev: Vec<String>,
+    #[arg(long = "vendor-rev", value_name = "NAME=SHA", value_parser = parse_vendor_rev)]
+    vendor_rev: Vec<(String, String)>,
 }
 
 fn main() {
@@ -45,6 +44,7 @@ fn main() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn run() -> Result<()> {
     let Cli {
         recipe_path,
@@ -61,7 +61,13 @@ fn run() -> Result<()> {
         vendor_rev,
     } = Cli::parse();
 
-    let (vendors, vendor_revs) = parse_vendors(&vendor, &vendor_rev)?;
+    let mut vendors = std::collections::BTreeMap::new();
+    for spec in &vendor {
+        let (name, path) = spec
+            .split_once('=')
+            .with_context(|| format!("--vendor {spec:?} must be name=dir"))?;
+        vendors.insert(name.to_string(), PathBuf::from(path));
+    }
 
     let (text, recipe_dir) = match (&recipe_path, recipe_inline) {
         (Some(path), None) => {
@@ -101,7 +107,7 @@ fn run() -> Result<()> {
         root,
         vendors,
         source_rev,
-        vendor_revs,
+        vendor_revs: vendor_rev.into_iter().collect(),
     };
     let facts = match run_pipeline(&mut ws, &recipe.ops, &recipe_dir, &inputs) {
         Ok(facts) => facts,
@@ -157,31 +163,6 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-type Vendors = (BTreeMap<String, PathBuf>, BTreeMap<String, String>);
-
-fn parse_vendors(vendor: &[String], vendor_rev: &[String]) -> Result<Vendors> {
-    let mut vendors = BTreeMap::new();
-    for spec in vendor {
-        let (name, path) = spec
-            .split_once('=')
-            .with_context(|| format!("--vendor {spec:?} must be name=dir"))?;
-        vendors.insert(name.to_string(), PathBuf::from(path));
-    }
-
-    let mut vendor_revs = BTreeMap::new();
-    for spec in vendor_rev {
-        let (name, rev) = spec
-            .split_once('=')
-            .with_context(|| format!("--vendor-rev {spec:?} must be name=sha"))?;
-        if !vendors.contains_key(name) {
-            bail!("--vendor-rev {name} has no matching --vendor {name}=<dir>");
-        }
-        let rev = parse_rev(rev).map_err(anyhow::Error::msg)?;
-        vendor_revs.insert(name.to_string(), rev);
-    }
-    Ok((vendors, vendor_revs))
-}
-
 // Nix passes the `rev` of a locked flake input.
 fn parse_rev(rev: &str) -> Result<String, String> {
     if rev.len() == 40 && rev.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -189,6 +170,13 @@ fn parse_rev(rev: &str) -> Result<String, String> {
     } else {
         Err(format!("expected a full 40-character hex SHA, got {rev:?}"))
     }
+}
+
+fn parse_vendor_rev(spec: &str) -> Result<(String, String), String> {
+    let (name, rev) = spec
+        .split_once('=')
+        .ok_or_else(|| format!("{spec:?} must be name=sha"))?;
+    Ok((name.to_string(), parse_rev(rev)?))
 }
 
 // A recipe kept on disk is re-run later, by someone else, against a newer

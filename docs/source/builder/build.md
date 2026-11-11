@@ -319,22 +319,6 @@ $ install -m 644 $out/build.toml $out/port-provenance.json .
 
 The generated source is available as `.#portedSrc` for inspection.
 
-To try a local `kernel-builder` checkout, write the override to the lock file
-instead of passing `--no-write-lock-file`. With `--no-write-lock-file`, Nix
-drops the revision of a clean kernel checkout and the build fails with
-`Kernel is not in a git repository`. Also pin `nixpkgs` to the one locked by the
-checkout, since the override otherwise locks the latest `nixpkgs`:
-
-```bash
-$ kb=/path/to/kernels
-$ nixpkgs=$(nix flake metadata --json $kb | jq -r '.locks.nodes.nixpkgs.locked.rev')
-$ nix flake lock \
-    --override-input kernel-builder git+file://$kb \
-    --override-input kernel-builder/nixpkgs github:NixOS/nixpkgs/$nixpkgs
-$ nix build .#portedSrc
-$ git checkout flake.lock
-```
-
 ## Skipping the `get_kernel` check
 
 `kernel-builder` verifies that a kernel can be

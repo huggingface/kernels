@@ -166,8 +166,6 @@ Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that
 source repo="https://github.com/rusty1s/pytorch_scatter" commit="f514c10f920b5aeed2eb162092f0ad20d3edee52"
 ```
 
-With [`--source-rev`](#running-a-real-port) none of the git checks run, and the given revision must equal `commit`.
-
 Fails when: `--dir` is not a git checkout, sits at a different commit, has a different origin, or has uncommitted or untracked changes.
 
 #### `vendor`
@@ -182,8 +180,6 @@ The same verification for a second repository, supplied on the command line as `
 vendor name="quack" repo="https://github.com/Dao-AILab/quack" commit="<sha>" \
     path="quack/cute" to="torch-ext/kernel/cute"
 ```
-
-With `--vendor-rev <id>=<sha>` none of the git checks run, as for `--source-rev`.
 
 Fails when: no `--vendor` was passed for that name, the checkout drifts from the pin, or `path` is not a directory in it.
 

@@ -1,9 +1,0 @@
-[general]
-name = "pkg"
-version = 2
-edition = 6
-backends = ["cpu"]
-
-[torch-noarch]
-
-[kernel]

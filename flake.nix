@@ -94,16 +94,7 @@
             rev ? null,
             self ? null,
 
-            # Generate the kernel source with `kernel-port` at build time, in
-            # place of committing it. `path` then only provides `build.toml`,
-            # `port-provenance.json` and other files that are read during
-            # evaluation:
-            #
-            #     port = {
-            #       recipe = ./port;       # Directory with `port.kdl`.
-            #       upstream = upstream;   # Flake input, `flake = false`.
-            #       vendors = { };         # `vendor` op name -> flake input.
-            #     };
+            # Generate the source with `kernel-port`, see `docs/source/builder/build.md`.
             port ? null,
 
             # This option is not documented on purpose. You should not use it,

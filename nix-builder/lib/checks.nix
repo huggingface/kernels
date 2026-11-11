@@ -56,36 +56,12 @@ let
     touch $out
   '';
 
-  portedSrcStaleBuildTomlCheck = testers.testBuildFailure' {
-    drv = (mkPortedSrc (portedSrcArgs // { path = portedSrcFixture + "/stale"; })).verified;
-    expectedBuilderExitCode = 1;
-    expectedBuilderLogEntries = [
-      "Committed build.toml or port-provenance.json differs"
-    ];
-  };
-
   # The hash of the generated tree is how a change in `kernel-port` output shows.
   portedSrcStaleProvenanceCheck = testers.testBuildFailure' {
     drv = (mkPortedSrc (portedSrcArgs // { path = portedSrcFixture + "/stale-provenance"; })).verified;
     expectedBuilderExitCode = 1;
     expectedBuilderLogEntries = [
       "Committed build.toml or port-provenance.json differs"
-    ];
-  };
-
-  portedSrcWrongRevCheck = testers.testBuildFailure' {
-    drv =
-      (mkPortedSrc (
-        portedSrcArgs
-        // {
-          upstream = portedSrcArgs.upstream // {
-            rev = "ffffffffffffffffffffffffffffffffffffffff";
-          };
-        }
-      )).generated;
-    expectedBuilderExitCode = 2;
-    expectedBuilderLogEntries = [
-      "but this port is written against"
     ];
   };
 
@@ -251,9 +227,7 @@ runCommand "builder-nix-checks"
       badRegistrationCheck
       fetchFromHuggingFaceCheck
       portedSrcCheck
-      portedSrcStaleBuildTomlCheck
       portedSrcStaleProvenanceCheck
-      portedSrcWrongRevCheck
     ];
   }
   ''

@@ -17,6 +17,9 @@ def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, lega
     """
     Parse a versioned variant string with the regex for the legacy or the new
     variant string format. Both regexes capture the major and minor version.
+
+    Legacy regexes should parse non-dotted versions like `rocm72`, whereas
+    new regexes should parse dotted versions like `rocm-7.2`.
     """
     m = (legacy_regex if legacy else new_regex).fullmatch(s)
     if not m:

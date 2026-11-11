@@ -309,7 +309,22 @@ Decision = VariantAccepted | VariantRejected
 
 
 def parse_variant(variant_str: str) -> Variant:
-    """Parse a variant string into an ArchVariant, NoarchVariant or SdkVariant."""
+    """Parse a variant string into an ArchVariant, NoarchVariant or SdkVariant.
+
+    * Noarch variants have the shape `{framework}-{backend}`.
+    * New-style arch variants have the shape
+      `{framework}-{framework_version}-{backend}-{backend_version}-{python_abi}-{platform}-{os}`,
+      unless the backend is versionless (e.g. CPU), then it has the shape
+      `{framework}-{framework_version}-{backend}-{python_abi}-{platform}-{os}`.
+      Versions in new-style variants are always noted as `{major}.{minor}`.
+    * Legacy arch variants have no Python ABI tag (they are always abi3), no
+      dash before versions and no dot inside versions. Also, `cu` is used as
+      the backend name for CUDA.
+    * SDKs follow noarch or new-style arch naming conventions, but use `sdk`
+      in place of the framework and its version. Additionally, the variant
+      name `sdk` can be used for SDKs that are backend-agnostic and do not
+      have compiled parts.
+    """
     parts = variant_str.split("-")
 
     if parts[0] == "sdk":

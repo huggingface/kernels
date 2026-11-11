@@ -94,7 +94,7 @@
             rev ? null,
             self ? null,
 
-            # Generate the source with `kernel-port`, see `docs/source/builder/build.md`.
+            # Generate the source with `kernel-port`, see `kernel-port/README.md`.
             port ? null,
 
             # This option is not documented on purpose. You should not use it,

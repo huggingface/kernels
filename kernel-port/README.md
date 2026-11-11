@@ -68,6 +68,43 @@ cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
 - `--source-rev <sha>` states the revision of a `--dir` that has no `.git`, such as a Nix store path from a locked flake input, in place of asking git. It must equal the pin of [`source`](#source).
 - `--vendor-rev name=sha` does the same for a `--vendor` tree, and must equal the pin of that [`vendor`](#vendor).
 
+## Generating the source at build time
+
+A kernel can commit its recipe in place of the ported tree. `genKernelFlakeOutputs` then runs the port in a derivation, with `--source-rev` and `--vendor-rev` taken from the locked flake inputs:
+
+```nix
+{
+  inputs = {
+    kernel-builder.url = "github:huggingface/kernels";
+    upstream = {
+      url = "github:org/repo/<commit>";
+      flake = false;
+    };
+  };
+
+  outputs =
+    { self, kernel-builder, upstream }:
+    kernel-builder.lib.genKernelFlakeOutputs {
+      inherit self;
+      path = ./.;
+      port = {
+        recipe = ./port; # Directory with port.kdl and its overlay.
+        inherit upstream;
+        # vendors = { <vendor name> = <flake input>; };
+      };
+    };
+}
+```
+
+- `build.toml` is read during evaluation, so it stays committed in `path`, as do `kernels.lock` and `Cargo.lock` when the kernel uses them.
+- `port-provenance.json` also stays committed. Its tree hash makes any change to the generated code show up as a diff, including one from a new `kernel-port`.
+- The build fails when either differs from what the recipe generates. `.#portedSrc` is the unchecked output, to inspect it or refresh them:
+
+```sh
+out=$(nix build --no-link --print-out-paths .#portedSrc)
+install -m 644 $out/build.toml $out/port-provenance.json .
+```
+
 ## Ops
 
 Each op links to its entry in the [cookbook](#cookbook) below, which gives the full argument list, a runnable example, and the failure modes.

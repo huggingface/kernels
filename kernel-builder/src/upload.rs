@@ -248,23 +248,43 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         .send()
         .wrap_err("Cannot list repository refs")?;
     let branch_exists = refs.branches.iter().any(|r| r.name == branch);
-    let is_new_version_branch = !branch_exists;
+    // Commit the new branch is created from. Pinning it lets the stale file
+    // listing below see only what the branch inherited, never uploads that
+    // concurrent jobs make to the branch right after it is created.
+    let base_commit = refs
+        .branches
+        .iter()
+        .find(|r| r.name == MAIN_BRANCH)
+        .map(|r| r.target_commit.clone());
 
-    if is_new_version_branch {
-        repo.create_branch()
+    let is_new_version_branch = if branch_exists {
+        false
+    } else {
+        match repo
+            .create_branch()
             .branch(&branch)
+            .maybe_revision(base_commit.clone())
             .send()
-            .wrap_err_with(|| {
-                if args.create_pr {
-                    format!(
-                        "Pull requests can only target an existing branch. Ask a \
-                         maintainer of `{repo_id}` to create the branch `{branch}` first."
-                    )
-                } else {
-                    format!("Cannot create branch `{branch}`")
-                }
-            })?;
-    }
+        {
+            Ok(()) => true,
+            // Another upload (e.g. a sibling CI job) created the branch after
+            // we listed the refs. Treat it as existing: as a new branch, its
+            // stale-file cleanup would delete that upload's variants.
+            Err(HFError::Conflict { .. }) => false,
+            Err(err) => {
+                return Err(err).wrap_err_with(|| {
+                    if args.create_pr {
+                        format!(
+                            "Pull requests can only target an existing branch. Ask a \
+                             maintainer of `{repo_id}` to create the branch `{branch}` first."
+                        )
+                    } else {
+                        format!("Cannot create branch `{branch}`")
+                    }
+                });
+            }
+        }
+    };
     eprintln!(
         "Using branch `{branch}`{}",
         if is_new_version_branch { " (new)" } else { "" }
@@ -288,7 +308,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     // Diff against the pull request when updating one, since it may already
     // differ from the branch it targets.
     let main_existing_files = list_repo_files(&repo, &revision_of(MAIN_BRANCH));
-    let version_existing_files = list_repo_files(&repo, &revision_of(&branch));
+    let version_revision = match (&base_commit, open_prs.contains_key(&branch)) {
+        (Some(base_commit), false) if is_new_version_branch => base_commit.clone(),
+        _ => revision_of(&branch),
+    };
+    let version_existing_files = list_repo_files(&repo, &version_revision);
 
     let operations_by_branch = collect_commit_ops(
         &kernel_dir,

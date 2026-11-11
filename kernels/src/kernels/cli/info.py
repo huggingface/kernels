@@ -9,7 +9,7 @@ from kernels._rust import Metadata
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
 from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.variants import (
-    ArchVariant,
+    Noarch,
     Variant,
     get_variants,
     get_variants_local,
@@ -109,10 +109,14 @@ def _local_kernel_info(repo_path: Path) -> dict:
 def _metadata_info(metadata: Metadata | None, variants: list[Variant]) -> dict:
     backends = set()
     for variant in variants:
-        if isinstance(variant, ArchVariant):
-            backends.add(variant.arch.backend.name)
+        backend = variant.backend
+        if backend is None:
+            # Backend-agnostic SDK variant.
+            continue
+        if isinstance(backend, Noarch):
+            backends.add(backend.backend_name)
         else:
-            backends.add(variant.arch.backend_name)
+            backends.add(backend.name)
 
     info: dict[str, Any] = {}
     if metadata is not None:

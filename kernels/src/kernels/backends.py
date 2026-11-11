@@ -17,6 +17,9 @@ def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, lega
     """
     Parse a versioned variant string with the regex for the legacy or the new
     variant string format. Both regexes capture the major and minor version.
+
+    Legacy regexes should parse non-dotted versions like `rocm72`, whereas
+    new regexes should parse dotted versions like `rocm-7.2`.
     """
     m = (legacy_regex if legacy else new_regex).fullmatch(s)
     if not m:
@@ -238,9 +241,6 @@ _VERSIONED_BACKENDS: dict[str, type[CANN] | type[CUDA] | type[ROCm] | type[XPU]]
     "rocm": ROCm,
     "xpu": XPU,
 }
-
-# Names of backends that have a version token in the new variant format.
-VERSIONED_BACKEND_NAMES = frozenset(_VERSIONED_BACKENDS)
 
 
 def parse_backend(s: str, *, legacy: bool = True) -> Backend:

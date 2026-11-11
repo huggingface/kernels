@@ -35,18 +35,18 @@ let
     ];
   };
 
-  # Generate a kernel source with `kernel-port`.
-  mkPortedSrc = (builtins.head buildSets).pkgs.callPackage ./ported-src.nix { };
+  # Generate a kernel source with `kernel-port`. The fixture upstream is fetched
+  # with the hash that `kernel-port` recorded, so Nix verifies that hash.
   portedSrcFixture = ../tests/ported-src;
-  portedSrcArgs = {
-    path = portedSrcFixture;
-    recipe = portedSrcFixture + "/port";
-    upstream = {
-      outPath = portedSrcFixture + "/upstream";
-      rev = "0123456789abcdef0123456789abcdef01234567";
-    };
+  mkPortedSrc = (builtins.head buildSets).pkgs.callPackage ./ported-src.nix {
+    fetchgit =
+      { hash, ... }:
+      runCommand "upstream" {
+        outputHashMode = "recursive";
+        outputHash = hash;
+      } "cp -r ${portedSrcFixture + "/upstream"} $out";
   };
-  portedSrc = mkPortedSrc portedSrcArgs;
+  portedSrc = mkPortedSrc portedSrcFixture;
 
   portedSrcCheck = runCommand "ported-src-check" { } ''
     test -f ${portedSrc.generated}/torch-ext/pkg/py.typed
@@ -58,7 +58,7 @@ let
 
   # The hash of the generated tree is how a change in `kernel-port` output shows.
   portedSrcStaleProvenanceCheck = testers.testBuildFailure' {
-    drv = (mkPortedSrc (portedSrcArgs // { path = portedSrcFixture + "/stale-provenance"; })).verified;
+    drv = (mkPortedSrc (portedSrcFixture + "/stale-provenance")).verified;
     expectedBuilderExitCode = 1;
     expectedBuilderLogEntries = [
       "Committed build.toml or port-provenance.json differs"

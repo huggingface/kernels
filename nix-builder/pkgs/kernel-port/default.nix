@@ -1,4 +1,5 @@
 {
+  git,
   mkKernelsRustSrc,
   rustPlatform,
 }:
@@ -29,6 +30,8 @@ rustPlatform.buildRustPackage {
 
   cargoBuildFlags = cargoFlags;
   cargoTestFlags = cargoFlags;
+  # The NAR hash tests create a git repository.
+  nativeCheckInputs = [ git ];
 
   meta = {
     description = "Port third-party kernels to the Hugging Face Kernels layout";

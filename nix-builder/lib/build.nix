@@ -352,6 +352,8 @@ rec {
           ;
         bundleOnly = true;
       };
+      # The card of a port is generated with the rest of its source.
+      cardDir = if portedSrc != null then portedSrc else path;
       benchmarksPath = path + "/benchmarks";
       hasBenchmarks = builtins.pathExists benchmarksPath;
       benchmarks =
@@ -368,11 +370,18 @@ rec {
       inherit pkgs contents;
       name = "torch-ext-bundle";
       # Fill card iff we build any variants.
-      postInstall = lib.optionalString (buildSets != [ ]) ''
-        if [ -f "${path}/CARD.md" ]; then
-          ${(builtins.head buildSets).pkgs.kernel-builder}/bin/kernel-builder fill-card ${path} $out/CARD.md
-        fi
-      '';
+      postInstall =
+        lib.optionalString (buildSets != [ ]) ''
+          if [ -f "${cardDir}/CARD.md" ]; then
+            ${(builtins.head buildSets).pkgs.kernel-builder}/bin/kernel-builder fill-card ${cardDir} $out/CARD.md
+          fi
+        ''
+        # A port generates its benchmarks, they are not in `path`.
+        + lib.optionalString (portedSrc != null) ''
+          if [ -d "${portedSrc}/benchmarks" ]; then
+            cp -r ${portedSrc}/benchmarks $out/
+          fi
+        '';
     };
 
   # Get a development shell with the extension in PYTHONPATH. Handy

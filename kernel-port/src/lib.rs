@@ -271,6 +271,7 @@ pub fn provenance_json(
     struct Pin<'a> {
         repo: &'a str,
         commit: &'a str,
+        hash: &'a str,
     }
 
     #[derive(serde::Serialize)]
@@ -295,6 +296,7 @@ pub fn provenance_json(
                     Pin {
                         repo: &s.repo,
                         commit: &s.commit,
+                        hash: &s.hash,
                     },
                 )
             })

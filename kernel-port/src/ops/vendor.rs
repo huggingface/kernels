@@ -1,5 +1,5 @@
 use super::git::{CommitSha, check_clean_checkout, git, normalize_git_url};
-use super::{Facts, Inputs, copy_tree};
+use super::{Facts, Inputs, copy_tree, nar};
 use crate::recipe::Args;
 use crate::workspace::Workspace;
 use anyhow::{Context, Result, bail};
@@ -54,7 +54,8 @@ impl Vendor {
                 self.commit
             );
         }
-        if let Ok(origin) = git(checkout, &["remote", "get-url", "origin"])
+        if rev.is_none()
+            && let Ok(origin) = git(checkout, &["remote", "get-url", "origin"])
             && normalize_git_url(&origin) != normalize_git_url(&self.repo)
         {
             bail!(
@@ -66,7 +67,8 @@ impl Vendor {
         if rev.is_none() {
             check_clean_checkout(checkout, "vendor")?;
         }
-        facts.record_source(&self.name, &self.repo, self.commit.as_str());
+        let hash = nar::hash(checkout, rev.is_none())?;
+        facts.record_source(&self.name, &self.repo, self.commit.as_str(), hash);
 
         let src_root = checkout.join(&self.path);
         if !src_root.is_dir() {

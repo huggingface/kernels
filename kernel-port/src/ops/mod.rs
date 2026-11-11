@@ -10,6 +10,7 @@ mod kernelize_imports;
 mod manifest;
 mod mark_tests;
 mod r#move;
+mod nar;
 mod overlay;
 mod prune;
 mod relativize_imports;
@@ -67,15 +68,18 @@ pub struct SourceRecord {
     pub name: String,
     pub repo: String,
     pub commit: String,
+    // Nix hash of the source tree, for `fetchgit`.
+    pub hash: String,
 }
 
 impl Facts {
-    fn record_source(&mut self, name: &str, repo: &str, commit: &str) {
+    fn record_source(&mut self, name: &str, repo: &str, commit: &str, hash: String) {
         if !self.sources.iter().any(|s| s.name == name) {
             self.sources.push(SourceRecord {
                 name: name.to_string(),
                 repo: repo.to_string(),
                 commit: commit.to_string(),
+                hash,
             });
         }
     }

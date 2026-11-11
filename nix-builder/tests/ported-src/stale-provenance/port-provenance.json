@@ -5,8 +5,9 @@
   "sources": {
     "upstream": {
       "repo": "https://example.com/upstream.git",
-      "commit": "0123456789abcdef0123456789abcdef01234567"
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "hash": "sha256-8LxcPIiFAAx+VUTlmVlU3NDFLrfrlDmFZRKkzUZhvX0="
     }
   },
-  "tree": "sha256:00000000199849f322088416c318b3ab304f04ecf32917502788c14fc4ad8aed"
+  "tree": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 }

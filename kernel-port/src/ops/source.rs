@@ -1,5 +1,5 @@
 use super::git::{CommitSha, check_clean_checkout, git, normalize_git_url};
-use super::{Facts, Inputs};
+use super::{Facts, Inputs, nar};
 use crate::recipe::Args;
 use anyhow::{Context, Result, bail};
 
@@ -36,7 +36,8 @@ impl Source {
             );
         }
         // A checkout with no origin still passes; only a mismatch fails.
-        if let Ok(origin) = git(&inputs.root, &["remote", "get-url", "origin"])
+        if inputs.source_rev.is_none()
+            && let Ok(origin) = git(&inputs.root, &["remote", "get-url", "origin"])
             && normalize_git_url(&origin) != normalize_git_url(&self.repo)
         {
             bail!(
@@ -47,7 +48,8 @@ impl Source {
         if inputs.source_rev.is_none() {
             check_clean_checkout(&inputs.root, "source")?;
         }
-        facts.record_source("upstream", &self.repo, self.commit.as_str());
+        let hash = nar::hash(&inputs.root, inputs.source_rev.is_none())?;
+        facts.record_source("upstream", &self.repo, self.commit.as_str(), hash);
         Ok(format!("verified {} @ {}", self.repo, &head[..12]))
     }
 }

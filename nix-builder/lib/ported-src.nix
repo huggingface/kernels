@@ -2,40 +2,45 @@
 # their recipe in place of the output.
 {
   lib,
+  fetchgit,
   kernel-port,
   runCommand,
 }:
 
-{
-  # Kernel directory with the committed `build.toml` and `port-provenance.json`.
-  path,
-  # Directory with `port.kdl` and the files that the recipe refers to.
-  recipe,
-  # Flake input with the upstream source.
-  upstream,
-  # Flake inputs by the name of their `vendor` op.
-  vendors ? { },
-}:
+# Kernel directory with `port/port.kdl` and the committed `build.toml` and
+# `port-provenance.json`.
+path:
 
 let
-  # A store path has no `.git`, so the revision comes from the lock file.
-  # `kernel-port` fails the build when it differs from the pin in the recipe.
+  # The provenance pins and hashes every source, as `kernels.lock` does for
+  # kernel dependencies. A store path has no `.git`, so the commits are passed
+  # to `kernel-port`, which fails when they differ from the recipe.
+  pins = (lib.importJSON (path + "/port-provenance.json")).sources;
+  sources = lib.mapAttrs (
+    _: pin:
+    fetchgit {
+      url = pin.repo;
+      rev = pin.commit;
+      inherit (pin) hash;
+      fetchSubmodules = false;
+    }
+  ) pins;
   vendorArgs = lib.concatStringsSep " " (
     lib.mapAttrsToList (
-      name: input:
+      name: pin:
       lib.escapeShellArgs [
         "--vendor"
-        "${name}=${input}"
+        "${name}=${sources.${name}}"
         "--vendor-rev"
-        "${name}=${input.rev}"
+        "${name}=${pin.commit}"
       ]
-    ) vendors
+    ) (removeAttrs pins [ "upstream" ])
   );
 
   generated = runCommand "ported-src" { nativeBuildInputs = [ kernel-port ]; } ''
-    kernel-port ${recipe}/port.kdl \
-      --dir ${upstream} \
-      --source-rev ${upstream.rev} \
+    kernel-port ${path + "/port"}/port.kdl \
+      --dir ${sources.upstream} \
+      --source-rev ${pins.upstream.commit} \
       ${vendorArgs} \
       --out $out
   '';

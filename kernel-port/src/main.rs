@@ -31,7 +31,7 @@ struct Cli {
     vendor: Vec<String>,
     #[arg(long, requires = "out")]
     partial: bool,
-    #[arg(long, value_name = "SHA", value_parser = parse_rev)]
+    #[arg(long, value_name = "SHA")]
     source_rev: Option<String>,
     #[arg(long = "vendor-rev", value_name = "NAME=SHA", value_parser = parse_vendor_rev)]
     vendor_rev: Vec<(String, String)>,
@@ -163,20 +163,11 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-// Nix passes the `rev` of a locked flake input.
-fn parse_rev(rev: &str) -> Result<String, String> {
-    if rev.len() == 40 && rev.chars().all(|c| c.is_ascii_hexdigit()) {
-        Ok(rev.to_string())
-    } else {
-        Err(format!("expected a full 40-character hex SHA, got {rev:?}"))
-    }
-}
-
 fn parse_vendor_rev(spec: &str) -> Result<(String, String), String> {
     let (name, rev) = spec
         .split_once('=')
         .ok_or_else(|| format!("{spec:?} must be name=sha"))?;
-    Ok((name.to_string(), parse_rev(rev)?))
+    Ok((name.to_string(), rev.to_string()))
 }
 
 // A recipe kept on disk is re-run later, by someone else, against a newer

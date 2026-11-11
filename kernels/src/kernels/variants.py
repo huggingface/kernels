@@ -3,9 +3,9 @@ import platform
 import re
 import sys
 import sysconfig
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal, get_args
 
 from huggingface_hub import HfApi, constants
 from huggingface_hub.dataclasses import strict
@@ -16,10 +16,13 @@ from kernels._versions import resolve_revision_or_version
 from kernels.backends import (
     CANN,
     CUDA,
+    VERSIONED_BACKEND_NAMES,
     XPU,
     Backend,
     Metal,
     ROCm,
+    _format_version,
+    _parse_version,
     _select_backend,
     parse_backend,
 )
@@ -33,34 +36,52 @@ logger = logging.getLogger(__name__)
 # load at runtime.
 _METAL_MIN_MACOS_VERSION = Version("26.0")
 
+# Python ABI of the compiled parts of a kernel:
+#
+# - `abi3`: stable ABI, for Python builds with a GIL.
+# - `abi3t`: stable ABI for Python >= 3.15 free-threaded builds (PEP 803).
+#            Also works with >= 3.15 GIL-enabled builds.
+#
+# Variants in the legacy variant string format do not have a Python ABI tag
+# and are always `abi3`.
+PythonAbi = Literal["abi3", "abi3t"]
+_PYTHON_ABIS: tuple[str, ...] = get_args(PythonAbi)
+_ABI3T_MIN_PYTHON_VERSION = Version("3.15")
+
 
 @dataclass(unsafe_hash=True)
 class Torch:
     """Versioned Torch framework (arch variants)."""
 
-    # Match the following Torch version encoding:
+    # Match the following Torch version encodings:
     #
-    # The first part is `torchxy` where x is the major version and y the minor
-    # version. x can only consist of one digit, y of one or more digits.
+    # The first part is `torchxy` (legacy) or `torch-x.y` (new), where x is
+    # the major version and y the minor version. In the legacy encoding, x
+    # can only consist of one digit, y of one or more digits. In the new
+    # encoding, both can consist of one or more digits.
     #
     # The optional second part is the ABI tag, which is `-cxx11` or `-cxx98`.
     # The ABI tag is used for historical reasons for Linux build variants. It
     # will be removed from builds in the future.
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch(\d)(\d+)(?:-(cxx11|cxx98))?")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch(\d)(\d+)(?:-(cxx11|cxx98))?")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch-(\d+)\.(\d+)(?:-(cxx11|cxx98))?")
 
     version: Version
     cxx11_abi: bool | None
+    # Whether to use the legacy variant string format (e.g. `torch210` rather
+    # than `torch-2.10`). Does not take part in comparisons.
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def variant_str(self) -> str:
-        base = f"torch{self.version.major}{self.version.minor}"
+        base = _format_version("torch", "torch-", self.version, self.legacy)
         if self.cxx11_abi is None:
             return base
         return f"{base}-{'cxx11' if self.cxx11_abi else 'cxx98'}"
 
     @staticmethod
-    def parse(s: str) -> "Torch":
-        m = Torch._VARIANT_REGEX.fullmatch(s)
+    def parse(s: str, *, legacy: bool = True) -> "Torch":
+        m = (Torch._LEGACY_VARIANT_REGEX if legacy else Torch._VARIANT_REGEX).fullmatch(s)
         if not m:
             raise ValueError(f"Invalid Torch variant string: {s!r}")
         version = Version(f"{m.group(1)}.{m.group(2)}")
@@ -69,53 +90,64 @@ class Torch:
             cxx11_abi = None
         else:
             cxx11_abi = abi_str != "cxx98"
-        return Torch(version=version, cxx11_abi=cxx11_abi)
+        return Torch(version=version, cxx11_abi=cxx11_abi, legacy=legacy)
 
 
 @dataclass(unsafe_hash=True)
 class TorchStableAbi:
     """Stable ABI-versioned Torch framework (arch variants)."""
 
-    # Match the following Torch version encoding:
+    # Match the following Torch version encodings:
     #
-    # The first part is `torch-stable-abixy` where x is the major ABI version
-    # and y the minor ABI version. x can only consist of one digit, y of one
-    # or more digits.
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch-stable-abi(\d)(\d+)")
+    # The first part is `torch-stable-abixy` (legacy) or
+    # `torch-stable-abi-x.y` (new), where x is the major ABI version and y the
+    # minor ABI version. In the legacy encoding, x can only consist of one
+    # digit, y of one or more digits. In the new encoding, both can consist of
+    # one or more digits.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch-stable-abi(\d)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch-stable-abi-(\d+)\.(\d+)")
 
     version: Version
+    # Whether to use the legacy variant string format (e.g.
+    # `torch-stable-abi211` rather than `torch-stable-abi-2.11`). Does not take
+    # part in comparisons.
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def variant_str(self) -> str:
-        return f"torch-stable-abi{self.version.major}{self.version.minor}"
+        return _format_version("torch-stable-abi", "torch-stable-abi-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "TorchStableAbi":
-        m = TorchStableAbi._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "TorchStableAbi":
+        version = _parse_version(TorchStableAbi._LEGACY_VARIANT_REGEX, TorchStableAbi._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid Torch stable ABI variant string: {s!r}")
-        version = Version(f"{m.group(1)}.{m.group(2)}")
-        return TorchStableAbi(version=version)
+        return TorchStableAbi(version=version, legacy=legacy)
 
 
 @dataclass(unsafe_hash=True)
 class TvmFfi:
     """Versioned tvm-ffi framework (arch variants)."""
 
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"tvm-ffi(\d+?)(\d+)")
+    # Legacy variant string: `tvm-ffixy`, new variant string: `tvm-ffi-x.y`.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"tvm-ffi(\d+?)(\d+)")
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"tvm-ffi-(\d+)\.(\d+)")
 
     version: Version
+    # Whether to use the legacy variant string format (e.g. `tvm-ffi01` rather
+    # than `tvm-ffi-0.1`). Does not take part in comparisons.
+    legacy: bool = field(default=True, compare=False)
 
     @property
     def variant_str(self) -> str:
-        return f"tvm-ffi{self.version.major}{self.version.minor}"
+        return _format_version("tvm-ffi", "tvm-ffi-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str) -> "TvmFfi":
-        m = TvmFfi._VARIANT_REGEX.fullmatch(s)
-        if not m:
+    def parse(s: str, *, legacy: bool = True) -> "TvmFfi":
+        version = _parse_version(TvmFfi._LEGACY_VARIANT_REGEX, TvmFfi._VARIANT_REGEX, s, legacy)
+        if version is None:
             raise ValueError(f"Invalid TvmFfi variant string: {s!r}")
-        return TvmFfi(version=Version(f"{m.group(1)}.{m.group(2)}"))
+        return TvmFfi(version=version, legacy=legacy)
 
 
 @strict
@@ -136,21 +168,47 @@ class Arch:
     backend: Backend
     platform: str
     os: str
+    python_abi: PythonAbi = "abi3"
+    # Whether to use the legacy variant string format, which does not have a
+    # Python ABI tag (the ABI is implicitly `abi3`). Does not take part in
+    # comparisons.
+    legacy: bool = field(default=True, compare=False)
+
+    def __post_init__(self):
+        if self.legacy and self.python_abi != "abi3":
+            raise ValueError(f"The legacy variant string format only supports abi3, not {self.python_abi}")
 
     @property
     def variant_str(self) -> str:
-        return f"{self.backend.variant_str}-{self.platform}-{self.os}"
+        if self.legacy:
+            return f"{self.backend.variant_str}-{self.platform}-{self.os}"
+        return f"{self.backend.variant_str}-{self.python_abi}-{self.platform}-{self.os}"
 
     @staticmethod
-    def parse(parts: list[str]) -> "Arch":
-        if len(parts) != 3:
+    def parse(parts: list[str], *, legacy: bool = True) -> "Arch":
+        """
+        Parse arch parts: backend, Python ABI tag (new format only), platform
+        and OS. In the legacy format, the backend (including its version) is a
+        single part (`cu128`). In the new format, the backend name and the
+        version are separate parts (`cuda`, `12.8`), unless the backend does
+        not have a version, and the backend is followed by the Python ABI tag
+        (`abi3` or `abi3t`).
+        """
+        backend_len = 2 if not legacy and parts and parts[0] in VERSIONED_BACKEND_NAMES else 1
+        abi_len = 0 if legacy else 1
+        if len(parts) != backend_len + abi_len + 2:
             raise ValueError(f"Invalid arch variant parts: {parts!r}")
 
-        backend = parse_backend(parts[0])
-        platform = parts[1]
-        os = parts[2]
+        backend = parse_backend("-".join(parts[:backend_len]), legacy=legacy)
+        python_abi = "abi3"
+        if not legacy:
+            python_abi = parts[backend_len]
+            if python_abi not in _PYTHON_ABIS:
+                raise ValueError(f"Invalid Python ABI tag {python_abi!r} in arch variant parts: {parts!r}")
+        platform = parts[backend_len + abi_len]
+        os = parts[backend_len + abi_len + 1]
 
-        return Arch(backend=backend, platform=platform, os=os)
+        return Arch(backend=backend, platform=platform, os=os, python_abi=python_abi, legacy=legacy)  # type: ignore[arg-type]
 
 
 @strict
@@ -221,14 +279,25 @@ def parse_variant(variant_str: str) -> Variant:
     parts = variant_str.split("-")
 
     if variant_str.startswith("torch-stable-abi"):
+        # Legacy: `torch-stable-abi211-...`, new: `torch-stable-abi-2.11-...`.
+        legacy = not (len(parts) > 3 and parts[2] == "abi")
+        n = 3 if legacy else 4
         return ArchVariant(
-            framework=TorchStableAbi.parse("-".join(parts[0:3])),
-            arch=Arch.parse(parts[3:]),
+            framework=TorchStableAbi.parse("-".join(parts[:n]), legacy=legacy),
+            arch=Arch.parse(parts[n:], legacy=legacy),
         )
     if parts[0] == "torch":
+        if len(parts) >= 2 and parts[1][:1].isdigit():
+            # New format: `torch-2.10[-cxx11]-...`.
+            n = 3 if len(parts) >= 3 and parts[2] in ("cxx11", "cxx98") else 2
+            return ArchVariant(
+                framework=Torch.parse("-".join(parts[:n]), legacy=False),
+                arch=Arch.parse(parts[n:], legacy=False),
+            )
         # noarch: e.g. "torch-cpu"
         return NoarchVariant(framework=TorchNoarch(), arch=Noarch.parse("-".join(parts[1:])))
     elif parts[0].startswith("torch"):
+        # Legacy format: `torch210[-cxx11]-...`.
         if len(parts) >= 2 and parts[1] in ("cxx11", "cxx98"):
             framework_str = f"{parts[0]}-{parts[1]}"
             arch_parts = parts[2:]
@@ -237,7 +306,13 @@ def parse_variant(variant_str: str) -> Variant:
             arch_parts = parts[1:]
         return ArchVariant(framework=Torch.parse(framework_str), arch=Arch.parse(arch_parts))
     elif parts[0] == "tvm" and len(parts) >= 2 and parts[1].startswith("ffi"):
-        return ArchVariant(framework=TvmFfi.parse(f"tvm-{parts[1]}"), arch=Arch.parse(parts[2:]))
+        # Legacy: `tvm-ffi01-...`, new: `tvm-ffi-0.1-...`.
+        legacy = not (len(parts) > 2 and parts[1] == "ffi")
+        n = 2 if legacy else 3
+        return ArchVariant(
+            framework=TvmFfi.parse("-".join(parts[:n]), legacy=legacy),
+            arch=Arch.parse(parts[n:], legacy=legacy),
+        )
     else:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
 
@@ -331,6 +406,8 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
         torch_cxx11_abi=torch_cxx11_abi,
         tvm_ffi_version=tvm_ffi_version,
         macos_version=macos_version,
+        python_version=Version(f"{sys.version_info.major}.{sys.version_info.minor}"),
+        free_threaded=_is_free_threaded_build(),
     )
 
 
@@ -343,8 +420,13 @@ def _resolve_variant_for_system(
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
     macos_version: Version | None = None,
+    python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
+    free_threaded: bool = False,
 ) -> tuple[list[Variant], list[Decision]]:
     """Resolve the best matching variant given explicit system parameters.
+
+    The Python version and free-threaded state default to a GIL-enabled
+    Python 3.15, which supports both abi3 and abi3t variants.
 
     Returns the preference-sorted list of accepted variants and a trace of
     the acceptance/rejection decision for each variant."""
@@ -357,6 +439,8 @@ def _resolve_variant_for_system(
         torch_cxx11_abi,
         tvm_ffi_version,
         macos_version,
+        python_version,
+        free_threaded,
     )
     trace = _sort_variants(trace)
 
@@ -364,10 +448,20 @@ def _resolve_variant_for_system(
     return applicable, trace
 
 
-def _is_unsupported_free_threaded_build() -> bool:
-    """Check if the Python interpreter is a free-threaded build that does not
-    support ABI3."""
-    return sys.version_info < (3, 15) and bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+def _is_free_threaded_build() -> bool:
+    """Check if the Python interpreter is a free-threaded build."""
+    return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
+def _python_abi_mismatch(python_abi: str, python_version: Version, free_threaded: bool) -> str | None:
+    """Return the reason if the Python ABI is not supported by the interpreter."""
+    if python_abi == "abi3":
+        # Free-threaded builds do not load abi3 extensions.
+        if free_threaded:
+            return "abi3 is not supported on free-threaded Python, abi3t is required"
+    elif python_version < _ABI3T_MIN_PYTHON_VERSION:
+        return f"abi3t requires Python {_ABI3T_MIN_PYTHON_VERSION} or later, system Python version is {python_version}"
+    return None
 
 
 def _check_variants(
@@ -379,30 +473,17 @@ def _check_variants(
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
     macos_version: Version | None = None,
+    python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
+    free_threaded: bool = False,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
-    is_unsupported_free_threaded = _is_unsupported_free_threaded_build()
-    # Prefilter all arch kernels on free-threaded Python pre-3.15, since
-    # they do not support the stable ABI.
-    if is_unsupported_free_threaded:
-        logger.warning(
-            "Arch kernels use the stable ABI, which is not supported on free-threaded "
-            "Python before version 3.15. Arch kernels will not be used. Consider using "
-            "a non-free-threaded interpreter, or upgrade to Python 3.15+.",
-            stacklevel=2,
-        )
-        variants = [v for v in variants if not isinstance(v, ArchVariant)]
-
     result: list[Decision] = []
     for v in variants:
         if isinstance(v, ArchVariant):
-            if is_unsupported_free_threaded:
-                result.append(
-                    VariantRejected(
-                        variant=v,
-                        reason="arch kernel not supported on free-threaded Python <3.15",
-                    )
-                )
+            # Skip variants with a Python ABI that the interpreter cannot load.
+            reason = _python_abi_mismatch(v.arch.python_abi, python_version, free_threaded)
+            if reason is not None:
+                result.append(VariantRejected(variant=v, reason=reason))
                 continue
 
             # Skip non-matching CPU or OS.
@@ -488,7 +569,7 @@ def _check_variants(
                         )
                     )
                     continue
-            elif v.arch.backend.variant_str != selected_backend.variant_str:
+            elif v.arch.backend != selected_backend:
                 result.append(
                     VariantRejected(
                         variant=v,
@@ -509,7 +590,7 @@ def _check_variants(
         elif isinstance(v, NoarchVariant):
             # Only noarch variants with a matching backend or "universal"
             # are applicable.
-            noarch_backend_name = "npu" if selected_backend.name == "cann" else selected_backend.name
+            noarch_backend_name = selected_backend.name
             if v.arch.backend_name != noarch_backend_name and v.arch.backend_name != "universal":
                 result.append(
                     VariantRejected(
@@ -534,6 +615,10 @@ def _sort_variants(
     3. tvm-ffi arch kernels with with the highest compatible CUDA version.
     4. Torch noarch kernels.
     5. Old Torch universal kernels.
+
+    Arch kernels that are otherwise equal are ordered by Python ABI: abi3
+    before abi3t, since GIL-enabled builds prefer abi3 (abi3 variants are never
+    accepted on free-threaded builds).
     """
 
     def sort_key(vs: Decision) -> tuple[int, ...]:
@@ -560,11 +645,12 @@ def _sort_variants(
                 backend_order = -v.arch.backend.version.minor
             else:
                 backend_order = 0
-            return (decision_order, framework_order, *abi_version_order, backend_order)
+            python_abi_order = _PYTHON_ABIS.index(v.arch.python_abi)
+            return (decision_order, framework_order, *abi_version_order, backend_order, python_abi_order)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.arch.backend_name == "universal" else 0
-            return (decision_order, 2, 0, 0, universal_order)
+            return (decision_order, 2, 0, 0, universal_order, 0)
 
     return sorted(variants, key=sort_key)
 

@@ -300,6 +300,7 @@ def test_kernel_func_nested_dispatch(compile):
         _bind_forward(inner._kernel_funcs["double_me"], TimesThree.forward)
 
     if compile:
+        torch._dynamo.reset()
         # We only need to know whether it's safe around get/set so the backend is not relevant
         model = torch.compile(model, backend="eager", fullgraph=True)
 
@@ -318,9 +319,69 @@ def test_kernel_func_nested_compile_context(monkeypatch, num_inner, expected):
         _bind_forward(inner._kernel_funcs["double_me"], TimesThree.forward)
 
     # Mimic different compiled boundaries
-    compiling = iter([True, True, False])
+    # > Outer: 5 checks (get/set/reset + 2 dispatches); each Inner: 4 (get/set/reset + 1 dispatch)
+    # > Each final boundary is set to false (last inner, outer dispatch, outer reset)
+    compiling = iter([True] * (4 * num_inner + 2) + [False] * 3)
     monkeypatch.setattr(torch.compiler, "is_compiling", lambda: next(compiling))
 
     # Same as in `test_kernel_func_nested_dispatch` (just *3 once or twice)
     x = torch.tensor(1.0)
     torch.testing.assert_close(model(x), torch.tensor(expected))
+
+
+def test_kernel_func_compile_reuses_forward_across_instances():
+    models = [SurpriseMe() for _ in range(24)]  # "num_hidden_layers"
+
+    for i, model in enumerate(models):
+        forward = AddOne.forward if i % 2 == 0 else TimesThree.forward
+        _bind_forward(model._kernel_funcs["surprise_me"], forward)
+
+    # Catch the graphs dynamo would create (including new ones created during recompiles)
+    graphs = []
+
+    def backend(gm, inputs):
+        graphs.append(gm)
+        return gm.forward
+
+    torch._dynamo.reset()
+    compiled = torch.compile(SurpriseMe.forward, backend=backend, fullgraph=True)
+
+    x = torch.arange(4).float()
+    for _ in range(2):
+        for i, model in enumerate(models):
+            expected = x + 1 if i % 2 == 0 else x * 3
+            torch.testing.assert_close(compiled(model, x), expected)
+
+    # One graph per implementation, not per private wrapper
+    assert len(graphs) == 2
+
+
+def test_kernel_func_compile_forward_switch():
+    a, b = SurpriseMe(), SurpriseMe()
+    a_func = a._kernel_funcs["surprise_me"]
+    b_func = b._kernel_funcs["surprise_me"]
+
+    _bind_forward(a_func, AddOne.forward)
+    _bind_forward(b_func, TimesThree.forward)
+
+    torch._dynamo.reset()
+    compiled = torch.compile(SurpriseMe.forward, backend="eager", fullgraph=True)
+    x = torch.arange(4).float()
+
+    torch.testing.assert_close(compiled(a, x), x + 1)
+    torch.testing.assert_close(compiled(b, x), x * 3)
+
+    # Switch A to B's implementation without affecting B
+    _bind_forward(a_func, TimesThree.forward)
+    torch.testing.assert_close(compiled(a, x), x * 3)
+    torch.testing.assert_close(compiled(b, x), x * 3)
+
+    # Restore the original forward
+    _bind_forward(a_func, type(a_func).forward)
+    torch.testing.assert_close(compiled(a, x), x)
+    torch.testing.assert_close(compiled(b, x), x * 3)
+
+    # Switch A back to its original kernel
+    _bind_forward(a_func, AddOne.forward)
+    torch.testing.assert_close(compiled(a, x), x + 1)
+    torch.testing.assert_close(compiled(b, x), x * 3)

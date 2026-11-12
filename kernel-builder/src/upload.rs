@@ -44,6 +44,8 @@ const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 /// Message of upload commits, and so the title of the pull requests they open.
 const UPLOAD_COMMIT_MESSAGE: &str = "Uploaded using `kernel-builder`";
+const NEW_BRANCH_CLEANUP_COMMIT_MESSAGE: &str =
+    "Remove build and benchmark files inherited from `main` using `kernel-builder`.";
 
 const KERNELS_COMMUNITY_URL: &str =
     "https://huggingface.co/spaces/kernels-community/README/discussions/new";
@@ -248,27 +250,74 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         .send()
         .wrap_err("Cannot list repository refs")?;
     let branch_exists = refs.branches.iter().any(|r| r.name == branch);
-    let is_new_version_branch = !branch_exists;
+    // Commit the new branch is created from, so that the cleanup below can be
+    // pinned to it.
+    let base_commit = refs
+        .branches
+        .iter()
+        .find(|r| r.name == MAIN_BRANCH)
+        .map(|r| r.target_commit.clone());
 
-    if is_new_version_branch {
-        repo.create_branch()
+    let is_new_version_branch = if branch_exists {
+        false
+    } else {
+        match repo
+            .create_branch()
             .branch(&branch)
+            .maybe_revision(base_commit.clone())
             .send()
-            .wrap_err_with(|| {
-                if args.create_pr {
-                    format!(
-                        "Pull requests can only target an existing branch. Ask a \
-                         maintainer of `{repo_id}` to create the branch `{branch}` first."
-                    )
-                } else {
-                    format!("Cannot create branch `{branch}`")
-                }
-            })?;
-    }
+        {
+            Ok(()) => true,
+            // Another upload (e.g. a sibling CI job) created the branch after
+            // we listed the refs, use it as an existing branch.
+            Err(HFError::Conflict { .. }) => false,
+            Err(err) => {
+                return Err(err).wrap_err_with(|| {
+                    if args.create_pr {
+                        format!(
+                            "Pull requests can only target an existing branch. Ask a \
+                             maintainer of `{repo_id}` to create the branch `{branch}` first."
+                        )
+                    } else {
+                        format!("Cannot create branch `{branch}`")
+                    }
+                });
+            }
+        }
+    };
     eprintln!(
         "Using branch `{branch}`{}",
         if is_new_version_branch { " (new)" } else { "" }
     );
+
+    // A new branch inherits the build and benchmark files of `main`. Remove
+    // them in a separate commit right away, so that every upload, including
+    // this one, only replaces files of its own variants. Uploads to the same
+    // branch from concurrent jobs then cannot delete each other's files.
+    //
+    // The commit is pinned to the base commit, so it is refused when another
+    // upload already committed to the branch. The inherited files are kept in
+    // that case, since they cannot be told apart from that upload anymore.
+    if is_new_version_branch {
+        if let Some(base_commit) = &base_commit {
+            let cleanup_ops = new_branch_cleanup_ops(&list_repo_files(&repo, base_commit));
+            if !cleanup_ops.is_empty() {
+                if let Err(err) = repo
+                    .create_commit()
+                    .operations(cleanup_ops)
+                    .commit_message(NEW_BRANCH_CLEANUP_COMMIT_MESSAGE.to_owned())
+                    .revision(branch.clone())
+                    .parent_commit(base_commit.clone())
+                    .send()
+                {
+                    eprintln!(
+                        "Warning: cannot remove files inherited from `{MAIN_BRANCH}` on \
+                         `{branch}`, keeping them: {err}"
+                    );
+                }
+            }
+        }
+    }
 
     // With --create-pr, update the open pull request of an earlier upload
     // rather than opening a sibling one. Uploads from different CI jobs (or
@@ -297,7 +346,6 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         &branch,
         &main_existing_files,
         &version_existing_files,
-        is_new_version_branch,
     )?;
     let mut pull_requests: Vec<PullRequest> = Vec::new();
 
@@ -671,6 +719,18 @@ fn list_repo_files<T: RepoType>(repo: &HFRepositorySync<T>, revision: &str) -> B
         .collect()
 }
 
+/// Operations that remove the build and benchmark files a new branch
+/// inherits from the branch it was created from.
+fn new_branch_cleanup_ops(inherited_files: &BTreeSet<String>) -> Vec<CommitOperation> {
+    inherited_files
+        .iter()
+        .filter(|file| file.starts_with("build/") || file.starts_with("benchmarks/"))
+        .map(|file| CommitOperation::Delete {
+            path_in_repo: file.clone(),
+        })
+        .collect()
+}
+
 /// Collect all commit operations, grouped by target branch.
 fn collect_commit_ops(
     kernel_dir: &Path,
@@ -679,7 +739,6 @@ fn collect_commit_ops(
     branch: &str,
     main_existing_files: &BTreeSet<String>,
     version_existing_files: &BTreeSet<String>,
-    is_new_version_branch: bool,
 ) -> Result<BTreeMap<String, Vec<CommitOperation>>> {
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
 
@@ -694,19 +753,8 @@ fn collect_commit_ops(
     let version_ops = operations_by_branch.entry(branch.to_owned()).or_default();
 
     collect_readme_commit_ops(build_dir, version_existing_files, version_ops);
-    collect_benchmark_commit_ops(
-        kernel_dir,
-        version_existing_files,
-        is_new_version_branch,
-        version_ops,
-    )?;
-    collect_build_commit_ops(
-        build_dir,
-        variants,
-        version_existing_files,
-        is_new_version_branch,
-        version_ops,
-    )?;
+    collect_benchmark_commit_ops(kernel_dir, version_existing_files, version_ops)?;
+    collect_build_commit_ops(build_dir, variants, version_existing_files, version_ops)?;
 
     Ok(operations_by_branch)
 }
@@ -715,7 +763,6 @@ fn collect_commit_ops(
 fn collect_benchmark_commit_ops(
     kernel_dir: &Path,
     existing_files: &BTreeSet<String>,
-    is_new_branch: bool,
     operations: &mut Vec<CommitOperation>,
 ) -> Result<()> {
     let benchmarks_dir = kernel_dir.join("benchmarks");
@@ -750,12 +797,10 @@ fn collect_benchmark_commit_ops(
         if !file.starts_with("benchmarks/") || added.contains(file) {
             continue;
         }
-        // On new branches delete everything; on existing branches only delete benchmark*.py.
-        if is_new_branch
-            || file
-                .split('/')
-                .next_back()
-                .is_some_and(|n| n.starts_with("benchmark") && n.ends_with(".py"))
+        if file
+            .split('/')
+            .next_back()
+            .is_some_and(|n| n.starts_with("benchmark") && n.ends_with(".py"))
         {
             operations.push(CommitOperation::Delete {
                 path_in_repo: file.clone(),
@@ -795,7 +840,6 @@ fn collect_build_commit_ops(
     build_dir: &Path,
     variants: &[PathBuf],
     existing_files: &BTreeSet<String>,
-    is_new_branch: bool,
     operations: &mut Vec<CommitOperation>,
 ) -> Result<()> {
     let mut repo_paths: BTreeMap<String, PathBuf> = BTreeMap::new();
@@ -817,14 +861,8 @@ fn collect_build_commit_ops(
         })
         .collect();
 
-    let delete_prefixes: Vec<&str> = if is_new_branch {
-        vec!["build/"]
-    } else {
-        variant_prefixes.iter().map(|s| s.as_str()).collect()
-    };
-
     for file in existing_files {
-        let should_delete = delete_prefixes
+        let should_delete = variant_prefixes
             .iter()
             .any(|prefix| file.starts_with(prefix));
         if should_delete && !repo_paths.contains_key(file) {
@@ -1117,7 +1155,6 @@ mod tests {
             "v3",
             &BTreeSet::new(),
             &BTreeSet::new(),
-            false,
         )
         .unwrap();
 
@@ -1162,7 +1199,7 @@ mod tests {
         let variants = vec![variant];
         let existing = BTreeSet::from(["README.md".to_owned()]);
         let operations_by_branch = collect_commit_ops(
-            kernel_dir, &build_dir, &variants, "v3", &existing, &existing, false,
+            kernel_dir, &build_dir, &variants, "v3", &existing, &existing,
         )
         .unwrap();
 
@@ -1191,7 +1228,7 @@ mod tests {
         fs::write(benchmarks_dir.join("other.py"), "# not a benchmark").unwrap();
 
         let mut operations = vec![];
-        collect_benchmark_commit_ops(kernel_dir, &BTreeSet::new(), false, &mut operations).unwrap();
+        collect_benchmark_commit_ops(kernel_dir, &BTreeSet::new(), &mut operations).unwrap();
 
         // Should only include benchmark*.py files
         assert_eq!(operations.len(), 2);
@@ -1208,7 +1245,7 @@ mod tests {
 
         let existing = BTreeSet::from(["benchmarks/benchmark_old.py".to_owned()]);
         let mut operations = vec![];
-        collect_benchmark_commit_ops(kernel_dir, &existing, false, &mut operations).unwrap();
+        collect_benchmark_commit_ops(kernel_dir, &existing, &mut operations).unwrap();
 
         // Should add new benchmark and delete stale one
         let add_count = operations
@@ -1236,14 +1273,7 @@ mod tests {
 
         let variants = vec![variant];
         let mut operations = vec![];
-        collect_build_commit_ops(
-            build_dir,
-            &variants,
-            &BTreeSet::new(),
-            false,
-            &mut operations,
-        )
-        .unwrap();
+        collect_build_commit_ops(build_dir, &variants, &BTreeSet::new(), &mut operations).unwrap();
 
         assert_eq!(operations.len(), 2); // metadata.json + kernel.so
         let paths: Vec<_> = operations
@@ -1272,7 +1302,7 @@ mod tests {
         ]);
         let variants = vec![variant];
         let mut operations = vec![];
-        collect_build_commit_ops(build_dir, &variants, &existing, false, &mut operations).unwrap();
+        collect_build_commit_ops(build_dir, &variants, &existing, &mut operations).unwrap();
 
         let delete_paths: Vec<_> = operations
             .iter()
@@ -1287,7 +1317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_build_commit_ops_new_branch_deletes_all() {
+    fn test_collect_build_commit_ops_keeps_other_variants() {
         let temp_dir = tempfile::tempdir().unwrap();
         let build_dir = temp_dir.path();
 
@@ -1295,16 +1325,16 @@ mod tests {
         fs::create_dir_all(&variant).unwrap();
         fs::write(variant.join("metadata.json"), "{}").unwrap();
 
+        // `torch-cuda` may just have been uploaded by a concurrent job.
         let existing = BTreeSet::from([
             "build/torch-cpu/stale.py".to_owned(),
-            "build/torch-cuda/inherited.py".to_owned(),
+            "build/torch-cuda/metadata.json".to_owned(),
         ]);
         let variants = vec![variant];
         let mut operations = vec![];
-        // is_new_branch = true
-        collect_build_commit_ops(build_dir, &variants, &existing, true, &mut operations).unwrap();
+        collect_build_commit_ops(build_dir, &variants, &existing, &mut operations).unwrap();
 
-        let delete_paths: HashSet<_> = operations
+        let delete_paths: Vec<_> = operations
             .iter()
             .filter_map(|op| match op {
                 CommitOperation::Delete { path_in_repo } => Some(path_in_repo.clone()),
@@ -1312,9 +1342,37 @@ mod tests {
             })
             .collect();
 
-        // New branch deletes ALL build/* files not in current upload
-        assert!(delete_paths.contains("build/torch-cpu/stale.py"));
-        assert!(delete_paths.contains("build/torch-cuda/inherited.py"));
+        assert_eq!(delete_paths, vec!["build/torch-cpu/stale.py"]);
+    }
+
+    #[test]
+    fn test_new_branch_cleanup_ops() {
+        let inherited = BTreeSet::from([
+            ".gitattributes".to_owned(),
+            "README.md".to_owned(),
+            "benchmarks/benchmark.py".to_owned(),
+            "benchmarks/data.json".to_owned(),
+            "build/torch-cpu/metadata.json".to_owned(),
+            "build/torch-cuda/metadata.json".to_owned(),
+        ]);
+
+        let delete_paths: Vec<_> = new_branch_cleanup_ops(&inherited)
+            .into_iter()
+            .filter_map(|op| match op {
+                CommitOperation::Delete { path_in_repo } => Some(path_in_repo),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            delete_paths,
+            vec![
+                "benchmarks/benchmark.py",
+                "benchmarks/data.json",
+                "build/torch-cpu/metadata.json",
+                "build/torch-cuda/metadata.json",
+            ]
+        );
     }
 
     const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
@@ -1470,14 +1528,7 @@ branch = "custom-branch"
 
         // Verify commit ops are generated - these would be uploaded to the branch above.
         let mut operations = vec![];
-        collect_build_commit_ops(
-            &build_dir,
-            &variants,
-            &BTreeSet::new(),
-            false,
-            &mut operations,
-        )
-        .unwrap();
+        collect_build_commit_ops(&build_dir, &variants, &BTreeSet::new(), &mut operations).unwrap();
         assert!(!operations.is_empty());
     }
 

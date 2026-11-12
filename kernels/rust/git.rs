@@ -5,7 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// A git object identifier.
-#[pyclass(name = "Oid", frozen, eq, hash, ord)]
+#[pyclass(name = "Oid", frozen, eq, hash, ord, from_py_object)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct PyOid {
     inner: Oid,

@@ -3,6 +3,7 @@
   wrapCCWith,
   bintools,
   glibc,
+  hip-parallel-driver,
   hip-devel,
   llvm,
   rocm-device-libs,
@@ -88,6 +89,15 @@
     # cause compilation errors in downstream dependencies because e.g.
     # libstdc++'s new operator cannot handle device code.
     echo "" > $out/nix-support/libcxx-cxxflags
+
+    # Run the per-architecture device jobs of multi-architecture HIP
+    # compilations in parallel when HIP_OFFLOAD_JOBS is set.
+    for f in $out/bin/*; do
+      if [ -f "$f" ] && [ ! -L "$f" ] && grep -q "@hipParallelDriver@" "$f"; then
+        substituteInPlace "$f" \
+          --replace-fail "@hipParallelDriver@" "${hip-parallel-driver}/bin/hip-parallel-driver"
+      fi
+    done
 
     # GPU compilation uses builtin `lld`
     substituteInPlace $out/bin/{clang,clang++} \

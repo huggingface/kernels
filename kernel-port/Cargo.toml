@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+base64 = "0.22.1"
 clap = { version = "4.6.6", features = ["derive"] }
 globset = "0.4.20"
 kdl = "6.5"

@@ -1,0 +1,14 @@
+recipe version=1
+
+source \
+    repo="https://example.com/upstream.git" \
+    commit="0123456789abcdef0123456789abcdef01234567"
+
+move from="pkg" to="torch-ext/pkg"
+
+manifest \
+    name="pkg" \
+    version=1 \
+    edition=6 \
+    backends="cpu" \
+    noarch=#true

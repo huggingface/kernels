@@ -54,7 +54,8 @@ The [cookbook](#cookbook) is one such command per op.
 
 ```sh
 cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
-    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial]
+    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial] \
+    [--source-rev <sha>] [--vendor-rev name=sha]
 ```
 
 - `--dir` is the upstream checkout. It is read, never written.
@@ -64,6 +65,28 @@ cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
 - `--print` dumps every file in the resulting tree.
 - `--vendor name=dir` supplies a second pinned checkout for [`vendor`](#vendor).
 - `--partial` writes the state as of the last successful op to `--out`, to inspect what a failing op saw. The run still exits non-zero.
+- `--source-rev <sha>` states the revision of a `--dir` that has no `.git`, such as a Nix store path, in place of asking git. It must equal the pin of [`source`](#source).
+- `--vendor-rev name=sha` does the same for a `--vendor` tree, and must equal the pin of that [`vendor`](#vendor).
+
+## Generating the source at build time
+
+A kernel can commit its recipe in `port/` in place of the ported tree. `genKernelFlakeOutputs` detects `port/port.kdl` and runs the port in a derivation:
+
+```
+<kernel>/
+  flake.nix             # The usual genKernelFlakeOutputs { inherit self; path = ./.; }
+  build.toml            # Generated, committed since it is read during evaluation
+  port-provenance.json  # Generated, pins and hashes every source
+  port/port.kdl
+```
+
+- `port-provenance.json` has the commit and Nix hash of the upstream and every vendor, so the builder fetches them with `fetchgit` and passes `--source-rev` and `--vendor-rev`. Its tree hash makes any change to the generated code show up as a diff, including one from a new `kernel-port`.
+- The build fails when `build.toml` or `port-provenance.json` differs from what the recipe generates. `.#portedSrc` is the unchecked output, to inspect it or to refresh both when the pins are unchanged. A new pin is fetched with the old hash, so regenerate both from checkouts at the new pins instead:
+
+```sh
+kernel-port port/port.kdl --dir <upstream-checkout> [--vendor name=<checkout>] --out <dir>
+install -m 644 <dir>/build.toml <dir>/port-provenance.json .
+```
 
 ## Ops
 

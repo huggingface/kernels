@@ -1,5 +1,5 @@
 use super::git::{CommitSha, check_clean_checkout, git, normalize_git_url};
-use super::{Facts, Inputs};
+use super::{Facts, Inputs, nar};
 use crate::recipe::Args;
 use anyhow::{Context, Result, bail};
 
@@ -18,12 +18,16 @@ impl Source {
     }
 
     pub(super) fn apply(&self, inputs: &Inputs, facts: &mut Facts) -> Result<String> {
-        let head = git(&inputs.root, &["rev-parse", "HEAD"]).with_context(|| {
-            format!(
-                "source pinning requires --dir to be a git checkout of {}",
-                self.repo
-            )
-        })?;
+        // A tree without .git, such as a Nix store path, has its revision given.
+        let head = match &inputs.source_rev {
+            Some(rev) => rev.clone(),
+            None => git(&inputs.root, &["rev-parse", "HEAD"]).with_context(|| {
+                format!(
+                    "source pinning requires --dir to be a git checkout of {}",
+                    self.repo
+                )
+            })?,
+        };
         if head != self.commit.as_str() {
             bail!(
                 "checkout is at {head} but this port is written against {} - \
@@ -32,7 +36,8 @@ impl Source {
             );
         }
         // A checkout with no origin still passes; only a mismatch fails.
-        if let Ok(origin) = git(&inputs.root, &["remote", "get-url", "origin"])
+        if inputs.source_rev.is_none()
+            && let Ok(origin) = git(&inputs.root, &["remote", "get-url", "origin"])
             && normalize_git_url(&origin) != normalize_git_url(&self.repo)
         {
             bail!(
@@ -40,8 +45,11 @@ impl Source {
                 self.repo
             );
         }
-        check_clean_checkout(&inputs.root, "source")?;
-        facts.record_source("upstream", &self.repo, self.commit.as_str());
+        if inputs.source_rev.is_none() {
+            check_clean_checkout(&inputs.root, "source")?;
+        }
+        let hash = nar::hash(&inputs.root, inputs.source_rev.is_none())?;
+        facts.record_source("upstream", &self.repo, self.commit.as_str(), hash);
         Ok(format!("verified {} @ {}", self.repo, &head[..12]))
     }
 }

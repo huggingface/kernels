@@ -9,7 +9,7 @@ pub mod workspace;
 
 use anyhow::{Context, Result, bail};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use workspace::Workspace;
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
@@ -32,19 +32,11 @@ pub fn run_pipeline(
     ws: &mut Workspace,
     recipe: &[recipe::Invocation],
     recipe_dir: &Path,
-    root: &Path,
-    vendors: BTreeMap<String, PathBuf>,
+    inputs: &ops::Inputs,
 ) -> Result<ops::Facts> {
-    run_pipeline_with(
-        ws,
-        recipe,
-        recipe_dir,
-        root,
-        vendors,
-        &mut |inv, summary| {
-            println!("[line {:>3}] {:<19} {}", inv.line, inv.op, summary);
-        },
-    )
+    run_pipeline_with(ws, recipe, recipe_dir, inputs, &mut |inv, summary| {
+        println!("[line {:>3}] {:<19} {}", inv.line, inv.op, summary);
+    })
 }
 
 // Same pipeline, with each op's summary handed to a callback instead of
@@ -54,14 +46,9 @@ pub fn run_pipeline_with(
     ws: &mut Workspace,
     recipe: &[recipe::Invocation],
     recipe_dir: &Path,
-    root: &Path,
-    vendors: BTreeMap<String, PathBuf>,
+    inputs: &ops::Inputs,
     log: &mut dyn FnMut(&recipe::Invocation, &str),
 ) -> Result<ops::Facts> {
-    let inputs = ops::Inputs {
-        root: root.to_path_buf(),
-        vendors,
-    };
     let mut facts = ops::Facts::default();
     // Build every op before applying any, so an argument typo or a bad glob
     // anywhere in the recipe fails before the first mutation.
@@ -73,7 +60,7 @@ pub fn run_pipeline_with(
     }
     for (inv, op) in built {
         let summary = op
-            .apply(ws, &inputs, &mut facts)
+            .apply(ws, inputs, &mut facts)
             .with_context(|| format!("recipe line {}: {}", inv.line, inv.op))?;
         log(inv, &summary);
     }
@@ -284,6 +271,7 @@ pub fn provenance_json(
     struct Pin<'a> {
         repo: &'a str,
         commit: &'a str,
+        hash: &'a str,
     }
 
     #[derive(serde::Serialize)]
@@ -308,6 +296,7 @@ pub fn provenance_json(
                     Pin {
                         repo: &s.repo,
                         commit: &s.commit,
+                        hash: &s.hash,
                     },
                 )
             })

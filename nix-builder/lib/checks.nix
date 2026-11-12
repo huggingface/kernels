@@ -35,6 +35,36 @@ let
     ];
   };
 
+  # Generate a kernel source with `kernel-port`. The fixture upstream is fetched
+  # with the hash that `kernel-port` recorded, so Nix verifies that hash.
+  portedSrcFixture = ../tests/ported-src;
+  mkPortedSrc = (builtins.head buildSets).pkgs.callPackage ./ported-src.nix {
+    fetchgit =
+      { hash, ... }:
+      runCommand "upstream" {
+        outputHashMode = "recursive";
+        outputHash = hash;
+      } "cp -r ${portedSrcFixture + "/upstream"} $out";
+  };
+  portedSrc = mkPortedSrc portedSrcFixture;
+
+  portedSrcCheck = runCommand "ported-src-check" { } ''
+    test -f ${portedSrc.generated}/torch-ext/pkg/py.typed
+    test -f ${portedSrc.verified}/torch-ext/pkg/__init__.py
+    # `source-set.nix` only keeps `pyext` files, generated sources should as well.
+    test ! -e ${portedSrc.verified}/torch-ext/pkg/py.typed
+    touch $out
+  '';
+
+  # The hash of the generated tree is how a change in `kernel-port` output shows.
+  portedSrcStaleProvenanceCheck = testers.testBuildFailure' {
+    drv = (mkPortedSrc (portedSrcFixture + "/stale-provenance")).verified;
+    expectedBuilderExitCode = 1;
+    expectedBuilderLogEntries = [
+      "Committed build.toml or port-provenance.json differs"
+    ];
+  };
+
   # Test the CUDA/ROCm arch intersection functions used by the CMake
   # templates. `utils.cmake` is passed explicitly since the test script is
   # copied to the store without its sibling files.
@@ -196,6 +226,8 @@ runCommand "builder-nix-checks"
       archIntersectionCheck
       badRegistrationCheck
       fetchFromHuggingFaceCheck
+      portedSrcCheck
+      portedSrcStaleProvenanceCheck
     ];
   }
   ''

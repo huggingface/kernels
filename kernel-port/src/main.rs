@@ -31,6 +31,10 @@ struct Cli {
     vendor: Vec<String>,
     #[arg(long, requires = "out")]
     partial: bool,
+    #[arg(long, value_name = "SHA")]
+    source_rev: Option<String>,
+    #[arg(long = "vendor-rev", value_name = "NAME=SHA", value_parser = parse_vendor_rev)]
+    vendor_rev: Vec<(String, String)>,
 }
 
 fn main() {
@@ -40,6 +44,7 @@ fn main() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn run() -> Result<()> {
     let Cli {
         recipe_path,
@@ -52,6 +57,8 @@ fn run() -> Result<()> {
         diff,
         vendor,
         partial,
+        source_rev,
+        vendor_rev,
     } = Cli::parse();
 
     let mut vendors = std::collections::BTreeMap::new();
@@ -96,7 +103,13 @@ fn run() -> Result<()> {
         Some(dir) => (Workspace::load(dir)?, dir.clone()),
         None => (inline_workspace(&files)?, PathBuf::from(".")),
     };
-    let facts = match run_pipeline(&mut ws, &recipe.ops, &recipe_dir, &root, vendors) {
+    let inputs = kernel_port::ops::Inputs {
+        root,
+        vendors,
+        source_rev,
+        vendor_revs: vendor_rev.into_iter().collect(),
+    };
+    let facts = match run_pipeline(&mut ws, &recipe.ops, &recipe_dir, &inputs) {
         Ok(facts) => facts,
         Err(err) => {
             if partial {
@@ -148,6 +161,13 @@ fn run() -> Result<()> {
         (None, _, _) => {}
     }
     Ok(())
+}
+
+fn parse_vendor_rev(spec: &str) -> Result<(String, String), String> {
+    let (name, rev) = spec
+        .split_once('=')
+        .ok_or_else(|| format!("{spec:?} must be name=sha"))?;
+    Ok((name.to_string(), rev.to_string()))
 }
 
 // A recipe kept on disk is re-run later, by someone else, against a newer

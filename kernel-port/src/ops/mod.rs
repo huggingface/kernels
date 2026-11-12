@@ -10,6 +10,7 @@ mod kernelize_imports;
 mod manifest;
 mod mark_tests;
 mod r#move;
+mod nar;
 mod overlay;
 mod prune;
 mod relativize_imports;
@@ -50,6 +51,10 @@ use std::path::{Path, PathBuf};
 pub struct Inputs {
     pub root: PathBuf,
     pub vendors: std::collections::BTreeMap<String, PathBuf>,
+    // Revision of a `--dir` without .git, vouched for by the caller.
+    pub source_rev: Option<String>,
+    // The same for `--vendor` trees, by vendor name.
+    pub vendor_revs: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Default)]
@@ -63,15 +68,18 @@ pub struct SourceRecord {
     pub name: String,
     pub repo: String,
     pub commit: String,
+    // Nix hash of the source tree, for `fetchgit`.
+    pub hash: String,
 }
 
 impl Facts {
-    fn record_source(&mut self, name: &str, repo: &str, commit: &str) {
+    fn record_source(&mut self, name: &str, repo: &str, commit: &str, hash: String) {
         if !self.sources.iter().any(|s| s.name == name) {
             self.sources.push(SourceRecord {
                 name: name.to_string(),
                 repo: repo.to_string(),
                 commit: commit.to_string(),
+                hash,
             });
         }
     }

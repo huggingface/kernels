@@ -189,8 +189,10 @@ class System:
         Parse system parts: the Python ABI tag (`abi3` or `abi3t`, new format
         only), the platform and the OS.
         """
-        if len(parts) != (2 if legacy else 3):
-            raise ValueError(f"Invalid system variant parts: {parts!r}")
+        if legacy and len(parts) != 2:
+            raise ValueError(f"Invalid system variant parts, expected `[platform]-[os]`, got: {parts!r}")
+        elif not legacy and len(parts) != 3:
+            raise ValueError(f"Invalid system variant parts, expected `[python_abi]-[platform]-[os]`, got: {parts!r}")
 
         python_abi = "abi3"
         if not legacy:

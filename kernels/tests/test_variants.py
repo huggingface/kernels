@@ -475,6 +475,7 @@ def test_arch_variant_backend_python_and_system():
         ("rocm71", "rocm-7.1", ROCm(Version("7.1"))),
         ("rocm714", "rocm-7.14", ROCm(Version("7.14"))),
         ("rocm100", "rocm-10.0", ROCm(Version("10.0"))),
+        ("rocm200", "rocm-20.0", ROCm(Version("20.0"))),
         ("xpu20253", "xpu-2025.3", XPU(Version("2025.3"))),
         ("cann81", "cann-8.1", CANN(Version("8.1"))),
     ],

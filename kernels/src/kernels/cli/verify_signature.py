@@ -1,12 +1,8 @@
 import argparse
 import sys
+from typing import assert_never
 
 from huggingface_hub import constants
-
-if sys.version_info >= (3, 11):
-    from typing import assert_never
-else:
-    from typing_extensions import assert_never
 
 from kernels._rust import KernelLocation, Metadata
 from kernels._versions import resolve_revision_or_version

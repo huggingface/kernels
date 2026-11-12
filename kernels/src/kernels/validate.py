@@ -1,14 +1,8 @@
 import logging
-import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, assert_never
 
 from packaging.version import InvalidVersion, parse
-
-if sys.version_info >= (3, 11):
-    from typing import assert_never
-else:
-    from typing_extensions import assert_never
 
 from kernels import digest
 from kernels._rust import KernelLocation, Metadata, Version

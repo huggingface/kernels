@@ -40,8 +40,7 @@ def test_failed_import_cleans_up_sys_modules(tmp_path):
             _import_from_path(variant_dir, deps={})
         assert "broken_1_cuda" not in sys.modules
         assert variant_dir not in _loaded_kernels
-        if sys.version_info >= (3, 11):
-            assert any("broken" in note for note in exc_info.value.__notes__)
+        assert any("broken" in note for note in exc_info.value.__notes__)
     finally:
         _loaded_kernels.pop(variant_dir, None)
         _loaded_kernel_metadata.pop("broken_1_cuda", None)

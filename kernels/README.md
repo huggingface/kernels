@@ -57,4 +57,4 @@ To reproduce the coverage number reported on PRs locally:
 uv run pytest --cov=kernels --cov-report=term-missing tests
 ```
 
-CI measures coverage on a single canonical matrix cell (Python 3.10 / Torch 2.12.0) and posts a sticky comment on the PR; the threshold is 80% (warn-only — the check stays green either way).
+CI measures coverage on a single canonical matrix cell (Python 3.11 / Torch 2.12.0) and posts a sticky comment on the PR; the threshold is 80% (warn-only — the check stays green either way).

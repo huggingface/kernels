@@ -1,11 +1,5 @@
 import importlib.util
-import sys
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
+import tomllib
 
 has_sigstore = importlib.util.find_spec("sigstore") is not None
 has_torch = importlib.util.find_spec("torch") is not None

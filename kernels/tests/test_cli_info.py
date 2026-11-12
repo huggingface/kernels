@@ -72,7 +72,7 @@ def test_info_local_no_variants(tmp_path):
 
 
 def test_info_local_sdk_variants(tmp_path, capsys):
-    for variant in ["sdk", "sdk-cuda", "sdk-cpu-abi3-x86_64-linux", "sdk-abi3-x86_64-linux"]:
+    for variant in ["sdk", "sdk-cuda", "sdk-cpu-cpython-3.9-abi3-x86_64-linux", "sdk-cpython-3.9-abi3-x86_64-linux"]:
         variant_dir = tmp_path / "build" / variant
         variant_dir.mkdir(parents=True)
         (variant_dir / "metadata.json").write_text(

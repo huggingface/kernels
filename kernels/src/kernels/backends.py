@@ -28,7 +28,7 @@ def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, lega
 
 
 # The version part of a backend in the new variant format, e.g. `12.8`.
-_BACKEND_VERSION_REGEX = re.compile(r"(\d+)\.(\d+)")
+_BACKEND_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
 
 
 def _parse_backend_version(legacy_regex: re.Pattern, name: str, parts: list[str], legacy: bool) -> Version | None:
@@ -48,7 +48,7 @@ def _parse_backend_version(legacy_regex: re.Pattern, name: str, parts: list[str]
         m = _BACKEND_VERSION_REGEX.fullmatch(parts[1])
     if not m:
         return None
-    return Version(f"{m.group(1)}.{m.group(2)}")
+    return Version(f"{m['major']}.{m['minor']}")
 
 
 def _format_version(legacy_prefix: str, new_prefix: str, version: Version, legacy: bool) -> str:
@@ -83,7 +83,7 @@ class Backend(Protocol):
 @dataclass(unsafe_hash=True)
 class CANN:
     # Legacy variant string: `cannxy`, new variant string: `cann-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -125,7 +125,7 @@ class CPU:
 @dataclass(unsafe_hash=True)
 class CUDA:
     # Legacy variant string: `cuxy`, new variant string: `cuda-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -184,8 +184,9 @@ class Neuron:
 
 @dataclass(unsafe_hash=True)
 class ROCm:
-    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
+    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`. The
+    # legacy minor is a single digit, except for 7.14 (`rocm714`).
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(?P<major>7(?=14$)|\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -227,7 +228,7 @@ class TPU:
 @dataclass(unsafe_hash=True)
 class XPU:
     # Legacy variant string: `xpuxy`, new variant string: `xpu-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)

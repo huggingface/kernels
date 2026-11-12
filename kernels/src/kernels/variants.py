@@ -302,9 +302,14 @@ class VariantRejected:
 Decision = VariantAccepted | VariantRejected
 
 
-def _split_system(parts: list[str], *, legacy: bool) -> tuple[list[str], System]:
+def _split_and_parse_system(parts: list[str], *, legacy: bool) -> tuple[list[str], System]:
     """Split the system off the end of the variant parts. Returns the
-    remaining parts and the system."""
+    remaining parts and the system.
+
+    For example this function applied to `cuda-13.0-abi3-x86_64-linux`
+    returns `("cuda-13.0", System(...))`.
+
+    """
     n = 2 if legacy else 3
     if len(parts) < n:
         raise ValueError(f"Invalid variant parts: {parts!r}")
@@ -361,7 +366,7 @@ def parse_variant(variant_str: str) -> Variant:
     else:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
 
-    backend_parts, system = _split_system(parts[n:], legacy=legacy)
+    backend_parts, system = _split_and_parse_system(parts[n:], legacy=legacy)
     if not backend_parts:
         raise ValueError(f"Missing backend in variant string: {variant_str!r}")
     backend = parse_backend("-".join(backend_parts), legacy=legacy)
@@ -385,7 +390,7 @@ def parse_sdk_variant(variant_str: str) -> SdkVariant:
         backend = Noarch.parse(rest[0])
     elif rest:
         # Compiled: the backend (optional) followed by the system.
-        backend_parts, system = _split_system(rest, legacy=False)
+        backend_parts, system = _split_and_parse_system(rest, legacy=False)
         if backend_parts:
             backend = parse_backend("-".join(backend_parts), legacy=False)
 

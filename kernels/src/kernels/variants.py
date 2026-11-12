@@ -45,7 +45,17 @@ _METAL_MIN_MACOS_VERSION = Version("26.0")
 # and are always `abi3`.
 PythonAbi = Literal["abi3", "abi3t"]
 _PYTHON_ABIS: tuple[str, ...] = get_args(PythonAbi)
+
+# In variant strings, the Python version and ABI are preceded by the marker
+# `cpython`, e.g. `cpython-3.12-abi3`.
+_PYTHON_MARKER = "cpython"
+_PYTHON_VERSION_REGEX = re.compile(r"(\d+)\.(\d+)")
+
+# Minimum Python version for abi3t.
 _ABI3T_MIN_PYTHON_VERSION = Version("3.15")
+
+# ABI version for legacy build variants.
+_LEGACY_PYTHON_VERSION = Version("3.9")
 
 
 @dataclass(unsafe_hash=True)
@@ -161,46 +171,84 @@ class TorchNoarch:
 
 @strict
 @dataclass(unsafe_hash=True)
-class System:
-    """The system that variants with compiled parts are built for: the Python
-    ABI, the platform (CPU architecture) and the OS."""
+class Python:
+    """The Python version and ABI that the compiled parts of a kernel or
+    or SDK are build for."""
 
-    platform: str
-    os: str
-    python_abi: PythonAbi = "abi3"
+    # The minimum Python version that is supported by the compiled parts.
+    version: Version = _LEGACY_PYTHON_VERSION
+    abi: PythonAbi = "abi3"
     # Whether to use the legacy variant string format, which does not have a
-    # Python ABI tag (the ABI is implicitly `abi3`). Does not take part in
-    # comparisons.
+    # Python version and ABI (they are implicitly `cpython-3.9-abi3`).
     legacy: bool = field(default=True, compare=False)
 
     def __post_init__(self):
-        if self.legacy and self.python_abi != "abi3":
-            raise ValueError(f"The legacy variant string format only supports abi3, not {self.python_abi}")
+        if self.legacy and (self.abi != "abi3" or self.version != _LEGACY_PYTHON_VERSION):
+            raise ValueError(
+                f"The legacy variant string format only supports Python {_LEGACY_PYTHON_VERSION} and abi3, "
+                f"not Python {self.version} and {self.abi}"
+            )
+        if self.abi == "abi3t" and self.version < _ABI3T_MIN_PYTHON_VERSION:
+            raise ValueError(f"abi3t requires Python {_ABI3T_MIN_PYTHON_VERSION} or later, not {self.version}")
 
     @property
     def variant_str(self) -> str:
+        """The variant string, which is empty in the legacy format."""
         if self.legacy:
-            return f"{self.platform}-{self.os}"
-        return f"{self.python_abi}-{self.platform}-{self.os}"
+            return ""
+        return f"{_PYTHON_MARKER}-{self.version.major}.{self.version.minor}-{self.abi}"
 
     @staticmethod
-    def parse(parts: list[str], *, legacy: bool = True) -> "System":
+    def parse(parts: list[str]) -> "Python":
         """
-        Parse system parts: the Python ABI tag (`abi3` or `abi3t`, new format
-        only), the platform and the OS.
+        Parse the Python version and ABI of the new variant string format:
+
+        * The marker `cpython`.
+        * The Python version (e.g. `3.12`).
+        * The ABI tag (`abi3` or `abi3t`).
         """
-        if legacy and len(parts) != 2:
+        if len(parts) != 3:
+            raise ValueError(
+                f"Invalid Python variant parts, expected `{_PYTHON_MARKER}-[version]-[abi]`, got: {parts!r}"
+            )
+
+        marker, version, abi = parts
+        if marker != _PYTHON_MARKER:
+            raise ValueError(f"Invalid Python variant parts, expected {_PYTHON_MARKER!r}, got: {marker!r}")
+        m = _PYTHON_VERSION_REGEX.fullmatch(version)
+        if m is None:
+            raise ValueError(f"Invalid Python version, expected `[major].[minor]`, got: {version!r}")
+        if abi not in _PYTHON_ABIS:
+            raise ValueError(f"Invalid ABI tag {abi!r} in Python variant parts, expected one of: {_PYTHON_ABIS!r}")
+
+        return Python(version=Version(f"{m.group(1)}.{m.group(2)}"), abi=abi, legacy=False)  # type: ignore[arg-type]
+
+
+@strict
+@dataclass(unsafe_hash=True)
+class System:
+    """The system that variants with compiled parts are built for: the platform
+    (CPU architecture) and the OS."""
+
+    platform: str
+    os: str
+
+    @property
+    def variant_str(self) -> str:
+        return f"{self.platform}-{self.os}"
+
+    @staticmethod
+    def parse(parts: list[str]) -> "System":
+        """
+        Parse system parts:
+
+        * The platform (e.g. `x86_64`)
+        * The OS (e.g. `linux`).
+        """
+        if len(parts) != 2:
             raise ValueError(f"Invalid system variant parts, expected `[platform]-[os]`, got: {parts!r}")
-        elif not legacy and len(parts) != 3:
-            raise ValueError(f"Invalid system variant parts, expected `[python_abi]-[platform]-[os]`, got: {parts!r}")
 
-        python_abi = "abi3"
-        if not legacy:
-            python_abi, parts = parts[0], parts[1:]
-            if python_abi not in _PYTHON_ABIS:
-                raise ValueError(f"Invalid Python ABI tag {python_abi!r} in system variant parts")
-
-        return System(platform=parts[0], os=parts[1], python_abi=python_abi, legacy=legacy)  # type: ignore[arg-type]
+        return System(platform=parts[0], os=parts[1])
 
 
 @strict
@@ -227,11 +275,17 @@ class ArchVariant:
 
     framework: Torch | TorchStableAbi | TvmFfi
     backend: Backend
+    python: Python
     system: System
 
     @property
     def variant_str(self) -> str:
-        return f"{self.framework.variant_str}-{self.backend.variant_str}-{self.system.variant_str}"
+        parts = [self.framework.variant_str, self.backend.variant_str]
+        # The Python version and ABI are implicit in the legacy format.
+        if not self.python.legacy:
+            parts.append(self.python.variant_str)
+        parts.append(self.system.variant_str)
+        return "-".join(parts)
 
 
 @strict
@@ -253,24 +307,30 @@ class SdkVariant:
     """SDK build variant.
 
     SDK variants have no framework. They only use the new variant string
-    format. There are three forms:
+    format. There are four forms:
 
     - `sdk`: framework and backend-agnostic, no dynamic libraries.
     - `sdk-<backend>`: SDK for a specific backend, no dynamic libraries.
-    - `sdk-<abi>-<platform>-<os>`: SDK with dynamic libraries that works with
-      any backend, e.g. `sdk-abi3-x86_64-linux`.
-    - `sdk-<backend>[-<version>]-<abi>-<platform>-<os>`: SDK with dynamic
-      libraries for a specific backend, e.g. `sdk-cuda-12.8-abi3-x86_64-linux`.
+    - `sdk-cpython-<python_version>-<abi>-<platform>-<os>`: SDK with dynamic
+      libraries that works with any backend, e.g.
+      `sdk-cpython-3.12-abi3-x86_64-linux`.
+    - `sdk-<backend>[-<version>]-cpython-<python_version>-<abi>-<platform>-<os>`:
+      SDK with dynamic libraries for a specific backend, e.g.
+      `sdk-cuda-12.8-cpython-3.12-abi3-x86_64-linux`.
     """
 
     backend: Backend | Noarch | None
+    python: Python | None
     system: System | None
 
     def __post_init__(self):
+        if (self.python is None) != (self.system is None):
+            raise ValueError("SDK variants must define the Python version and ABI together with the system")
         # Only backends with dynamic libraries use versioned backends.
-        if isinstance(self.backend, Noarch) and self.system is not None:
+        compiled = self.system is not None
+        if isinstance(self.backend, Noarch) and compiled:
             raise ValueError("SDK variants that define a system must also have a versioned backend")
-        if self.backend is not None and not isinstance(self.backend, Noarch) and self.system is None:
+        if self.backend is not None and not isinstance(self.backend, Noarch) and not compiled:
             raise ValueError("SDK variants with a versioned backend must also define a system")
 
     @property
@@ -278,6 +338,8 @@ class SdkVariant:
         parts = ["sdk"]
         if self.backend is not None:
             parts.append(self.backend.variant_str)
+        if self.python is not None and not self.python.legacy:
+            parts.append(self.python.variant_str)
         if self.system is not None:
             parts.append(self.system.variant_str)
         return "-".join(parts)
@@ -304,18 +366,38 @@ class VariantRejected:
 Decision = VariantAccepted | VariantRejected
 
 
-def _split_and_parse_system(parts: list[str], *, legacy: bool) -> tuple[list[str], System]:
-    """Split the system off the end of the variant parts. Returns the
-    remaining parts and the system.
+def _split_system(parts: list[str]) -> tuple[list[str], System]:
+    """Split the system (platform and OS) off the end of the variant parts.
+    Returns the remaining parts and the system.
 
-    For example this function applied to `cuda-13.0-abi3-x86_64-linux`
-    returns `("cuda-13.0", System(...))`.
-
+    For example this function applied to
+    `["cuda", 13.0", "cpython", "3.9", "abi3", "x86_64", "linux"]`
+    returns `(["cuda", "13.0", "cpython", "3.9", "abi3"], System(...))`.
     """
-    n = 2 if legacy else 3
-    if len(parts) < n:
+    if len(parts) < 2:
         raise ValueError(f"Invalid variant parts: {parts!r}")
-    return parts[:-n], System.parse(parts[-n:], legacy=legacy)
+    return parts[:-2], System.parse(parts[-2:])
+
+
+def _split_python(parts: list[str], *, legacy: bool) -> tuple[list[str], Python | None]:
+    """Split the Python version and ABI off the end of the variant parts.
+    Returns the remaining parts and the Python version and ABI.
+
+    In the new format, the Python version and ABI start at the `cpython`
+    marker. For example this function applied to
+    `["cuda", 13.0", "cpython", "3.9", "abi3"]` returns
+    `(["cuda", "13.0"], Python(...))`.
+
+    The result is `None` if the variant string does not have a Python ABI
+    version. In the legacy format, the Python version and ABI are implicit.
+    """
+    if legacy:
+        return parts, Python()
+
+    if _PYTHON_MARKER not in parts:
+        return parts, None
+    i = parts.index(_PYTHON_MARKER)
+    return parts[:i], Python.parse(parts[i:])
 
 
 def parse_variant(variant_str: str) -> Variant:
@@ -323,13 +405,15 @@ def parse_variant(variant_str: str) -> Variant:
 
     * Noarch variants have the shape `{framework}-{backend}`.
     * New-style arch variants have the shape
-      `{framework}-{framework_version}-{backend}-{backend_version}-{python_abi}-{platform}-{os}`,
+      `{framework}-{framework_version}-{backend}-{backend_version}-cpython-{python_version}-{python_abi}-{platform}-{os}`,
       unless the backend is versionless (e.g. CPU), then it has the shape
-      `{framework}-{framework_version}-{backend}-{python_abi}-{platform}-{os}`.
+      `{framework}-{framework_version}-{backend}-cpython-{python_version}-{python_abi}-{platform}-{os}`.
       Versions in new-style variants are always noted as `{major}.{minor}`.
-    * Legacy arch variants have no Python ABI tag (they are always abi3), no
-      dash before versions and no dot inside versions. Also, `cu` is used as
-      the backend name for CUDA.
+      `cpython-{python_version}` is the minimum Python version (e.g.
+      `cpython-3.12` for Python 3.12 or later).
+    * Legacy arch variants have no Python version and ABI (they are always
+      `cpython-3.9-abi3`), no dash before versions and no dot inside versions.
+      Also, `cu` is used as the backend name for CUDA.
     * SDKs follow noarch or new-style arch naming conventions, but use `sdk`
       in place of the framework and its version. Additionally, the variant
       name `sdk` can be used for SDKs that are backend-agnostic and do not
@@ -368,11 +452,14 @@ def parse_variant(variant_str: str) -> Variant:
     else:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
 
-    backend_parts, system = _split_and_parse_system(parts[n:], legacy=legacy)
+    backend_parts, system = _split_system(parts[n:])
+    backend_parts, python = _split_python(backend_parts, legacy=legacy)
+    if python is None:
+        raise ValueError(f"Missing Python version and ABI in variant string: {variant_str!r}")
     if not backend_parts:
         raise ValueError(f"Missing backend in variant string: {variant_str!r}")
-    backend = parse_backend("-".join(backend_parts), legacy=legacy)
-    return ArchVariant(framework=framework, backend=backend, system=system)
+    backend = parse_backend(backend_parts, legacy=legacy)
+    return ArchVariant(framework=framework, backend=backend, python=python, system=system)
 
 
 def parse_sdk_variant(variant_str: str) -> SdkVariant:
@@ -384,19 +471,20 @@ def parse_sdk_variant(variant_str: str) -> SdkVariant:
     rest = parts[1:]
 
     backend: Backend | Noarch | None = None
+    python: Python | None = None
     system: System | None = None
-    if len(rest) == 1:
+    if _PYTHON_MARKER in rest:
+        rest, system = _split_system(rest)
+        rest, python = _split_python(rest, legacy=False)
+        if rest:
+            backend = parse_backend(rest, legacy=False)
+    elif rest:
         # `sdk-<backend>`: no compiled parts, only the name of the backend.
-        if rest[0] in _PYTHON_ABIS:
+        if len(rest) != 1:
             raise ValueError(f"Invalid SDK variant string: {variant_str!r}")
         backend = Noarch.parse(rest[0])
-    elif rest:
-        # Compiled: the backend (optional) followed by the system.
-        backend_parts, system = _split_and_parse_system(rest, legacy=False)
-        if backend_parts:
-            backend = parse_backend("-".join(backend_parts), legacy=False)
 
-    return SdkVariant(backend=backend, system=system)
+    return SdkVariant(backend=backend, python=python, system=system)
 
 
 def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
@@ -508,7 +596,7 @@ def _resolve_variant_for_system(
     """Resolve the best matching variant given explicit system parameters.
 
     The Python version and free-threaded state default to a GIL-enabled
-    Python 3.15, which supports both abi3 and abi3t variants.
+    Python 3.15, which supports abi3 and abi3t variants (up to Python 3.15).
 
     Returns the preference-sorted list of accepted variants and a trace of
     the acceptance/rejection decision for each variant."""
@@ -535,23 +623,20 @@ def _is_free_threaded_build() -> bool:
     return bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
-def _python_abi_mismatch(python_abi: str, python_version: Version, free_threaded: bool) -> str | None:
-    """Return the reason if the Python ABI is not supported by the interpreter."""
-    if python_abi == "abi3":
+def _python_mismatch(python: Python, python_version: Version, free_threaded: bool) -> str | None:
+    """Return the reason if the Python version or ABI is not supported by the
+    interpreter."""
+    if python.abi == "abi3" and free_threaded:
         # Free-threaded builds do not load abi3 extensions.
-        if free_threaded:
-            return "abi3 is not supported on free-threaded Python, abi3t is required"
-    elif python_version < _ABI3T_MIN_PYTHON_VERSION:
-        return f"abi3t requires Python {_ABI3T_MIN_PYTHON_VERSION} or later, system Python version is {python_version}"
+        return "abi3 is not supported on free-threaded Python, abi3t is required"
+    if python_version < python.version:
+        return f"Python {python.version} or later is required, system Python version is {python_version}"
     return None
 
 
-def _system_mismatch(system: System, cpu: str, os: str, python_version: Version, free_threaded: bool) -> str | None:
-    """Return the reason if the Python ABI, CPU or OS of the system do not
-    match the current system."""
-    reason = _python_abi_mismatch(system.python_abi, python_version, free_threaded)
-    if reason is not None:
-        return reason
+def _system_mismatch(system: System, cpu: str, os: str) -> str | None:
+    """Return the reason if the CPU or OS of the variant do not match the
+    current system."""
     if system.platform != cpu:
         return f"CPU ({system.platform}) does not match system CPU ({cpu})"
     if system.os != os:
@@ -606,7 +691,7 @@ def _check_variants(
         if isinstance(v, ArchVariant):
             # Skip variants with a Python ABI that the interpreter cannot load,
             # or with a non-matching CPU or OS.
-            reason = _system_mismatch(v.system, cpu, os, python_version, free_threaded)
+            reason = _python_mismatch(v.python, python_version, free_threaded) or _system_mismatch(v.system, cpu, os)
             if reason is not None:
                 result.append(VariantRejected(variant=v, reason=reason))
                 continue
@@ -665,8 +750,10 @@ def _check_variants(
                 continue
         elif isinstance(v, SdkVariant):
             reason = None
-            if v.system is not None:
-                reason = _system_mismatch(v.system, cpu, os, python_version, free_threaded)
+            if v.python is not None:
+                reason = _python_mismatch(v.python, python_version, free_threaded)
+            if reason is None and v.system is not None:
+                reason = _system_mismatch(v.system, cpu, os)
             if reason is None and v.backend is not None:
                 if isinstance(v.backend, Noarch):
                     if v.backend.backend_name != selected_backend.name:
@@ -678,6 +765,16 @@ def _check_variants(
                 continue
         result.append(VariantAccepted(variant=v))
     return result
+
+
+def _python_order(python: Python) -> tuple[int, int, int]:
+    """Sort key for the Python version and ABI: abi3 before abi3t, then higher
+    Python versions first."""
+    return (
+        _PYTHON_ABIS.index(python.abi),
+        -python.version.major,
+        -python.version.minor,
+    )
 
 
 def _sort_variants(
@@ -699,7 +796,8 @@ def _sort_variants(
 
     Arch kernels that are otherwise equal are ordered by Python ABI: abi3
     before abi3t, since GIL-enabled builds prefer abi3 (abi3 variants are never
-    accepted on free-threaded builds).
+    accepted on free-threaded builds). Then the highest Python version comes
+    first (a higher Python version is preferred, like for wheel tags).
     """
 
     def sort_key(vs: Decision) -> tuple[int, ...]:
@@ -726,10 +824,9 @@ def _sort_variants(
                 backend_order = -v.backend.version.minor
             else:
                 backend_order = 0
-            python_abi_order = _PYTHON_ABIS.index(v.system.python_abi)
-            return (decision_order, framework_order, *abi_version_order, backend_order, python_abi_order)
+            return (decision_order, framework_order, *abi_version_order, backend_order, *_python_order(v.python))
         elif isinstance(v, SdkVariant):
-            if v.system is not None:
+            if v.python is not None:
                 if v.backend is None:
                     # Backend-agnostic is less specific than any backend.
                     backend_order = 1
@@ -737,15 +834,14 @@ def _sort_variants(
                     backend_order = -v.backend.version.minor
                 else:
                     backend_order = 0
-                python_abi_order = _PYTHON_ABIS.index(v.system.python_abi)
-                return (decision_order, 3, 0, 0, backend_order, python_abi_order)
+                return (decision_order, 3, 0, 0, backend_order, *_python_order(v.python))
             elif v.backend is not None:
-                return (decision_order, 5, 0, 0, 0, 0)
-            return (decision_order, 6, 0, 0, 0, 0)
+                return (decision_order, 5, 0, 0, 0, 0, 0, 0)
+            return (decision_order, 6, 0, 0, 0, 0, 0, 0)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.backend.backend_name == "universal" else 0
-            return (decision_order, 4, 0, 0, universal_order, 0)
+            return (decision_order, 4, 0, 0, universal_order, 0, 0, 0)
 
     return sorted(variants, key=sort_key)
 

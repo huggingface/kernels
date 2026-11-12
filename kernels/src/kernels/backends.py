@@ -184,8 +184,10 @@ class Neuron:
 
 @dataclass(unsafe_hash=True)
 class ROCm:
-    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
+    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`. The
+    # legacy major is one digit, or two starting with 1, so that `rocm714` is
+    # 7.14 and `rocm100` is 10.0.
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(1\d|[2-9])(\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)

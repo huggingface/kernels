@@ -417,6 +417,15 @@
         }
       ];
 
+      # Neuron kernels to build in CI.
+      ciNeuronKernels = [
+        {
+          name = "relu-nki-kernel";
+          path = ./relu-nki;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-neuron;
+        }
+      ];
+
       # Metal kernels to build in CI.
       ciMetalKernels = [
         {
@@ -501,6 +510,7 @@
 
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
       ciTpuKernelOutputs = mkKernelOutputs' ciTpuKernels;
+      ciNeuronKernelOutputs = mkKernelOutputs' ciNeuronKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
       ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
@@ -699,6 +709,7 @@
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
           ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
           ci-build-tpu = mkCiBuild "ci-kernels-tpu" ciTpuKernelOutputs;
+          ci-build-neuron = mkCiBuild "ci-kernels-neuron" ciNeuronKernelOutputs;
           ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
           ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
         in
@@ -709,6 +720,7 @@
               ci-build-rocm
               ci-build-xpu
               ci-build-tpu
+              ci-build-neuron
               ci-build-metal
               ci-build-cpu
               ;

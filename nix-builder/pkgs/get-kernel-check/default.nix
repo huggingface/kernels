@@ -18,6 +18,7 @@
 
 let
   useFakeSys = config.tpuSupport or false;
+  useNeuronOverrides = config.neuronSupport or false;
 in
 makeSetupHook {
   name = "get-kernel-check-hook";
@@ -28,5 +29,6 @@ makeSetupHook {
     proot = lib.optionalString useFakeSys "${proot}/bin/proot";
     pyhook = ./get-kernel-check-hook.py;
     useFakeSys = lib.optionalString useFakeSys "1";
+    useNeuronOverrides = lib.optionalString useNeuronOverrides "1";
   };
 } ./get-kernel-check-hook.sh

@@ -3,6 +3,7 @@ let
   isCpu = version: version.cpu or false;
   isCuda = version: version ? cudaVersion;
   isMetal = version: version.metal or false;
+  isNeuron = version: version.neuron or false;
   isRocm = version: version ? rocmVersion;
   isTpu = version: version.tpu or false;
   isXpu = version: version ? xpuVersion;
@@ -23,6 +24,7 @@ rec {
         "cpu"
         "cudaVersion"
         "metal"
+        "neuron"
         "ptxasVersion"
         "rocmVersion"
         "tpu"
@@ -58,6 +60,8 @@ rec {
       "cuda"
     else if isMetal version then
       "metal"
+    else if isNeuron version then
+      "neuron"
     else if isRocm version then
       "rocm"
     else if isTpu version then

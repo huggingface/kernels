@@ -20,15 +20,20 @@ rec {
           "rocm${flattenVersion (lib.versions.majorMinor version.rocmVersion)}"
         else if backend version == "metal" then
           "metal"
+        else if backend version == "neuron" then
+          "neuron"
         else if backend version == "xpu" then
           "xpu${flattenVersion (lib.versions.majorMinor version.xpuVersion)}"
         else
           throw "No compute framework set in Torch version";
     in
     version:
-    # TPU builds are noarch: one variant, independent of Torch version and system.
+    # TPU and Neuron builds are noarch: one variant, independent of Torch
+    # version and system.
     if backend version == "tpu" then
       "torch-tpu"
+    else if backend version == "neuron" then
+      "torch-neuron"
     else if version.system == "aarch64-darwin" then
       "torch${flattenVersion version.torchVersion}-${computeString version}-${version.system}"
     else
@@ -47,7 +52,7 @@ rec {
           version.system
           (backend version)
         ];
-        pathVersions = lib.attrByPath path [ ] acc ++ [ (buildName version) ];
+        pathVersions = lib.unique (lib.attrByPath path [ ] acc ++ [ (buildName version) ]);
       in
       lib.recursiveUpdate acc (lib.setAttrByPath path pathVersions)
     ) { } (flattenSystems (bundleBuildVersions torchVersions));

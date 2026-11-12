@@ -81,6 +81,10 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch215-cu132-x86_64-linux`
 - `torch215-cu134-x86_64-linux`
 
+## Neuron x86_64-linux
+
+- `torch-neuron`
+
 ## ROCm x86_64-linux
 
 - `torch210-rocm70-x86_64-linux`
@@ -117,6 +121,7 @@ one or more of the following variants:
 - `torch-cpu`
 - `torch-cuda`
 - `torch-metal`
+- `torch-neuron`
 - `torch-rocm`
 - `torch-tpu`
 - `torch-xpu`

@@ -11,6 +11,8 @@ let
       "cu${flattenVersion buildConfig.cudaVersion}"
     else if buildConfig.backend == "metal" then
       "metal"
+    else if buildConfig.backend == "neuron" then
+      "neuron"
     else if buildConfig.backend == "rocm" then
       "rocm${flattenVersion (lib.versions.majorMinor buildConfig.rocmVersion)}"
     else if buildConfig.backend == "tpu" then

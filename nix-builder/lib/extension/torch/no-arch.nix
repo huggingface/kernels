@@ -77,7 +77,10 @@ let
   dependencies =
     resolvePythonDeps pythonDeps
     ++ resolveBackendPythonDeps buildConfig.backend backendPythonDeps
-    ++ [ torch ];
+    ++ [ torch ]
+    ++ lib.optionals (buildConfig.backend == "neuron") [
+      (overrideTorch python3.pkgs.torch-neuronx)
+    ];
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
   metalSupport = buildConfig.metal or false;
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };

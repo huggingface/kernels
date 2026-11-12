@@ -55,6 +55,7 @@ in
         cpu = false;
         cuda = false;
         metal = false;
+        neuron = false;
         rocm = false;
         tpu = false;
         xpu = false;
@@ -70,6 +71,7 @@ in
         cpu = false;
         cuda = false;
         metal = false;
+        neuron = false;
         rocm = false;
         tpu = false;
         xpu = false;

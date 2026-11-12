@@ -62,6 +62,8 @@ let
       "xpu"
     else if buildConfig.metal or false then
       "metal"
+    else if buildConfig.neuron or false then
+      "neuron"
     else if buildConfig.tpu or false then
       "tpu"
     else
@@ -261,6 +263,7 @@ in
             (headOrEmpty (setsWithFramework "cpu"))
             ++ (headOrEmpty (setsWithFramework "cuda"))
             ++ (headOrEmpty (setsWithFramework "metal"))
+            ++ (headOrEmpty (setsWithFramework "neuron"))
             ++ (headOrEmpty (setsWithFramework "rocm"))
             ++ (headOrEmpty (setsWithFramework "tpu"))
             ++ (headOrEmpty (setsWithFramework "xpu"));

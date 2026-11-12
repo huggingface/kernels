@@ -8,6 +8,8 @@
 final: prev:
 {
   # Local packages/hooks.
+  aws-neuronx-runtime-lib = final.callPackage ./pkgs/aws-neuronx-runtime-lib { };
+
   kernel-builder = final.callPackage ./pkgs/kernel-builder { inherit builderProvenance; };
 
   kernel-port = final.callPackage ./pkgs/kernel-port { };
@@ -91,6 +93,24 @@ final: prev:
       };
     }
   );
+
+  # libfabric from with the EFA provider, which is required by the
+  # Neuron collectives network plugin.
+  libfabric-efa = prev.libfabric.overrideAttrs (_: {
+    version = "2.7.0amzn2.0";
+    src = final.fetchFromGitHub {
+      owner = "aws";
+      repo = "libfabric";
+      tag = "v2.7.0amzn2.0";
+      hash = "sha256-GlwpRrRwjPNiRFF1S/LbZhcsKe/jiH1jAmGkdsSldW0=";
+    };
+    buildInputs = [
+      final.numactl
+      final.rdma-core
+      final.util-linuxMinimal
+    ];
+    configureFlags = [ "--enable-efa" ];
+  });
 
   # nixpkgs overrides
   ucc = prev.ucc.overrideAttrs (
@@ -247,6 +267,10 @@ final: prev:
 
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
+        neuronx-cc = python-self.callPackage ./pkgs/python-modules/neuronx-cc { };
+
+        nki = python-self.callPackage ./pkgs/python-modules/nki { inherit (final) zstd; };
+
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
@@ -340,6 +364,8 @@ final: prev:
           triton-xpu = triton-xpu_3_9_0;
           xpuPackages = final.xpuPackages_2026_1_2;
         };
+
+        torch-neuronx = python-self.callPackage ./pkgs/python-modules/torch-neuronx { };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
           version = "5.3.0";

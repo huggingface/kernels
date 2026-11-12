@@ -24,7 +24,7 @@
     "metal": {},
     "neuron": {
       "nki": {
-        "nix": [],
+        "nix": ["nki"],
         "python": [{ "pkg": "nki", "import": "nki" }]
       }
     },

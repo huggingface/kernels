@@ -182,6 +182,10 @@ impl General {
                 .cuda
                 .as_ref()
                 .and_then(|cuda| cuda.python_depends.as_ref()),
+            Backend::Neuron => self
+                .neuron
+                .as_ref()
+                .and_then(|neuron| neuron.python_depends.as_ref()),
             Backend::Tpu => self
                 .tpu
                 .as_ref()
@@ -589,6 +593,25 @@ mod tests {
             .unwrap();
 
         assert_eq!(deps, vec!["nvidia-cutlass-dsl".to_string()]);
+    }
+
+    #[test]
+    fn backend_python_depends_resolves_neuron() {
+        let general = General {
+            cuda: None,
+            neuron: Some(NeuronGeneral {
+                kernel_depends: None,
+                python_depends: Some(vec!["nki".to_string()]),
+            }),
+            ..general_with_cuda_deps()
+        };
+        let deps = general
+            .backend_python_depends(Backend::Neuron)
+            .map(|dep| dep.map(|(name, _)| name.to_string()))
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(deps, vec!["nki".to_string()]);
     }
 
     #[test]

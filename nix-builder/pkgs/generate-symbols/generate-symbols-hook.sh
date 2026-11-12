@@ -43,6 +43,13 @@ _generateSymbolsHook() {
       prootCmd="@proot@ -b ${fakeSys}:/sys"
   fi
 
+  # The Neuron extension for Torch queries the Neuron device when it is
+  # imported, which fails in the build sandbox. Override the queried values.
+  if [[ -n "@useNeuronOverrides@" ]]; then
+    export NEURON_PLATFORM_TARGET_OVERRIDE=trn2
+    export NEURON_LOGICAL_NC_CONFIG=2
+  fi
+
   # Avoid adding an empty entry to the library path, which the dynamic
   # linker interprets as the current directory.
   local libraryPath="${LD_LIBRARY_PATH-}"

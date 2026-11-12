@@ -77,6 +77,11 @@ let
       metalSupport = true;
     };
 
+    neuron = {
+      allowUnfree = true;
+      neuronSupport = true;
+    };
+
     rocm = {
       allowUnfree = true;
       rocmSupport = true;
@@ -153,6 +158,8 @@ in
         else if backend == "tpu" then
           [ ]
         else if backend == "metal" then
+          [ ]
+        else if backend == "neuron" then
           [ ]
         else if backend == "xpu" then
           [ (overlayForXpuVersion xpuVersion) ]

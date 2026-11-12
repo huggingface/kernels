@@ -5,7 +5,7 @@ import nki.isa as nisa
 from ._ops import ops
 
 
-@nki.jit(platform_target="trn2")
+@nki.jit
 def relu(x):
     # Check the first dimension's size to ensure it does not exceed on-chip
     # memory tile size, since this simple kernel does not tile inputs.

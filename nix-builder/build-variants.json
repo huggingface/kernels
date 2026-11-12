@@ -74,6 +74,9 @@
       "torch215-cu132-x86_64-linux",
       "torch215-cu134-x86_64-linux"
     ],
+    "neuron": [
+      "torch-neuron"
+    ],
     "rocm": [
       "torch210-rocm70-x86_64-linux",
       "torch210-rocm71-x86_64-linux",

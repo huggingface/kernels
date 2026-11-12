@@ -241,6 +241,12 @@
   }
   {
     torchVersion = "2.13";
+    neuron = true;
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.13";
     rocmVersion = "7.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
@@ -302,6 +308,12 @@
     torchVersion = "2.14";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.14";
+    neuron = true;
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
   {

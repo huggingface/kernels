@@ -7,6 +7,7 @@ _PLATFORM_NAMES = {
     "cpu": "CPU",
     "cuda": "CUDA",
     "metal": "Metal",
+    "neuron": "Neuron",
     "rocm": "ROCm",
     "tpu": "TPU",
     "xpu": "XPU",

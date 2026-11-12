@@ -12,7 +12,7 @@
     <a href="https://pypi.org/project/kernels"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/kernels"></a>
     <a href="https://github.com/huggingface/kernels/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/huggingface/kernels"></a>
     <a href="https://github.com/huggingface/kernels/actions/workflows/test_kernels.yaml"><img alt="Test kernels" src="https://img.shields.io/github/actions/workflow/status/huggingface/kernels/test_kernels.yaml?label=test"></a>
-  
+
 </p>
 </div>
 <hr/>
@@ -79,10 +79,10 @@ different tiers:
 | Metal      | ✓               | ✓                      | ✗                       | 2    |
 | TPU        | ✓               | ✓                      | ✗                       | 2    |
 | Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
-| Neuron     | ✓               | x                      | x                       | 3    |
+| Neuron     | ✓               | ✓                      | ✗                       | 3    |
 
-> [!WARNING] 
-> Neuron support is experimental and packages are not public yet. TPU support is is experimental.
+> [!WARNING]
+> Neuron and TPU support are experimental.
 
 ## 📚 Documentation
 

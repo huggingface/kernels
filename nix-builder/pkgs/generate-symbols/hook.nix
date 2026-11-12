@@ -18,6 +18,7 @@
 
 let
   useFakeSys = config.tpuSupport or false;
+  useNeuronOverrides = config.neuronSupport or false;
 in
 makeSetupHook {
   name = "generate-symbols-hook";
@@ -27,5 +28,6 @@ makeSetupHook {
     inherit libraryPath;
     proot = lib.optionalString useFakeSys "${proot}/bin/proot";
     useFakeSys = lib.optionalString useFakeSys "1";
+    useNeuronOverrides = lib.optionalString useNeuronOverrides "1";
   };
 } ./generate-symbols-hook.sh

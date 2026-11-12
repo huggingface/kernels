@@ -205,7 +205,8 @@ Both checks can be performed on demand with the
 To avoid the high cost of verification, a kernel from the Hub is only verified
 in full once. Upon successful verification, we write a receipt file to the
 kernels cache. Signature and digest verification each have their own receipts,
-stored in `.verified-kernels/signature` and `.verified-kernels/digest`.
+stored in `.verified-kernels/signature` and `.verified-kernels/digest` at the
+top of the [kernels cache](cache.md).
 
 When a digest receipt is found on a later load, the kernel files are not hashed
 again. When a signature receipt is found, the signature is not verified again.

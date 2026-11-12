@@ -69,3 +69,25 @@ def test_info_local_rejects_revision(tmp_path):
 def test_info_local_no_variants(tmp_path):
     with pytest.raises(SystemExit):
         print_kernel_info(str(tmp_path))
+
+
+def test_info_local_sdk_variants(tmp_path, capsys):
+    for variant in ["sdk", "sdk-cuda", "sdk-cpu-abi3-x86_64-linux", "sdk-abi3-x86_64-linux"]:
+        variant_dir = tmp_path / "build" / variant
+        variant_dir.mkdir(parents=True)
+        (variant_dir / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "id": "sdk_1",
+                    "name": "sdk",
+                    "version": 1,
+                    "license": "Apache-2.0",
+                    "python-depends": [],
+                    "backend": {"type": "cuda"},
+                }
+            )
+        )
+
+    print_kernel_info(str(tmp_path), json_output=True)
+    info = json.loads(capsys.readouterr().out)
+    assert sorted(info["backends"]) == ["cpu", "cuda"]

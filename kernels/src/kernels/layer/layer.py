@@ -28,7 +28,14 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
-from ..validate import AllKernelValidator, AllMetadataValidator, default_kernel_validators, default_metadata_validators
+from ..validate import (
+    AllKernelValidator,
+    AllMetadataValidator,
+    ArchValidator,
+    MetadataValidator,
+    default_kernel_validators,
+    default_metadata_validators,
+)
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
@@ -90,6 +97,10 @@ class LayerRepository:
             repositories in addition to repositories from trusted organisations.
         user_agent (`Union[str, dict]`, *optional*):
             Optional application metadata to include in the user-agent for Hub requests.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            of the current device. Set to `False` for kernels whose declared
+            architectures are incomplete (e.g. when they have a Triton fallback).
 
     Example:
         ```python
@@ -113,6 +124,7 @@ class LayerRepository:
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
         user_agent: str | dict | None = None,
+        check_arch: bool = True,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
@@ -125,6 +137,7 @@ class LayerRepository:
             trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
         )
         self._user_agent = user_agent
+        self._check_arch = check_arch
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
@@ -138,6 +151,7 @@ class LayerRepository:
             version=self._version,
             trust_remote_code=self._trust_remote_code,
             user_agent=self._user_agent,
+            check_arch=self._check_arch,
         )
         return _get_kernel_layer(self, kernel)
 
@@ -149,6 +163,7 @@ class LayerRepository:
             and self._revision == other._revision
             and self._version == other._version
             and self._trust_remote_code == other._trust_remote_code
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
@@ -158,6 +173,7 @@ class LayerRepository:
                 self._repo_id,
                 self._revision,
                 self._version,
+                self._check_arch,
                 tuple(self._trust_remote_code)
                 if isinstance(self._trust_remote_code, list)
                 else self._trust_remote_code,
@@ -170,6 +186,10 @@ class LayerRepository:
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision_str()}), layer `{self.layer_name}`"
 
+    def __setstate__(self, state: dict):
+        self.__dict__.update(state)
+        self._check_arch = state.get("_check_arch", True)
+
 
 class LocalLayerRepository:
     """
@@ -180,6 +200,10 @@ class LocalLayerRepository:
             The local repository containing the layer.
         layer_name (`str`):
             The name of the layer within the kernel repository.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            of the current device. Set to `False` for kernels whose declared
+            architectures are incomplete (e.g. when they have a Triton fallback).
 
     Example:
         ```python
@@ -200,12 +224,14 @@ class LocalLayerRepository:
         repo_path: Path,
         *,
         layer_name: str,
+        check_arch: bool = True,
     ):
         self._repo_path = repo_path
         self.layer_name = layer_name
+        self._check_arch = check_arch
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_local_kernel(self._repo_path)
+        kernel = get_local_kernel(self._repo_path, check_arch=self._check_arch)
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -213,13 +239,18 @@ class LocalLayerRepository:
             isinstance(other, LocalLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_path == other._repo_path
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_path))
+        return hash((self.layer_name, self._repo_path, self._check_arch))
 
     def __str__(self) -> str:
         return f"`{self._repo_path}` (layer `{self.layer_name}`)"
+
+    def __setstate__(self, state: dict):
+        self.__dict__.update(state)
+        self._check_arch = state.get("_check_arch", True)
 
 
 class LockedLayerRepository:
@@ -237,15 +268,21 @@ class LockedLayerRepository:
         lockfile: Path | None = None,
         layer_name: str,
         trust_remote_code: bool | list[str] = False,
+        check_arch: bool = True,
     ):
         """
         Construct a layer repository.
 
         Args:
             repo_id (`str`): The Hub repository containing the layer.
+            check_arch (`bool`, *optional*, defaults to `True`):
+                Whether to check that the kernel build supports the architecture
+                of the current device. Set to `False` for kernels whose declared
+                architectures are incomplete (e.g. when they have a Triton fallback).
         """
         self._repo_id = repo_id
         self._lockfile = lockfile
+        self._check_arch = check_arch
         self.layer_name = layer_name
         self._trust_remote_code = (
             trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
@@ -272,13 +309,17 @@ class LockedLayerRepository:
                 trust_remote_code=self._trust_remote_code,
             )
         )
+        validators: list[MetadataValidator] = default_metadata_validators()
+        if self._check_arch:
+            validators.append(ArchValidator())
+
         kernel = get_kernel_with_resolver(
             api=_get_hf_api(),
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
             kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-            metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+            metadata_validator=AllMetadataValidator(validators=validators),
         )
         return _get_kernel_layer(self, kernel)
 
@@ -290,6 +331,7 @@ class LockedLayerRepository:
             and self.kernel_dep == other.kernel_dep
             and self.kernel_locks == other.kernel_locks
             and self._trust_remote_code == other._trust_remote_code
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
@@ -299,6 +341,7 @@ class LockedLayerRepository:
                 self._repo_id,
                 self.kernel_dep,
                 self.kernel_locks,
+                self._check_arch,
                 tuple(self._trust_remote_code)
                 if isinstance(self._trust_remote_code, list)
                 else self._trust_remote_code,
@@ -317,6 +360,7 @@ class LockedLayerRepository:
             "lockfile": self._lockfile,
             "layer_name": self.layer_name,
             "trust_remote_code": self._trust_remote_code,
+            "check_arch": self._check_arch,
             "kernel_locks": self.kernel_locks.to_json(),
         }
 
@@ -325,6 +369,7 @@ class LockedLayerRepository:
         self._lockfile = state["lockfile"]
         self.layer_name = state["layer_name"]
         self._trust_remote_code = state["trust_remote_code"]
+        self._check_arch = state.get("check_arch", True)
         self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 

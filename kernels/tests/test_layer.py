@@ -3,6 +3,7 @@ import logging
 import pickle
 import sys
 from contextlib import nullcontext
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,6 +22,7 @@ from kernels import (
     KernelizedLayers,
     KernelizeFallback,
     LayerRepository,
+    LocalFuncRepository,
     LocalLayerRepository,
     LockedFuncRepository,
     LockedLayerRepository,
@@ -745,6 +747,7 @@ def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
                 "version": None,
                 "trust_remote_code": False,
                 "user_agent": user_agent,
+                "check_arch": True,
             },
         )
     ]
@@ -1598,16 +1601,68 @@ def test_kernelize_torch_device_rocm(stub_kernel, monkeypatch, is_rocm):
     assert model[0]._kernel_repo == (repo_rocm if is_rocm else repo_cuda)
 
 
-def test_locked_repositories_are_picklable():
-    lockfile = Path(__file__).parent / "layer_locking" / "kernels.lock"
-    layer_repo = LockedLayerRepository("kernels-test/versions", layer_name="Version", lockfile=lockfile)
-    func_repo = LockedFuncRepository("kernels-test/versions", func_name="version", lockfile=lockfile)
+@pytest.fixture(
+    params=[
+        LayerRepository,
+        FuncRepository,
+        LocalLayerRepository,
+        LocalFuncRepository,
+        LockedLayerRepository,
+        LockedFuncRepository,
+    ]
+)
+def repository_factory(request, tmp_path):
+    repository = request.param
+    kwargs = (
+        {"layer_name": "Version"}
+        if repository in (LayerRepository, LocalLayerRepository, LockedLayerRepository)
+        else {"func_name": "version"}
+    )
+    if repository in (LocalLayerRepository, LocalFuncRepository):
+        return partial(repository, tmp_path, **kwargs)
+    if repository in (LockedLayerRepository, LockedFuncRepository):
+        kwargs["lockfile"] = Path(__file__).parent / "layer_locking" / "kernels.lock"
+    else:
+        kwargs["version"] = 2
+    return partial(repository, "kernels-test/versions", **kwargs)
 
-    for repo in (layer_repo, func_repo):
-        for restore in (copy.deepcopy, lambda repo: pickle.loads(pickle.dumps(repo))):
-            restored = restore(repo)
-            assert restored == repo
-            assert str(restored) == str(repo)
+
+@pytest.mark.parametrize("check_arch", [True, False])
+def test_repositories_are_picklable(repository_factory, check_arch):
+    repo = repository_factory(check_arch=check_arch)
+
+    for restore in (copy.deepcopy, lambda repo: pickle.loads(pickle.dumps(repo))):
+        restored = restore(repo)
+        assert restored == repo
+        assert hash(restored) == hash(repo)
+        assert str(restored) == str(repo)
+
+
+def test_repository_arch_check_affects_equality(repository_factory):
+    default = repository_factory()
+    checked = repository_factory(check_arch=True)
+    unchecked = repository_factory(check_arch=False)
+
+    assert default == checked
+    assert hash(default) == hash(checked)
+    assert checked != unchecked
+    assert len({default, checked, unchecked}) == 2
+
+
+def test_repository_restores_state_without_check_arch(repository_factory):
+    repo = repository_factory()
+    if isinstance(repo, (LockedLayerRepository, LockedFuncRepository)):
+        state = repo.__getstate__()
+        del state["check_arch"]
+    else:
+        state = repo.__dict__.copy()
+        del state["_check_arch"]
+
+    restored = type(repo).__new__(type(repo))
+    restored.__setstate__(state)
+
+    assert restored == repo
+    assert hash(restored) == hash(repo)
 
 
 def test_locked_repository_restores_rust_objects(tmp_path):

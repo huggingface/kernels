@@ -19,7 +19,14 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
-from ..validate import AllKernelValidator, AllMetadataValidator, default_kernel_validators, default_metadata_validators
+from ..validate import (
+    AllKernelValidator,
+    AllMetadataValidator,
+    ArchValidator,
+    MetadataValidator,
+    default_kernel_validators,
+    default_metadata_validators,
+)
 from .layer import (
     _create_func_module,
     use_kernel_forward_from_hub,
@@ -55,6 +62,10 @@ class FuncRepository:
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
             Either `version` or `revision` must be specified.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            of the current device. Set to `False` for kernels whose declared
+            architectures are incomplete (e.g. when they have a Triton fallback).
 
     Example:
         ```python
@@ -84,6 +95,7 @@ class FuncRepository:
         revision: str | None = None,
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
+        check_arch: bool = True,
     ):
         logger.warning(
             "FuncRepository is deprecated and will be removed in kernels 0.17. Use LayerRepository instead.",
@@ -97,6 +109,7 @@ class FuncRepository:
 
         self._repo_id = repo_id
         self.func_name = func_name
+        self._check_arch = check_arch
         self._trust_remote_code = (
             trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
         )
@@ -112,6 +125,7 @@ class FuncRepository:
             revision=self._revision,
             version=self._version,
             trust_remote_code=self._trust_remote_code,
+            check_arch=self._check_arch,
         )
         return _get_kernel_func(self, kernel)
 
@@ -123,6 +137,7 @@ class FuncRepository:
             and self._revision == other._revision
             and self._version == other._version
             and self._trust_remote_code == other._trust_remote_code
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
@@ -132,6 +147,7 @@ class FuncRepository:
                 self._repo_id,
                 self._revision,
                 self._version,
+                self._check_arch,
                 tuple(self._trust_remote_code)
                 if isinstance(self._trust_remote_code, list)
                 else self._trust_remote_code,
@@ -143,6 +159,10 @@ class FuncRepository:
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision_str()}), function `{self.func_name}`"
+
+    def __setstate__(self, state: dict):
+        self.__dict__.update(state)
+        self._check_arch = state.get("_check_arch", True)
 
 
 class LocalFuncRepository:
@@ -158,6 +178,10 @@ class LocalFuncRepository:
             The local repository containing the layer.
         func_name (`str`):
             The name of the function within the kernel repository.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            of the current device. Set to `False` for kernels whose declared
+            architectures are incomplete (e.g. when they have a Triton fallback).
 
     Example:
         ```python
@@ -178,6 +202,7 @@ class LocalFuncRepository:
         repo_path: Path,
         *,
         func_name: str,
+        check_arch: bool = True,
     ):
         logger.warning(
             "LocalFuncRepository is deprecated and will be removed in kernels 0.17. Use LocalLayerRepository instead.",
@@ -186,9 +211,10 @@ class LocalFuncRepository:
 
         self._repo_path = repo_path
         self.func_name = func_name
+        self._check_arch = check_arch
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_local_kernel(self._repo_path)
+        kernel = get_local_kernel(self._repo_path, check_arch=self._check_arch)
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -196,13 +222,18 @@ class LocalFuncRepository:
             isinstance(other, LocalFuncRepository)
             and self.func_name == other.func_name
             and self._repo_path == other._repo_path
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_path))
+        return hash((self.func_name, self._repo_path, self._check_arch))
 
     def __str__(self) -> str:
         return f"`{self._repo_path}` (layer `{self.func_name}`"
+
+    def __setstate__(self, state: dict):
+        self.__dict__.update(state)
+        self._check_arch = state.get("_check_arch", True)
 
 
 def use_kernel_func_from_hub(func_name: str):
@@ -281,6 +312,10 @@ class LockedFuncRepository:
         func_name (`str`): The name of the function within the kernel repository.
         trust_remote_code (`bool`, *optional*, defaults to `False`):
             Whether to allow loading kernels from untrusted organisations.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            of the current device. Set to `False` for kernels whose declared
+            architectures are incomplete (e.g. when they have a Triton fallback).
     """
 
     def __init__(
@@ -290,6 +325,7 @@ class LockedFuncRepository:
         lockfile: Path | None = None,
         func_name: str,
         trust_remote_code: bool | list[str] = False,
+        check_arch: bool = True,
     ):
         """
         Construct a function repository.
@@ -302,6 +338,7 @@ class LockedFuncRepository:
 
         self._repo_id = repo_id
         self._lockfile = lockfile
+        self._check_arch = check_arch
         self.func_name = func_name
         self._trust_remote_code = (
             trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
@@ -328,13 +365,17 @@ class LockedFuncRepository:
                 trust_remote_code=self._trust_remote_code,
             )
         )
+        validators: list[MetadataValidator] = default_metadata_validators()
+        if self._check_arch:
+            validators.append(ArchValidator())
+
         kernel = get_kernel_with_resolver(
             api=_get_hf_api(),
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
             kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-            metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+            metadata_validator=AllMetadataValidator(validators=validators),
         )
         return _get_kernel_func(self, kernel)
 
@@ -346,6 +387,7 @@ class LockedFuncRepository:
             and self.kernel_dep == other.kernel_dep
             and self.kernel_locks == other.kernel_locks
             and self._trust_remote_code == other._trust_remote_code
+            and self._check_arch == other._check_arch
         )
 
     def __hash__(self):
@@ -355,6 +397,7 @@ class LockedFuncRepository:
                 self._repo_id,
                 self.kernel_dep,
                 self.kernel_locks,
+                self._check_arch,
                 tuple(self._trust_remote_code)
                 if isinstance(self._trust_remote_code, list)
                 else self._trust_remote_code,
@@ -373,6 +416,7 @@ class LockedFuncRepository:
             "lockfile": self._lockfile,
             "func_name": self.func_name,
             "trust_remote_code": self._trust_remote_code,
+            "check_arch": self._check_arch,
             "kernel_locks": self.kernel_locks.to_json(),
         }
 
@@ -381,6 +425,7 @@ class LockedFuncRepository:
         self._lockfile = state["lockfile"]
         self.func_name = state["func_name"]
         self._trust_remote_code = state["trust_remote_code"]
+        self._check_arch = state.get("check_arch", True)
         self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 

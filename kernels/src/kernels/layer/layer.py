@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Callable, Protocol, Type
 from huggingface_hub import constants
 
 from kernels._rust import KernelDependency, KernelLocks
-from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from ..hf_hub import _get_hf_api
 from ..load import (
+    _get_locked_hub_resolver,
     get_kernel,
     get_kernel_with_resolver,
     get_local_kernel,
@@ -290,16 +290,10 @@ class LockedLayerRepository:
             return get_locked_kernel_revision(self._repo_id, self._lockfile)
 
     def load(self) -> Type["nn.Module"]:
-        resolver = (
-            LockedHubCacheResolver(
-                kernel_locks=self.kernel_locks,
-                trust_remote_code=self._trust_remote_code,
-            )
-            if constants.HF_HUB_OFFLINE
-            else LockedHubResolver(
-                kernel_locks=self.kernel_locks,
-                trust_remote_code=self._trust_remote_code,
-            )
+        resolver = _get_locked_hub_resolver(
+            kernel_locks=self.kernel_locks,
+            trust_remote_code=self._trust_remote_code,
+            local_files_only=constants.HF_HUB_OFFLINE,
         )
         validators: list[MetadataValidator] = default_metadata_validators()
         if self._check_arch:

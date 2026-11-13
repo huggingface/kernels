@@ -186,10 +186,6 @@ class LayerRepository:
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision_str()}), layer `{self.layer_name}`"
 
-    def __setstate__(self, state: dict):
-        self.__dict__.update(state)
-        self._check_arch = state.get("_check_arch", True)
-
 
 class LocalLayerRepository:
     """
@@ -247,10 +243,6 @@ class LocalLayerRepository:
 
     def __str__(self) -> str:
         return f"`{self._repo_path}` (layer `{self.layer_name}`)"
-
-    def __setstate__(self, state: dict):
-        self.__dict__.update(state)
-        self._check_arch = state.get("_check_arch", True)
 
 
 class LockedLayerRepository:
@@ -369,7 +361,7 @@ class LockedLayerRepository:
         self._lockfile = state["lockfile"]
         self.layer_name = state["layer_name"]
         self._trust_remote_code = state["trust_remote_code"]
-        self._check_arch = state.get("check_arch", True)
+        self._check_arch = state["check_arch"]
         self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 

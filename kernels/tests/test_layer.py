@@ -1649,22 +1649,6 @@ def test_repository_arch_check_affects_equality(repository_factory):
     assert len({default, checked, unchecked}) == 2
 
 
-def test_repository_restores_state_without_check_arch(repository_factory):
-    repo = repository_factory()
-    if isinstance(repo, (LockedLayerRepository, LockedFuncRepository)):
-        state = repo.__getstate__()
-        del state["check_arch"]
-    else:
-        state = repo.__dict__.copy()
-        del state["_check_arch"]
-
-    restored = type(repo).__new__(type(repo))
-    restored.__setstate__(state)
-
-    assert restored == repo
-    assert hash(restored) == hash(repo)
-
-
 def test_locked_repository_restores_rust_objects(tmp_path):
     target = KernelDependency("kernels-test/target", KernelVersion.Version(3))
     other_version = KernelDependency("kernels-test/other", KernelVersion.Version(1))

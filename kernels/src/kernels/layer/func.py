@@ -160,10 +160,6 @@ class FuncRepository:
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision_str()}), function `{self.func_name}`"
 
-    def __setstate__(self, state: dict):
-        self.__dict__.update(state)
-        self._check_arch = state.get("_check_arch", True)
-
 
 class LocalFuncRepository:
     """
@@ -230,10 +226,6 @@ class LocalFuncRepository:
 
     def __str__(self) -> str:
         return f"`{self._repo_path}` (layer `{self.func_name}`"
-
-    def __setstate__(self, state: dict):
-        self.__dict__.update(state)
-        self._check_arch = state.get("_check_arch", True)
 
 
 def use_kernel_func_from_hub(func_name: str):
@@ -425,7 +417,7 @@ class LockedFuncRepository:
         self._lockfile = state["lockfile"]
         self.func_name = state["func_name"]
         self._trust_remote_code = state["trust_remote_code"]
-        self._check_arch = state.get("check_arch", True)
+        self._check_arch = state["check_arch"]
         self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 

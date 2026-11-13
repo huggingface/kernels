@@ -5,7 +5,7 @@ from types import ModuleType
 
 from huggingface_hub import HfApi, constants
 
-from kernels._rust import KernelDependency, KernelVersion
+from kernels._rust import KernelDependency, KernelLocks, KernelVersion
 from kernels._versions import revision_or_version
 from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api
@@ -16,6 +16,7 @@ from kernels.locking import (
 from kernels.resolver import (
     HubCacheResolver,
     HubResolver,
+    LatestHubResolver,
     LockedHubCacheResolver,
     LockedHubResolver,
     NoopResolver,
@@ -41,6 +42,39 @@ def _get_local_kernel_overrides() -> Resolver:
         return NoopResolver()
     overrides = _parse_local_kernel_overrides(local_kerels)
     return RepoPathsResolver(local_kernels=overrides)
+
+
+def _use_latest_kernels() -> bool:
+    return os.environ.get("UNSTABLE_KERNELS_ALL_LATEST", "").upper() in {"1", "ON", "YES", "TRUE"}
+
+
+def _get_latest_kernel_overrides(*, trust_remote_code: bool | list[str], local_files_only: bool) -> Resolver:
+    if not _use_latest_kernels():
+        return NoopResolver()
+    return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+
+
+def _kernel_version_for_loading(*, revision: str | None, version: int | None) -> KernelVersion:
+    # A dependency still needs a version when the caller omits one. The latest
+    # resolver replaces this placeholder after local overrides have been tried.
+    if revision is None and version is None and _use_latest_kernels():
+        return KernelVersion.Revision("main")
+    return revision_or_version(revision=revision, version=version)
+
+
+def _get_locked_kernel_resolver(
+    *, kernel_locks: KernelLocks, trust_remote_code: bool | list[str], local_files_only: bool
+) -> Resolver:
+    return SequentialResolver(
+        [
+            _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=local_files_only),
+            (
+                LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+                if local_files_only
+                else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+            ),
+        ]
+    )
 
 
 @functools.lru_cache(maxsize=1)
@@ -116,6 +150,9 @@ def get_kernel(
     This function downloads a kernel to the local Hugging Face Hub cache directory (if it was not downloaded before)
     and then loads the kernel.
 
+    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores version and revision pins for this kernel and its dependencies.
+    In this development mode, omitting both is allowed, but kernel API changes may break your code.
+
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -157,10 +194,11 @@ def get_kernel(
     """
     api = _get_hf_api(user_agent=user_agent)
 
-    kernel_version = revision_or_version(revision=revision, version=version)
+    kernel_version = _kernel_version_for_loading(revision=revision, version=version)
 
     resolvers = [
         _get_local_kernel_overrides(),
+        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
         (
             HubCacheResolver(trust_remote_code=trust_remote_code)
             if constants.HF_HUB_OFFLINE
@@ -194,6 +232,8 @@ def get_local_kernel(
 
     If the kernel has any (transitive) dependencies, they will be downloaded.
 
+    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` loads the latest versions of Hub dependencies, ignoring their pins.
+
     Args:
         repo_path (`Path`):
             The local path to the kernel repository.
@@ -218,6 +258,7 @@ def get_local_kernel(
     resolvers = [
         RepoPathsResolver(local_kernels={str(repo_path): repo_path}),
         _get_local_kernel_overrides(),
+        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
         (
             HubCacheResolver(trust_remote_code=trust_remote_code)
             if constants.HF_HUB_OFFLINE
@@ -250,6 +291,9 @@ def has_kernel(
 
     If the kernel has any (transitive) dependencies, they will be checked as well.
 
+    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` checks the latest versions, ignoring pins for this kernel and its
+    dependencies. In this development mode, omitting both `version` and `revision` is allowed.
+
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -278,10 +322,11 @@ def has_kernel(
     """
     api = _get_hf_api()
 
-    kernel_version = revision_or_version(revision=revision, version=version)
+    kernel_version = _kernel_version_for_loading(revision=revision, version=version)
 
     resolvers = [
         _get_local_kernel_overrides(),
+        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
         (
             HubCacheResolver(trust_remote_code=trust_remote_code)
             if constants.HF_HUB_OFFLINE
@@ -322,6 +367,9 @@ def load_kernel(
 
     If `lockfile` is not specified, the lockfile will be loaded from the caller's package metadata.
 
+    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores lockfile pins and uses the latest cached versions of this
+    kernel and its dependencies. A lockfile is still required, and this function never downloads anything.
+
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -339,7 +387,7 @@ def load_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=False)
+    resolver = _get_locked_kernel_resolver(kernel_locks=kernel_locks, trust_remote_code=False, local_files_only=True)
 
     return get_kernel_with_resolver(
         # We need to provide the API, but it is never used, so no need for a
@@ -363,6 +411,9 @@ def get_locked_kernel(
     """
     Get a kernel using a lock file.
 
+    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores lockfile pins and loads the latest versions of this kernel
+    and its dependencies. A lockfile is still required, but is not modified.
+
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -379,10 +430,8 @@ def get_locked_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = (
-        LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
-        if constants.HF_HUB_OFFLINE
-        else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+    resolver = _get_locked_kernel_resolver(
+        kernel_locks=kernel_locks, trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE
     )
 
     return get_kernel_with_resolver(

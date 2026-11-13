@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -5,8 +6,8 @@ from typing import Protocol, runtime_checkable
 from huggingface_hub.errors import IncompleteSnapshotError, LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 
-from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata, Oid
-from kernels._versions import _get_available_versions, resolve_kernel_version
+from kernels._rust import KernelDependency, KernelLocks, KernelPaths, KernelVersion, Metadata, Oid
+from kernels._versions import _get_available_versions, _record_ref_in_cache, resolve_kernel_version
 from kernels.hf_hub import _check_trust_remote_code, _get_cache_dir
 from kernels.variants import (
     Variant,
@@ -21,6 +22,8 @@ from kernels.variants import (
 # bytecode. So these patterns are used to ensure that they are never
 # downloaded.
 _BYTECODE_IGNORE_PATTERNS = ["*.pyc", "**/__pycache__/**"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -314,6 +317,51 @@ class HubResolver:
         revision = resolve_kernel_version(kernel.repo_id, kernel.version, local_files_only=False)
 
         # Get the kernel metadata for the revision.
+        return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, backend=backend)
+
+
+@dataclass
+class LatestHubResolver:
+    """Resolve the latest numbered kernel version, or `main` for unversioned repositories.
+
+    This development-only resolver ignores requested versions and lockfile pins.
+    In cache-only mode, it selects the latest version recorded in the local cache.
+    """
+
+    trust_remote_code: bool | list[str]
+    local_files_only: bool
+
+    def resolve(self, *, api: HfApi, backend: str | None, kernel: KernelDependency) -> LocalKernel | RemoteKernel:
+        _check_trust_remote_code(
+            repo_id=kernel.repo_id,
+            local_files_only=self.local_files_only,
+            trust_remote_code=self.trust_remote_code,
+        )
+
+        versions = _get_available_versions(kernel.repo_id, local_files_only=self.local_files_only)
+        if versions:
+            ref = versions[max(versions)]
+            selected_ref = ref.name
+            revision = Oid.from_str(ref.target_commit)
+            if not self.local_files_only:
+                _record_ref_in_cache(kernel.repo_id, selected_ref, str(revision))
+        else:
+            selected_ref = "main"
+            revision = resolve_kernel_version(
+                kernel.repo_id, KernelVersion.Revision(selected_ref), local_files_only=self.local_files_only
+            )
+
+        logger.warning(
+            "UNSTABLE_KERNELS_ALL_LATEST is enabled: overriding requested %s and any lockfile pin for '%s' "
+            "with %s (%s). Kernel API changes may break your code.",
+            kernel.version,
+            kernel.repo_id,
+            selected_ref,
+            revision,
+        )
+
+        if self.local_files_only:
+            return resolve_hub_cache_kernel(api, kernel.repo_id, revision=revision, backend=backend)
         return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, backend=backend)
 
 

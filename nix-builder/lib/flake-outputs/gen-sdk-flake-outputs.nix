@@ -13,8 +13,12 @@
   repoId,
   branch ? null,
 
+  # Name of the SDK (e.g. `flydsl`).
+  name,
+
   # Python version and ABI that the SDK is built for, e.g.
-  # `{ version = "3.12"; abi = "abi3"; }`.
+  # `{ version = "3.12"; abi = "abi3"; }`. Only `abi3` is currently
+  # supported.
   python,
 
   # Directory with tests, run with pytest. Tests marked with `kernels_ci`
@@ -46,6 +50,72 @@ let
 
   variantOf = buildSet: buildSet.variants.sdkVariant python;
 
+  # Check and finalize a variant. Copy the build output and run our standard
+  # kernel hooks on the copy.
+  checkVariant =
+    {
+      buildSet,
+      variant,
+      kernel,
+    }:
+    let
+      inherit (buildSet)
+        pkgs
+        python3
+        torch
+        overrideTorch
+        ;
+
+      # Torch is not used by SDKs, it is only needed in the environment of the
+      # load check, which provides the backend libraries (e.g. ROCm).
+      loadCheckPython = python3.withPackages (_: [ torch ]);
+      kernels = overrideTorch python3.pkgs.kernels;
+    in
+    assert lib.assertMsg (
+      python.abi == "abi3"
+    ) "Only abi3 SDKs are supported, got ABI `${python.abi}` for `${name}`";
+    pkgs.stdenv.mkDerivation {
+      name = "${name}-${variant}";
+
+      dontUnpack = true;
+
+      # Keep the binaries as the SDK built them.
+      dontFixup = true;
+
+      nativeBuildInputs = [
+        # Order matters: remove bytecode, then hash.
+        pkgs.remove-bytecode-hook
+        pkgs.hash-kernel-hook
+        pkgs.kernel-builder
+        (pkgs.get-kernel-check.override {
+          python3 = loadCheckPython;
+          inherit kernels;
+        })
+        (pkgs.generate-symbols-hook.override {
+          python3 = loadCheckPython;
+          inherit kernels;
+        })
+      ];
+
+      moduleName = name;
+      kernelDeps = pkgs.writeText "kernel-deps" "[]";
+      inherit variant;
+
+      doInstallCheck = true;
+      doAbiCheck = true;
+      pythonAbiVersion = python.version;
+
+      installPhase = ''
+        runHook preInstall
+
+        mkdir -p $out
+        cp -r ${kernel}/. $out/
+        chmod -R u+w $out
+
+        runHook postInstall
+      '';
+    };
+
   variantSets = lib.listToAttrs (
     map (buildSet: {
       name = variantOf buildSet;
@@ -56,9 +126,16 @@ let
       };
     }) applicableBuildSets
   );
-  variantDrvs = lib.mapAttrs (_: set: set.kernel) variantSets;
-
-  variantsOf = sets: lib.genAttrs (map variantOf sets) (variant: variantSets.${variant});
+  variantDrvs = lib.listToAttrs (
+    map (buildSet: {
+      name = variantOf buildSet;
+      value = checkVariant {
+        inherit buildSet;
+        variant = variantOf buildSet;
+        kernel = variantSets.${variantOf buildSet}.kernel;
+      };
+    }) applicableBuildSets
+  );
 
   testPython =
     buildSet:
@@ -95,7 +172,7 @@ lib.optionalAttrs (applicableBuildSets != [ ]) (
           ${lib.concatMapStringsSep "\n" (set: "cp -r ${variantDrvs.${variantOf set}}/* $out/") sets}
         '';
 
-    mkRedistributable = sets: lib.mapAttrs (_: set: set.kernel) (variantsOf sets);
+    mkRedistributable = sets: lib.genAttrs (map variantOf sets) (variant: variantDrvs.${variant});
 
     mkTestShells =
       sets:

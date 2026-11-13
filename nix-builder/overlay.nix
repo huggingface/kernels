@@ -14,6 +14,10 @@ final: prev:
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
+  hipOffloadJobsHook = final.callPackage ./pkgs/hip-offload-jobs-hook { };
+
+  hip-parallel-driver = final.callPackage ./pkgs/hip-parallel-driver { };
+
   fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
 
   fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };

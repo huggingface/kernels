@@ -449,6 +449,11 @@
           path = ./relu-metal-cpp;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-metal-${sys}"};
         }
+        {
+          name = "relu-mlx-kernel";
+          path = ./relu-mlx;
+          drv = sys: out: out.packages.${sys}.redistributable.mlx-metal;
+        }
       ];
 
       # CPU kernels to build in CI.

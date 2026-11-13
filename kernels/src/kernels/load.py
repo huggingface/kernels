@@ -188,6 +188,7 @@ def get_local_kernel(
     backend: str | None = None,
     trust_remote_code: bool | list[str] = False,
     user_agent: str | dict | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Import a kernel from a local kernel repository path.
@@ -207,8 +208,12 @@ def get_local_kernel(
             only kernels from trusted organisations are allowed. When ``True``, all
             repositories are allowed. A list of repository IDs allows only those
             repositories in addition to repositories from trusted organisations.
-
-
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -225,6 +230,10 @@ def get_local_kernel(
         ),
     ]
 
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
+
     return get_kernel_with_resolver(
         api=api,
         backend=backend,
@@ -232,7 +241,7 @@ def get_local_kernel(
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )
 
 
@@ -313,6 +322,7 @@ def load_kernel(
     *,
     lockfile: Path | None,
     backend: str | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -330,6 +340,12 @@ def load_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -341,6 +357,10 @@ def load_kernel(
 
     resolver = LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=False)
 
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
+
     return get_kernel_with_resolver(
         # We need to provide the API, but it is never used, so no need for a
         # user agent.
@@ -349,7 +369,7 @@ def load_kernel(
         kernel=kernel_dep,
         resolver=resolver,
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )
 
 
@@ -359,6 +379,7 @@ def get_locked_kernel(
     lockfile: Path | None,
     trust_remote_code: bool | list[str] = False,
     user_agent: str | dict | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Get a kernel using a lock file.
@@ -370,6 +391,12 @@ def get_locked_kernel(
             Path to the lockfile. If not provided, the lockfile will be loaded from the caller's package metadata.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -385,11 +412,15 @@ def get_locked_kernel(
         else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
     )
 
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
+
     return get_kernel_with_resolver(
         api=_get_hf_api(user_agent=user_agent),
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )

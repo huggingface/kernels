@@ -11,7 +11,7 @@ use crate::PyKernelDependency;
 use crate::git::{PyOid, parse_oid};
 
 /// A locked kernel revision.
-#[pyclass(name = "KernelLock", frozen, eq, hash)]
+#[pyclass(name = "KernelLock", frozen, eq, hash, from_py_object)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct PyKernelLock {
     commit: Oid,
@@ -206,7 +206,7 @@ impl PyKernelLocks {
 }
 
 /// A locked kernel revision with the SRI hash of the Nix output path.
-#[pyclass(name = "NixKernelLock", frozen, eq, hash)]
+#[pyclass(name = "NixKernelLock", frozen, eq, hash, from_py_object)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct PyNixKernelLock {
     commit: Oid,

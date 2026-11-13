@@ -27,6 +27,30 @@ def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, lega
     return Version(f"{m.group(1)}.{m.group(2)}")
 
 
+# The version part of a backend in the new variant format, e.g. `12.8`.
+_BACKEND_VERSION_REGEX = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)")
+
+
+def _parse_backend_version(legacy_regex: re.Pattern, name: str, parts: list[str], legacy: bool) -> Version | None:
+    """
+    Parse the version of a versioned backend from the parts of its variant
+    string. In the legacy format, the backend is a single part that matches the
+    legacy regex (e.g. `["cu128"]`). In the new format, the backend consists of
+    its name and a dotted version (e.g. `["cuda", "12.8"]`).
+    """
+    if legacy:
+        if len(parts) != 1:
+            return None
+        m = legacy_regex.fullmatch(parts[0])
+    else:
+        if len(parts) != 2 or parts[0] != name:
+            return None
+        m = _BACKEND_VERSION_REGEX.fullmatch(parts[1])
+    if not m:
+        return None
+    return Version(f"{m['major']}.{m['minor']}")
+
+
 def _format_version(legacy_prefix: str, new_prefix: str, version: Version, legacy: bool) -> str:
     """
     Format a version for a variant string: `{legacy_prefix}{major}{minor}`
@@ -59,8 +83,7 @@ class Backend(Protocol):
 @dataclass(unsafe_hash=True)
 class CANN:
     # Legacy variant string: `cannxy`, new variant string: `cann-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann-(\d+)\.(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -74,10 +97,10 @@ class CANN:
         return _format_version("cann", "cann-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "CANN":
-        version = _parse_version(CANN._LEGACY_VARIANT_REGEX, CANN._VARIANT_REGEX, s, legacy)
+    def parse(parts: list[str], *, legacy: bool = True) -> "CANN":
+        version = _parse_backend_version(CANN._LEGACY_VARIANT_REGEX, "cann", parts, legacy)
         if version is None:
-            raise ValueError(f"Invalid CANN variant string: {s!r}")
+            raise ValueError(f"Invalid CANN variant parts: {parts!r}")
         return CANN(version=version, legacy=legacy)
 
 
@@ -93,17 +116,16 @@ class CPU:
         return "cpu"
 
     @staticmethod
-    def parse(s: str) -> "CPU":
-        if s != "cpu":
-            raise ValueError(f"Invalid CPU variant string: {s!r}")
+    def parse(parts: list[str]) -> "CPU":
+        if parts != ["cpu"]:
+            raise ValueError(f"Invalid CPU variant parts: {parts!r}")
         return CPU()
 
 
 @dataclass(unsafe_hash=True)
 class CUDA:
     # Legacy variant string: `cuxy`, new variant string: `cuda-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cuda-(\d+)\.(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -117,10 +139,10 @@ class CUDA:
         return _format_version("cu", "cuda-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "CUDA":
-        version = _parse_version(CUDA._LEGACY_VARIANT_REGEX, CUDA._VARIANT_REGEX, s, legacy)
+    def parse(parts: list[str], *, legacy: bool = True) -> "CUDA":
+        version = _parse_backend_version(CUDA._LEGACY_VARIANT_REGEX, "cuda", parts, legacy)
         if version is None:
-            raise ValueError(f"Invalid CUDA variant string: {s!r}")
+            raise ValueError(f"Invalid CUDA variant parts: {parts!r}")
         return CUDA(version=version, legacy=legacy)
 
 
@@ -136,9 +158,9 @@ class Metal:
         return "metal"
 
     @staticmethod
-    def parse(s: str) -> "Metal":
-        if s != "metal":
-            raise ValueError(f"Invalid Metal variant string: {s!r}")
+    def parse(parts: list[str]) -> "Metal":
+        if parts != ["metal"]:
+            raise ValueError(f"Invalid Metal variant parts: {parts!r}")
         return Metal()
 
 
@@ -154,17 +176,17 @@ class Neuron:
         return "neuron"
 
     @staticmethod
-    def parse(s: str) -> "Neuron":
-        if s != "neuron":
-            raise ValueError(f"Invalid Neuron variant string: {s!r}")
+    def parse(parts: list[str]) -> "Neuron":
+        if parts != ["neuron"]:
+            raise ValueError(f"Invalid Neuron variant parts: {parts!r}")
         return Neuron()
 
 
 @dataclass(unsafe_hash=True)
 class ROCm:
-    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm-(\d+)\.(\d+)")
+    # Legacy variant string: `rocmxy`, new variant string: `rocm-x.y`. The
+    # legacy minor is a single digit, except for 7.14 (`rocm714`).
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(?P<major>7(?=14$)|\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -178,10 +200,10 @@ class ROCm:
         return _format_version("rocm", "rocm-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "ROCm":
-        version = _parse_version(ROCm._LEGACY_VARIANT_REGEX, ROCm._VARIANT_REGEX, s, legacy)
+    def parse(parts: list[str], *, legacy: bool = True) -> "ROCm":
+        version = _parse_backend_version(ROCm._LEGACY_VARIANT_REGEX, "rocm", parts, legacy)
         if version is None:
-            raise ValueError(f"Invalid ROCm variant string: {s!r}")
+            raise ValueError(f"Invalid ROCm variant parts: {parts!r}")
         return ROCm(version=version, legacy=legacy)
 
 
@@ -197,17 +219,16 @@ class TPU:
         return "tpu"
 
     @staticmethod
-    def parse(s: str) -> "TPU":
-        if s != "tpu":
-            raise ValueError(f"Invalid TPU variant string: {s!r}")
+    def parse(parts: list[str]) -> "TPU":
+        if parts != ["tpu"]:
+            raise ValueError(f"Invalid TPU variant parts: {parts!r}")
         return TPU()
 
 
 @dataclass(unsafe_hash=True)
 class XPU:
     # Legacy variant string: `xpuxy`, new variant string: `xpu-x.y`.
-    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu-(\d+)\.(\d+)")
+    _LEGACY_VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(?P<major>\d+)(?P<minor>\d+)")
 
     version: Version
     legacy: bool = field(default=True, compare=False)
@@ -221,10 +242,10 @@ class XPU:
         return _format_version("xpu", "xpu-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "XPU":
-        version = _parse_version(XPU._LEGACY_VARIANT_REGEX, XPU._VARIANT_REGEX, s, legacy)
+    def parse(parts: list[str], *, legacy: bool = True) -> "XPU":
+        version = _parse_backend_version(XPU._LEGACY_VARIANT_REGEX, "xpu", parts, legacy)
         if version is None:
-            raise ValueError(f"Invalid XPU variant string: {s!r}")
+            raise ValueError(f"Invalid XPU variant parts: {parts!r}")
         return XPU(version=version, legacy=legacy)
 
 
@@ -243,38 +264,42 @@ _VERSIONED_BACKENDS: dict[str, type[CANN] | type[CUDA] | type[ROCm] | type[XPU]]
 }
 
 
-def parse_backend(s: str, *, legacy: bool = True) -> Backend:
+def parse_backend(parts: list[str], *, legacy: bool = True) -> Backend:
     """
-    Parse a backend variant string into a Backend. In the legacy variant
-    format, versions are part of a single token (e.g. `cu128`, `rocm61`,
-    `cpu`). In the new variant format, the backend is written out in full and
-    the version is separated by a dash (e.g. `cuda-12.8`, `rocm-6.1`, `cpu`).
+    Parse the parts of a backend variant string into a Backend. In the legacy
+    variant format, the backend is a single part that includes the version
+    (e.g. `["cu128"]`, `["rocm61"]`, `["cpu"]`). In the new variant format, the
+    backend is written out in full and the version is a separate part (e.g.
+    `["cuda", "12.8"]`, `["rocm", "6.1"]`, `["cpu"]`).
     """
     if legacy:
+        if len(parts) != 1:
+            raise ValueError(f"Invalid backend variant parts, expected a single part, got: {parts!r}")
+        s = parts[0]
         if s == "cpu":
-            return CPU.parse(s)
+            return CPU.parse(parts)
         elif s == "metal":
-            return Metal.parse(s)
+            return Metal.parse(parts)
         elif s == "neuron":
-            return Neuron.parse(s)
+            return Neuron.parse(parts)
         elif s == "tpu":
-            return TPU.parse(s)
+            return TPU.parse(parts)
         elif s.startswith("cu"):
-            return CUDA.parse(s)
+            return CUDA.parse(parts)
         elif s.startswith("rocm"):
-            return ROCm.parse(s)
+            return ROCm.parse(parts)
         elif s.startswith("xpu"):
-            return XPU.parse(s)
+            return XPU.parse(parts)
         elif s.startswith("cann"):
-            return CANN.parse(s)
-        raise ValueError(f"Unknown backend variant string: {s!r}")
+            return CANN.parse(parts)
+        raise ValueError(f"Unknown backend variant parts: {parts!r}")
 
-    name = s.partition("-")[0]
+    name = parts[0] if parts else ""
     if name in _UNVERSIONED_BACKENDS:
-        return _UNVERSIONED_BACKENDS[name].parse(s)
+        return _UNVERSIONED_BACKENDS[name].parse(parts)
     elif name in _VERSIONED_BACKENDS:
-        return _VERSIONED_BACKENDS[name].parse(s, legacy=False)
-    raise ValueError(f"Unknown backend variant string: {s!r}")
+        return _VERSIONED_BACKENDS[name].parse(parts, legacy=False)
+    raise ValueError(f"Unknown backend variant parts: {parts!r}")
 
 
 def _backend() -> Backend:

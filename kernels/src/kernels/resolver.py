@@ -101,10 +101,12 @@ class RemoteKernel:
 
 def resolve_local_kernel(repo_path: Path, *, backend: str | None) -> LocalKernel:
     variant_path = None
+    trace = []
 
     for base_path in [repo_path, repo_path / "build"]:
         variants = get_variants_local(base_path)
-        variant, trace = resolve_variant(variants, backend)
+        variant, base_trace = resolve_variant(variants, backend)
+        trace += base_trace
         if variant is not None:
             variant_path = base_path / variant.variant_str
             break

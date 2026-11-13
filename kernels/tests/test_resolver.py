@@ -37,6 +37,7 @@ from kernels.resolver import (
     _locked_revision,
     resolve_hub_cache_kernel,
     resolve_hub_kernel,
+    resolve_local_kernel,
 )
 from kernels.variants import parse_variant
 
@@ -555,3 +556,14 @@ def test_locked_revision_requires_lock():
 )
 def test_resolver_protocol_conformance(resolver):
     assert isinstance(resolver, Resolver)
+
+
+def test_resolve_local_kernel_keeps_rejection_reasons(tmp_path):
+    (tmp_path / "torch-xpu").mkdir()
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        resolve_local_kernel(tmp_path, backend="cpu")
+
+    # The `build/` pass finds no variants and must not drop the reasons from
+    # the pass over `tmp_path`.
+    assert "torch-xpu: " in str(exc_info.value)

@@ -19,6 +19,7 @@ pub(crate) mod common;
 pub mod deps;
 pub mod fileset;
 mod kernel;
+mod mlx;
 mod ops_identifier;
 mod torch;
 mod tvm_ffi;
@@ -34,12 +35,13 @@ pub fn create_pyproject_file_set(
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
-    let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
-        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?
-    } else if build.is_noarch() {
-        torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
-    } else {
-        torch::write_torch_ext(&env, &build, kernel_id, provenance)?
+    let file_set = match build.framework {
+        Framework::MlxNoarch(_) => mlx::write_mlx_ext_noarch(&env, &build, kernel_id, provenance)?,
+        Framework::Torch(_) => torch::write_torch_ext(&env, &build, kernel_id, provenance)?,
+        Framework::TorchNoarch(_) => {
+            torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
+        }
+        Framework::TvmFfi(_) => tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?,
     };
 
     Ok(file_set)

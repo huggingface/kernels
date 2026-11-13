@@ -82,6 +82,7 @@ STABLE_ABI_VARIANT_STRINGS = [
 ]
 
 NOARCH_VARIANT_STRINGS = [
+    "mlx-metal",
     "torch-cpu",
     "torch-cuda",
     "torch-metal",
@@ -603,6 +604,40 @@ def test_resolve_noarch_cann():
     assert [v.variant_str for v in result] == ["torch-cann"]
     rejected = {vs.variant.variant_str for vs in trace if isinstance(vs, VariantRejected)}
     assert rejected == {"torch-npu"}
+
+
+def _resolve_mlx_noarch(*, mlx_available: bool):
+    variants = [parse_variant(s) for s in ["mlx-cuda", "mlx-metal"]]
+    return _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+        macos_version=Version("26.0"),
+        mlx_available=mlx_available,
+    )
+
+
+def test_resolve_noarch_mlx():
+    result, trace = _resolve_mlx_noarch(mlx_available=True)
+    assert [v.variant_str for v in result] == ["mlx-metal"]
+    rejected = {vs.variant.variant_str for vs in trace if isinstance(vs, VariantRejected)}
+    assert rejected == {"mlx-cuda"}
+
+
+def test_resolve_noarch_mlx_requires_mlx():
+    result, trace = _resolve_mlx_noarch(mlx_available=False)
+    assert result == []
+    reasons = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
+    assert "MLX is not installed" in reasons["mlx-metal"]
+
+
+def test_mlx_arch_variants_are_not_supported_yet():
+    with pytest.raises(ValueError):
+        parse_variant("mlx-0.32-metal-cpython-3.12-abi3-aarch64-darwin")
 
 
 def _resolve_python_abi(variants: list[str], *, python_version: str, free_threaded: bool):

@@ -8,7 +8,7 @@ from typing import ClassVar, Optional, Protocol, runtime_checkable
 from huggingface_hub.dataclasses import strict
 from packaging.version import Version
 
-from kernels.compat import has_torch
+from kernels.compat import has_mlx, has_torch
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +339,12 @@ def _backend() -> Backend:
         cuda = _get_cuda()
         if cuda is not None:
             return cuda
+
+        if has_mlx:
+            import mlx.core as mx
+
+            if mx.metal.is_available():
+                return Metal()
 
         return CPU()
 

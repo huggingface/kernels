@@ -41,6 +41,9 @@ in
 {
   inherit kernelBackend kernelLanguage toml;
 
+  # Is the kernel a noarch MLX kernel.
+  isMlxNoarch = toml ? mlx-noarch;
+
   # Is the kernel a Torch kernel.
   isTorch = toml ? torch;
 

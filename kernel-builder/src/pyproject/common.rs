@@ -37,7 +37,18 @@ pub fn write_metadata(
     provenance: Option<&Provenance>,
     file_set: &mut FileSet,
 ) -> Result<()> {
-    for backend in &Backend::all() {
+    write_metadata_for_backends(build, &Backend::all(), kernel_id, provenance, file_set)
+}
+
+/// Write metadata for the given backends only.
+pub fn write_metadata_for_backends(
+    build: &Build,
+    backends: &[Backend],
+    kernel_id: &KernelIdentifier,
+    provenance: Option<&Provenance>,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    for backend in backends {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
         let mut metadata =

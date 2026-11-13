@@ -341,7 +341,7 @@ def _backend() -> Backend:
             return cuda
 
         if has_mlx:
-            import mlx.core as mx
+            import mlx.core as mx  # type: ignore[import-not-found]
 
             if mx.metal.is_available():
                 return Metal()

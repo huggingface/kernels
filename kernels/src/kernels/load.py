@@ -48,10 +48,12 @@ def _use_latest_kernels() -> bool:
     return os.environ.get("UNSTABLE_KERNELS_ALL_LATEST", "").upper() in {"1", "ON", "YES", "TRUE"}
 
 
-def _get_latest_kernel_overrides(*, trust_remote_code: bool | list[str], local_files_only: bool) -> Resolver:
-    if not _use_latest_kernels():
-        return NoopResolver()
-    return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+def _get_hub_resolver(*, trust_remote_code: bool | list[str], local_files_only: bool) -> Resolver:
+    if _use_latest_kernels():
+        return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+    if local_files_only:
+        return HubCacheResolver(trust_remote_code=trust_remote_code)
+    return HubResolver(trust_remote_code=trust_remote_code)
 
 
 def _kernel_version_for_loading(*, revision: str | None, version: int | None) -> KernelVersion:
@@ -65,16 +67,11 @@ def _kernel_version_for_loading(*, revision: str | None, version: int | None) ->
 def _get_locked_kernel_resolver(
     *, kernel_locks: KernelLocks, trust_remote_code: bool | list[str], local_files_only: bool
 ) -> Resolver:
-    return SequentialResolver(
-        [
-            _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=local_files_only),
-            (
-                LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
-                if local_files_only
-                else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
-            ),
-        ]
-    )
+    if _use_latest_kernels():
+        return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+    if local_files_only:
+        return LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+    return LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
 
 
 @functools.lru_cache(maxsize=1)
@@ -195,12 +192,7 @@ def get_kernel(
 
     resolvers = [
         _get_local_kernel_overrides(),
-        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
 
     validators: list[MetadataValidator] = default_metadata_validators()
@@ -253,12 +245,7 @@ def get_local_kernel(
     resolvers = [
         RepoPathsResolver(local_kernels={str(repo_path): repo_path}),
         _get_local_kernel_overrides(),
-        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
 
     return get_kernel_with_resolver(
@@ -318,12 +305,7 @@ def has_kernel(
 
     resolvers = [
         _get_local_kernel_overrides(),
-        _get_latest_kernel_overrides(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
 
     try:

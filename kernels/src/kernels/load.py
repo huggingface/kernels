@@ -150,9 +150,6 @@ def get_kernel(
     This function downloads a kernel to the local Hugging Face Hub cache directory (if it was not downloaded before)
     and then loads the kernel.
 
-    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores version and revision pins for this kernel and its dependencies.
-    In this development mode, omitting both is allowed, but kernel API changes may break your code.
-
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -232,8 +229,6 @@ def get_local_kernel(
 
     If the kernel has any (transitive) dependencies, they will be downloaded.
 
-    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` loads the latest versions of Hub dependencies, ignoring their pins.
-
     Args:
         repo_path (`Path`):
             The local path to the kernel repository.
@@ -290,9 +285,6 @@ def has_kernel(
     Check whether a kernel build exists for the current environment (framework version and backend).
 
     If the kernel has any (transitive) dependencies, they will be checked as well.
-
-    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` checks the latest versions, ignoring pins for this kernel and its
-    dependencies. In this development mode, omitting both `version` and `revision` is allowed.
 
     Args:
         repo_id (`str`):
@@ -367,9 +359,6 @@ def load_kernel(
 
     If `lockfile` is not specified, the lockfile will be loaded from the caller's package metadata.
 
-    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores lockfile pins and uses the latest cached versions of this
-    kernel and its dependencies. A lockfile is still required, and this function never downloads anything.
-
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
@@ -410,9 +399,6 @@ def get_locked_kernel(
 ) -> ModuleType:
     """
     Get a kernel using a lock file.
-
-    Setting `UNSTABLE_KERNELS_ALL_LATEST=1` ignores lockfile pins and loads the latest versions of this kernel
-    and its dependencies. A lockfile is still required, but is not modified.
 
     Args:
         repo_id (`str`):

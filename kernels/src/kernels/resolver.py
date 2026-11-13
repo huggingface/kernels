@@ -6,7 +6,7 @@ from typing import Protocol, runtime_checkable
 from huggingface_hub.errors import IncompleteSnapshotError, LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 
-from kernels._rust import KernelDependency, KernelLocks, KernelPaths, KernelVersion, Metadata, Oid
+from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata, Oid
 from kernels._versions import _get_available_versions, _record_ref_in_cache, resolve_kernel_version
 from kernels.hf_hub import _check_trust_remote_code, _get_cache_dir
 from kernels.variants import (
@@ -322,10 +322,11 @@ class HubResolver:
 
 @dataclass
 class LatestHubResolver:
-    """Resolve the latest numbered kernel version, or `main` for unversioned repositories.
+    """Resolve the latest numbered kernel version.
 
     This development-only resolver ignores requested versions and lockfile pins.
     In cache-only mode, it selects the latest version recorded in the local cache.
+    Repositories without numbered versions cannot be resolved.
     """
 
     trust_remote_code: bool | list[str]
@@ -339,17 +340,18 @@ class LatestHubResolver:
         )
 
         versions = _get_available_versions(kernel.repo_id, local_files_only=self.local_files_only)
-        if versions:
-            ref = versions[max(versions)]
-            selected_ref = ref.name
-            revision = Oid.from_str(ref.target_commit)
-            if not self.local_files_only:
-                _record_ref_in_cache(kernel.repo_id, selected_ref, str(revision))
-        else:
-            selected_ref = "main"
-            revision = resolve_kernel_version(
-                kernel.repo_id, KernelVersion.Revision(selected_ref), local_files_only=self.local_files_only
+        if not versions:
+            source = "in the local cache" if self.local_files_only else "on the Hub"
+            raise ValueError(
+                f"Cannot load the latest version of '{kernel.repo_id}': no numbered versions are available {source}. "
+                "UNSTABLE_KERNELS_ALL_LATEST requires a numbered version."
             )
+
+        ref = versions[max(versions)]
+        selected_ref = ref.name
+        revision = Oid.from_str(ref.target_commit)
+        if not self.local_files_only:
+            _record_ref_in_cache(kernel.repo_id, selected_ref, str(revision))
 
         logger.warning(
             "UNSTABLE_KERNELS_ALL_LATEST is enabled: overriding requested %s and any lockfile pin for '%s' "

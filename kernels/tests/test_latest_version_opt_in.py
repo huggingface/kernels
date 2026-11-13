@@ -110,7 +110,8 @@ def hub(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("loader", [load.get_kernel, load.has_kernel])
 @pytest.mark.parametrize(
-    "requested", [{"version": 1}, {"version": 99}, {"revision": "missing"}, {"revision": COMMITS[1]}, {}]
+    "requested",
+    [{"version": 1}, {"version": 99}, {"revision": "missing"}, {"revision": COMMITS[1]}, {"revision": "main"}],
 )
 def test_latest_overrides_requested_version(hub, monkeypatch, caplog, loader, requested):
     monkeypatch.setenv("UNSTABLE_KERNELS_ALL_LATEST", "1")
@@ -152,6 +153,18 @@ def test_latest_setting_is_read_on_each_call(hub, monkeypatch, value):
 
 
 @pytest.mark.parametrize("loader", [load.get_kernel, load.has_kernel])
+@pytest.mark.parametrize("local_override", [False, True])
+def test_latest_requires_version_or_revision(hub, monkeypatch, loader, local_override):
+    monkeypatch.setenv("UNSTABLE_KERNELS_ALL_LATEST", "1")
+    if local_override:
+        monkeypatch.setenv("LOCAL_KERNELS", f"{REPO}={hub.write_kernel(version=1)}")
+
+    with pytest.raises(ValueError, match="A kernel version or revision must be specified"):
+        loader(REPO, backend="cpu")
+    assert hub.api.mock_calls == []
+
+
+@pytest.mark.parametrize("loader", [load.get_kernel, load.has_kernel])
 def test_latest_rejects_version_and_revision_together(hub, monkeypatch, loader):
     monkeypatch.setenv("UNSTABLE_KERNELS_ALL_LATEST", "1")
     with pytest.raises(ValueError, match="Only one of"):
@@ -159,15 +172,31 @@ def test_latest_rejects_version_and_revision_together(hub, monkeypatch, loader):
     hub.api.list_repo_refs.assert_not_called()
 
 
-def test_latest_unversioned_repo_uses_main(hub, monkeypatch):
+@pytest.mark.parametrize("loader", [load.get_kernel, load.has_kernel, load.get_locked_kernel, load.load_kernel])
+@pytest.mark.parametrize("offline", [False, True])
+def test_latest_requires_numbered_versions(hub, monkeypatch, loader, offline):
     monkeypatch.setenv("UNSTABLE_KERNELS_ALL_LATEST", "1")
+    monkeypatch.setattr(load.constants, "HF_HUB_OFFLINE", offline)
     hub.api.list_repo_refs.return_value = SimpleNamespace(
         branches=[GitRefInfo(name="main", ref="refs/heads/main", target_commit=MAIN)]
     )
+    refs = _cached_refs_dir(REPO)
+    refs.mkdir(parents=True)
+    (refs / "main").write_text(MAIN)
 
-    assert load.get_kernel(REPO, version=1, backend="cpu").version == 0
-    hub.api.repo_info.assert_called_once_with(repo_id=REPO, repo_type="kernel", revision="main")
-    assert (_cached_refs_dir(REPO) / "main").read_text() == MAIN
+    kwargs = (
+        {"lockfile": hub.lockfile} if loader in [load.get_locked_kernel, load.load_kernel] else {"revision": "main"}
+    )
+    with pytest.raises(ValueError, match="no numbered versions") as exc_info:
+        loader(REPO, **kwargs)
+
+    cache_only = offline or loader is load.load_kernel
+    assert ("in the local cache" if cache_only else "on the Hub") in str(exc_info.value)
+    if cache_only:
+        hub.api.list_repo_refs.assert_not_called()
+    hub.api.repo_info.assert_not_called()
+    hub.api.hf_hub_download.assert_not_called()
+    hub.api.snapshot_download.assert_not_called()
 
 
 def test_latest_preserves_publisher_trust(hub, monkeypatch):
@@ -197,8 +226,8 @@ def test_local_override_takes_precedence(hub, monkeypatch):
     local_path = hub.write_kernel(version=1)
     monkeypatch.setenv("LOCAL_KERNELS", f"{REPO}={local_path}")
 
-    assert load.get_kernel(REPO, backend="cpu").version == 1
-    assert load.has_kernel(REPO, backend="cpu")
+    assert load.get_kernel(REPO, version=1, backend="cpu").version == 1
+    assert load.has_kernel(REPO, version=1, backend="cpu")
     assert hub.api.mock_calls == []
 
 
@@ -278,12 +307,13 @@ def test_latest_locked_layer_mapping(hub, monkeypatch, repository, offline):
 
 
 @pytest.mark.parametrize("loader", [load.get_kernel, load.has_kernel])
-@pytest.mark.parametrize("ref, commit, expected", [("v2", COMMITS[2], 2), ("main", MAIN, 0)])
+@pytest.mark.parametrize("ref, commit, expected", [("v2", COMMITS[2], 2), ("v10", COMMITS[10], 10)])
 def test_latest_offline_uses_only_cached_refs(hub, monkeypatch, loader, ref, commit, expected):
     monkeypatch.setenv("UNSTABLE_KERNELS_ALL_LATEST", "1")
     monkeypatch.setattr(load.constants, "HF_HUB_OFFLINE", True)
     refs = _cached_refs_dir(REPO)
     refs.mkdir(parents=True)
+    (refs / "main").write_text(MAIN)
     (refs / ref).write_text(commit)
 
     result = loader(REPO, version=1, backend="cpu")

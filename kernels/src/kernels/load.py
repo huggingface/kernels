@@ -56,14 +56,6 @@ def _get_hub_resolver(*, trust_remote_code: bool | list[str], local_files_only: 
     return HubResolver(trust_remote_code=trust_remote_code)
 
 
-def _kernel_version_for_loading(*, revision: str | None, version: int | None) -> KernelVersion:
-    # A dependency still needs a version when the caller omits one. The latest
-    # resolver replaces this placeholder after local overrides have been tried.
-    if revision is None and version is None and _use_latest_kernels():
-        return KernelVersion.Revision("main")
-    return revision_or_version(revision=revision, version=version)
-
-
 def _get_locked_kernel_resolver(
     *, kernel_locks: KernelLocks, trust_remote_code: bool | list[str], local_files_only: bool
 ) -> Resolver:
@@ -188,7 +180,7 @@ def get_kernel(
     """
     api = _get_hf_api(user_agent=user_agent)
 
-    kernel_version = _kernel_version_for_loading(revision=revision, version=version)
+    kernel_version = revision_or_version(revision=revision, version=version)
 
     resolvers = [
         _get_local_kernel_overrides(),
@@ -301,7 +293,7 @@ def has_kernel(
     """
     api = _get_hf_api()
 
-    kernel_version = _kernel_version_for_loading(revision=revision, version=version)
+    kernel_version = revision_or_version(revision=revision, version=version)
 
     resolvers = [
         _get_local_kernel_overrides(),

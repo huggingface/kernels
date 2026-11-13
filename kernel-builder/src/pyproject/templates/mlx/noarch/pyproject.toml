@@ -1,0 +1,32 @@
+[project]
+name = "{{ name }}"
+version = "0.0.1"
+requires-python = ">= 3.10"
+dependencies = [
+  "mlx>=0.32",
+  {{python_dependencies}}
+]
+
+[project.optional-dependencies]
+{% for backend_name, deps in backend_dependencies %}
+{{backend_name}} = [
+  {{ deps }}
+]
+{% endfor %}
+
+[tool.setuptools]
+package-dir = { "" = "mlx-ext" }
+
+[tool.setuptools.packages.find]
+where = ["mlx-ext"]
+include = ["{{ python_name }}*"]
+
+{% if data_globs %}
+[tool.setuptools.package-data]
+{{ python_name }} = [ {{ data_globs }} ]
+{% endif %}
+
+[tool.pytest.ini_options]
+markers = [
+  "kernels_ci: mark a test as a kernel CI test"
+]

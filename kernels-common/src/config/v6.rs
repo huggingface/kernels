@@ -30,6 +30,7 @@ pub struct Build {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Framework {
+    MlxNoarch(MlxNoarch),
     Torch(Torch),
     TorchNoarch(TorchNoarch),
     TvmFfi(TvmFfi),
@@ -120,6 +121,12 @@ pub struct Torch {
     pub stable_abi: Option<super::TorchAbi>,
 
     pub cxx_flags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct MlxNoarch {
+    pub pyext: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -232,6 +239,21 @@ impl TryFrom<Build> for super::Build {
     type Error = ConfigError;
 
     fn try_from(build: Build) -> Result<Self, Self::Error> {
+        if matches!(build.framework, Framework::MlxNoarch(_))
+            && let Some(backend) = build
+                .general
+                .backends
+                .iter()
+                .find(|backend| **backend != Backend::Metal)
+        {
+            return Err(ConfigError::InvalidFramework {
+                reason: format!(
+                    "`[mlx-noarch]` only supports the `metal` backend, got `{}`",
+                    super::Backend::from(*backend)
+                ),
+            });
+        }
+
         let tvm_ffi = matches!(build.framework, Framework::TvmFfi(_));
         let kernels: HashMap<String, super::Kernel> = build
             .kernels
@@ -291,6 +313,7 @@ impl From<General> for super::General {
 impl From<Framework> for super::Framework {
     fn from(framework: Framework) -> Self {
         match framework {
+            Framework::MlxNoarch(mlx_noarch) => super::Framework::MlxNoarch(mlx_noarch.into()),
             Framework::Torch(torch) => super::Framework::Torch(torch.into()),
             Framework::TorchNoarch(torch_noarch) => {
                 super::Framework::TorchNoarch(torch_noarch.into())
@@ -356,6 +379,14 @@ impl From<Torch> for super::Torch {
             src: torch.src,
             stable_abi: torch.stable_abi,
             cxx_flags: torch.cxx_flags,
+        }
+    }
+}
+
+impl From<MlxNoarch> for super::MlxNoarch {
+    fn from(mlx_noarch: MlxNoarch) -> Self {
+        Self {
+            pyext: mlx_noarch.pyext,
         }
     }
 }
@@ -537,6 +568,7 @@ impl From<super::General> for General {
 impl From<super::Framework> for Framework {
     fn from(framework: super::Framework) -> Self {
         match framework {
+            super::Framework::MlxNoarch(mlx_noarch) => Framework::MlxNoarch(mlx_noarch.into()),
             super::Framework::Torch(torch) => Framework::Torch(torch.into()),
             super::Framework::TorchNoarch(torch_noarch) => {
                 Framework::TorchNoarch(torch_noarch.into())
@@ -602,6 +634,14 @@ impl From<super::Torch> for Torch {
             src: torch.src,
             stable_abi: torch.stable_abi,
             cxx_flags: torch.cxx_flags,
+        }
+    }
+}
+
+impl From<super::MlxNoarch> for MlxNoarch {
+    fn from(mlx_noarch: super::MlxNoarch) -> Self {
+        Self {
+            pyext: mlx_noarch.pyext,
         }
     }
 }

@@ -12,7 +12,7 @@ use rustpython_parser::{ast, Parse};
 use crate::util::check_or_infer_kernel_dir;
 
 fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
-    let init_path = ["torch-ext", "tvm-ffi-ext"]
+    let init_path = ["mlx-ext", "torch-ext", "tvm-ffi-ext"]
         .iter()
         .map(|ext_dir| {
             kernel_dir
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_extract_functions_excludes_private_exports() {
-        for ext_dir in ["torch-ext", "tvm-ffi-ext"] {
+        for ext_dir in ["mlx-ext", "torch-ext", "tvm-ffi-ext"] {
             let temp_dir = tempfile::tempdir().unwrap();
             let kernel_dir = temp_dir.path();
             let module_dir = kernel_dir.join(ext_dir).join("test_module");

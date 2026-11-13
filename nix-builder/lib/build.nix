@@ -71,7 +71,9 @@ rec {
             buildSet:
             let
               backendSupported = kernelConfig.backends.${buildSet.buildConfig.backend};
-              frameworkSupported = !kernelConfig.isTvmFfi || (buildSet.buildConfig ? tvmFfiVersion);
+              frameworkSupported =
+                (!kernelConfig.isTvmFfi || (buildSet.buildConfig ? tvmFfiVersion))
+                && (!kernelConfig.isMlxNoarch || (buildSet.buildConfig ? mlxVersion));
               cudaVersionSupported =
                 buildSet.buildConfig.backend != "cuda"
                 || versionBetween minCuda maxCuda buildSet.buildConfig.cudaVersion;
@@ -220,7 +222,22 @@ rec {
         lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
           kernelConfig.toml.general;
     in
-    if !kernelConfig.kernelBackends.${buildConfig.backend} then
+    if kernelConfig.isMlxNoarch then
+      extension.mkMlxNoArchExtension {
+        inherit
+          buildConfig
+          src
+          rev
+          doGetKernelCheck
+          kernelDeps
+          pythonDeps
+          backendPythonDeps
+          kernelProvenance
+          ;
+        kernelName = kernelConfig.name;
+        variant = variants.kernelVariant kernelConfig;
+      }
+    else if !kernelConfig.kernelBackends.${buildConfig.backend} then
       # No compiled kernel files? Treat it as a noarch package.
 
       extension.mkTorchNoArchExtension {

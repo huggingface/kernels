@@ -1,0 +1,11 @@
+[general]
+name = "relu-mlx"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["metal"]
+
+[general.hub]
+repo-id = "kernels-test/relu-mlx"
+
+[mlx-noarch]

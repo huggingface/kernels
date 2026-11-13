@@ -25,7 +25,7 @@ from kernels.backends import (
     _select_backend,
     parse_backend,
 )
-from kernels.compat import has_torch, has_tvm_ffi
+from kernels.compat import has_mlx, has_torch, has_tvm_ffi
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +171,16 @@ class TorchNoarch:
 
 @strict
 @dataclass(unsafe_hash=True)
+class MlxNoarch:
+    """Versionless MLX framework (noarch variants)."""
+
+    @property
+    def variant_str(self) -> str:
+        return "mlx"
+
+
+@strict
+@dataclass(unsafe_hash=True)
 class Python:
     """The Python version and ABI that the compiled parts of a kernel or
     or SDK are build for."""
@@ -293,7 +303,7 @@ class ArchVariant:
 class NoarchVariant:
     """Noarch kernel build variant."""
 
-    framework: TorchNoarch
+    framework: MlxNoarch | TorchNoarch
     backend: Noarch
 
     @property
@@ -439,6 +449,9 @@ def parse_variant(variant_str: str) -> Variant:
     elif parts[0] == "torch":
         # noarch: e.g. "torch-cpu"
         return NoarchVariant(framework=TorchNoarch(), backend=Noarch.parse("-".join(parts[1:])))
+    elif parts[0] == "mlx" and len(parts) >= 2 and not parts[1][:1].isdigit():
+        # noarch: e.g. "mlx-metal". Versioned (arch) MLX variants are not supported yet.
+        return NoarchVariant(framework=MlxNoarch(), backend=Noarch.parse("-".join(parts[1:])))
     elif parts[0].startswith("torch"):
         # Legacy format: `torch210[-cxx11]-...`.
         legacy = True
@@ -578,6 +591,7 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
         macos_version=macos_version,
         python_version=Version(f"{sys.version_info.major}.{sys.version_info.minor}"),
         free_threaded=_is_free_threaded_build(),
+        mlx_available=has_mlx,
     )
 
 
@@ -592,6 +606,7 @@ def _resolve_variant_for_system(
     macos_version: Version | None = None,
     python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
     free_threaded: bool = False,
+    mlx_available: bool = True,
 ) -> tuple[list[Variant], list[Decision]]:
     """Resolve the best matching variant given explicit system parameters.
 
@@ -611,6 +626,7 @@ def _resolve_variant_for_system(
         macos_version,
         python_version,
         free_threaded,
+        mlx_available,
     )
     trace = _sort_variants(trace)
 
@@ -684,6 +700,7 @@ def _check_variants(
     macos_version: Version | None = None,
     python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
     free_threaded: bool = False,
+    mlx_available: bool = True,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
     result: list[Decision] = []
@@ -737,6 +754,9 @@ def _check_variants(
                 result.append(VariantRejected(variant=v, reason=reason))
                 continue
         elif isinstance(v, NoarchVariant):
+            if isinstance(v.framework, MlxNoarch) and not mlx_available:
+                result.append(VariantRejected(variant=v, reason="MLX is not installed in the environment"))
+                continue
             # Only noarch variants with a matching backend or "universal"
             # are applicable.
             noarch_backend_name = selected_backend.name

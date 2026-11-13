@@ -13,13 +13,15 @@ inputs have finished.
 
 import os
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
+from typing import IO
 
 
-def outputs(job):
-    outs = []
+def outputs(job: list[str]) -> list[str]:
+    outs: list[str] = []
     for i, arg in enumerate(job):
         if arg == "-o" and i + 1 < len(job):
             outs.append(job[i + 1])
@@ -28,8 +30,9 @@ def outputs(job):
     return outs
 
 
-def main():
-    max_jobs = int(sys.argv[1])
+def main() -> int:
+    # At least one job, otherwise nothing would ever be started.
+    max_jobs = max(1, int(sys.argv[1]))
     clang = sys.argv[2]
     args = sys.argv[3:]
 
@@ -58,58 +61,85 @@ def main():
             sys.stderr.write(line + "\n")
 
     job_outs = [outputs(j) for j in jobs]
+
+    # deps[i] holds the indices of the earlier jobs that job i depends on.
     deps = [
-        {k for k in range(i) if any(o in a for a in job for o in job_outs[k])}
-        for i, job in enumerate(jobs)
+        {
+            earlier
+            for earlier in range(job_idx)
+            if any(
+                output in arg  # substring: also matches e.g. `-input=<path>`
+                for arg in job_args  # every argument of this job
+                for output in job_outs[earlier]  # every file the earlier job writes
+            )
+        }
+        for job_idx, job_args in enumerate(jobs)
     ]
 
     pending = list(range(len(jobs)))
-    done = set()
-    running = {}
+    done: set[int] = set()
+    # pid -> (job index, file that captures the stderr of the job)
+    running: dict[int, tuple[int, IO[bytes]]] = {}
     status = 0
 
-    def finish(pid, code):
+    def stop_running() -> None:
+        for pid in running:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+    def finish(pid: int, code: int) -> None:
         nonlocal status
-        i, proc, err = running.pop(pid)
-        proc.returncode = code
+        i, err = running.pop(pid)
         err.seek(0)
         sys.stderr.write(err.read().decode(errors="replace"))
         sys.stderr.flush()
         err.close()
         if code != 0 and status == 0:
             status = code
-            for _, other, _ in running.values():
-                other.terminate()
+            stop_running()
         done.add(i)
 
     try:
         while pending or running:
             if status == 0:
                 for i in list(pending):
+                    # Do not spawn more jobs than requested.
                     if len(running) >= max_jobs:
                         break
+                    # Spawn this pending job if its dependencies have finished.
                     if deps[i] <= done:
                         pending.remove(i)
                         err = tempfile.TemporaryFile()
-                        proc = subprocess.Popen(jobs[i], stderr=err)
-                        running[proc.pid] = (i, proc, err)
-            elif not running:
-                break
+                        try:
+                            pid = os.posix_spawn(
+                                jobs[i][0],
+                                jobs[i],
+                                os.environ,
+                                file_actions=[(os.POSIX_SPAWN_DUP2, err.fileno(), 2)],
+                            )
+                        except OSError as exc:
+                            err.close()
+                            sys.stderr.write(f"{jobs[i][0]}: {exc.strerror}\n")
+                            status = 127
+                            stop_running()
+                            break
+                        running[pid] = (i, err)
             if not running:
                 break
             pid, st = os.wait()
-            if pid in running:
-                finish(pid, os.waitstatus_to_exitcode(st))
+            finish(pid, os.waitstatus_to_exitcode(st))
     finally:
-        # Stop remaining jobs on failure/interruption.
-        for pid, (_, proc, _) in list(running.items()):
-            proc.terminate()
-        for pid in list(running):
-            try:
-                _, st = os.waitpid(pid, 0)
-                finish(pid, os.waitstatus_to_exitcode(st))
-            except ChildProcessError:
-                running.pop(pid)
+        # Stop and collect remaining jobs on failure/interruption. This
+        # should not be needed in normal cases, since when a job fails,
+        # finish() already calls `stop_running()`. However, this is an
+        # extra safeguard for e.g. when the loop raises and therefore
+        # finish() does not get called.
+        stop_running()
+        while running:
+            pid, st = os.wait()
+            finish(pid, os.waitstatus_to_exitcode(st))
 
         # Remove intermediate files (outputs consumed by another job) that the
         # driver would have cleaned up. Final outputs are never consumed by a

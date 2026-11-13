@@ -56,7 +56,7 @@ def _get_hub_resolver(*, trust_remote_code: bool | list[str], local_files_only: 
     return HubResolver(trust_remote_code=trust_remote_code)
 
 
-def _get_locked_kernel_resolver(
+def _get_locked_hub_resolver(
     *, kernel_locks: KernelLocks, trust_remote_code: bool | list[str], local_files_only: bool
 ) -> Resolver:
     if _use_latest_kernels():
@@ -350,7 +350,7 @@ def load_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = _get_locked_kernel_resolver(kernel_locks=kernel_locks, trust_remote_code=False, local_files_only=True)
+    resolver = _get_locked_hub_resolver(kernel_locks=kernel_locks, trust_remote_code=False, local_files_only=True)
 
     return get_kernel_with_resolver(
         # We need to provide the API, but it is never used, so no need for a
@@ -390,7 +390,7 @@ def get_locked_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = _get_locked_kernel_resolver(
+    resolver = _get_locked_hub_resolver(
         kernel_locks=kernel_locks, trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE
     )
 

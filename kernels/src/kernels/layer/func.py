@@ -9,7 +9,7 @@ from kernels._rust import KernelDependency, KernelLocks
 
 from ..hf_hub import _get_hf_api
 from ..load import (
-    _get_locked_kernel_resolver,
+    _get_locked_hub_resolver,
     get_kernel,
     get_kernel_with_resolver,
     get_local_kernel,
@@ -317,7 +317,7 @@ class LockedFuncRepository:
             return get_locked_kernel_revision(self._repo_id, self._lockfile)
 
     def load(self) -> Type["nn.Module"]:
-        resolver = _get_locked_kernel_resolver(
+        resolver = _get_locked_hub_resolver(
             kernel_locks=self.kernel_locks,
             trust_remote_code=self._trust_remote_code,
             local_files_only=constants.HF_HUB_OFFLINE,

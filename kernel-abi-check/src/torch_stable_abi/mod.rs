@@ -3,9 +3,9 @@ use std::str::FromStr;
 
 use cpp_demangle::Symbol as CppSymbol;
 use eyre::Result;
-use object::{BinaryFormat, ObjectSymbol, Symbol};
 use once_cell::sync::Lazy;
 
+use crate::symbols::UndefinedSymbol;
 use crate::version::Version;
 
 // https://raw.githubusercontent.com/pytorch/pytorch/refs/heads/main/torch/csrc/stable/c/shim_function_versions.txt
@@ -48,23 +48,14 @@ pub enum TorchStableAbiViolation {
 }
 
 /// Check for violations of the Python ABI policy.
-pub fn check_torch_stable_abi<'a>(
+pub fn check_torch_stable_abi(
     torch_stable_abi: &Version,
-    binary_format: BinaryFormat,
-    symbols: impl IntoIterator<Item = Symbol<'a, 'a>>,
+    symbols: &[UndefinedSymbol],
 ) -> Result<BTreeSet<TorchStableAbiViolation>> {
     let mut violations = BTreeSet::new();
 
     for symbol in symbols {
-        if !symbol.is_undefined() {
-            continue;
-        }
-
-        let mut symbol_name = symbol.name()?;
-        if matches!(binary_format, BinaryFormat::MachO) {
-            // Mach-O C symbol mangling adds an underscore.
-            symbol_name = symbol_name.strip_prefix("_").unwrap_or(symbol_name);
-        }
+        let symbol_name = symbol.name.as_str();
 
         // If this is a C shim symbol, check if it is valid for this version.
         if let Some(symbol_version) = TORCH_SHIM_VERSIONS.get(symbol_name) {

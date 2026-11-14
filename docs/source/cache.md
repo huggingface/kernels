@@ -221,9 +221,7 @@ variant_path = install_kernel("kernels-community/activation", version=1, local_f
 
 ## Cleaning up
 
-- Removing a `kernels--…` directory from the cache is safe. The kernel is
-  downloaded again the next time it is loaded, so this is the way to reclaim
-  space or to force a fresh download.
+- Removing a `kernels--…` directory from the cache is safe. Delete a `kernels--...` directory to free space or force a fresh download. `kernels` downloads the kernel again the next time you load it.
 - Removing `.verified-kernels/` only costs re-verification on the next load.
 - When copying or moving a cache, preserve symlinks (`cp -a`, `tar`, `rsync -a`)
   to keep blobs deduplicated. Copying with symlinks resolved also works, but

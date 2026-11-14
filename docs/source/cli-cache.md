@@ -78,6 +78,7 @@ version-level values describe just the corresponding snapshot.
 
 ## See also
 
+- [Kernels cache](cache.md) - Cache configuration, on-disk layout, and offline use
 - [kernels variants](cli-variants.md) - Inspect build variants available on the Hub
 - [kernels download](cli-download.md) - Download locked kernels
 - [Environment variables](env.md) - Configure cache locations

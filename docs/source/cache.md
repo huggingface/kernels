@@ -146,7 +146,7 @@ kernel code.
 ## Offline use
 
 Set `HF_HUB_OFFLINE=1` to make `kernels` resolve everything from the local
-cache, without Hub requests:
+cache, without Hub requests. `HF_HUB_OFFLINE` is read when `huggingface_hub` is imported, so set it before you start Python.
 
 ```bash
 export HF_HUB_OFFLINE=1

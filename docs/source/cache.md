@@ -228,9 +228,7 @@ variant_path = install_kernel("kernels-community/activation", version=1, local_f
 - When copying or moving a cache, preserve symlinks (`cp -a`, `tar`, `rsync -a`)
   to keep blobs deduplicated. Copying with symlinks resolved also works, but
   stores every file once per snapshot.
-- The cache is trusted input. Editing files in place is not supported: a
-  modified file makes digest verification fail the next time the kernel is
-  verified in full.
+- Don't edit cached files. A modified file fails digest verification the next time the kernel is verified in full.
 
 ## See also
 

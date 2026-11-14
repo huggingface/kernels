@@ -197,8 +197,7 @@ RUN python -c 'from kernels import get_kernel; get_kernel("kernels-community/act
 ENV HF_HUB_OFFLINE=1
 ```
 
-The Python API can also be kept offline-only per call, without the environment
-variable, with `install_kernel`:
+To read from the cache for a single call without setting `HF_HUB_OFFLINE`, pass `local_files_only=True` to `install_kernel`:
 
 ```python
 from kernels import install_kernel

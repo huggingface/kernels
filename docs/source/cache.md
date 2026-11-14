@@ -104,9 +104,7 @@ own. `kernels` therefore records the ref itself when a kernel is fetched by
 version or revision, which is what makes `get_kernel(..., version=1)` resolvable
 later without a Hub request (see [offline use](#offline-use)).
 
-Refs are a local mirror of the Hub branches and tags and can be deleted: they
-are rewritten the next time the kernel is downloaded while online. Deleting a
-ref only breaks resolving that branch or tag from the local cache.
+You can delete refs. `kernels` writes them again the next time it downloads the kernel online. Until then, you can't download that branch or tag offline.
 
 ### `.verified-kernels/`
 

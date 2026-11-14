@@ -104,8 +104,7 @@ You can delete refs. `kernels` writes them again the next time it downloads the 
 Verification receipts. A kernel that has been verified once gets a receipt, so
 that its files are not hashed and its signature is not verified again on every
 load. Receipts live at the top of the cache directory, not inside a repository,
-and are keyed by repo ID, commit and build variant. Deleting them is safe; the
-kernel is simply verified in full again on the next load. Since receipts are
+and are keyed by repo ID, commit and build variant. You can delete them safely. The kernel is then verified in full on its next load.
 stored inside the cache directory, pointing `KERNELS_CACHE` at a different
 directory also means the kernels there are verified again. See
 [Kernels security](security.md) for what is verified and what the receipts

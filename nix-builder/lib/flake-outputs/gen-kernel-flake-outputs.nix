@@ -10,6 +10,9 @@
   rev ? null,
   self ? null,
 
+  # Git provenance (`{ commit, dirty }` or `null`) of the `kernel-builder` flake.
+  builderProvenance ? null,
+
   doGetKernelCheck,
   pythonCheckInputs,
   pythonNativeCheckInputs,
@@ -35,11 +38,15 @@ let
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 
-  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
-  # in the build metadata. The Nix sandbox has no `.git`, so it is derived from
-  # the kernel flake's `self` here and passed in explicitly. (`kernel-builder`'s
-  # own provenance is burned into its binary.)
+  # Git provenance (`{ commit; dirty; }`, or `null`) of the kernel source,
+  # recorded in the build metadata. The Nix sandbox has no `.git`, so it is
+  # derived from the kernel flake's `self` here and passed in explicitly.
   kernelProvenance = import ./flake-provenance.nix { inherit lib; } self;
+
+  provenance = {
+    kernel = kernelProvenance;
+    builder = builderProvenance;
+  };
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
@@ -75,7 +82,7 @@ import ./gen-flake-outputs.nix {
       inherit
         path
         doGetKernelCheck
-        kernelProvenance
+        provenance
         buildSets
         ;
       rev = revUnderscored;
@@ -87,7 +94,7 @@ import ./gen-flake-outputs.nix {
       inherit
         path
         doGetKernelCheck
-        kernelProvenance
+        provenance
         buildSets
         ;
       bundleOnly = false;
@@ -127,7 +134,7 @@ import ./gen-flake-outputs.nix {
         path
         doGetKernelCheck
         pythonCheckInputs
-        kernelProvenance
+        provenance
         buildSets
         ;
       rev = revUnderscored;

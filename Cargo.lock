@@ -249,15 +249,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "built"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c0e531d93d39c34eef561e929e8a7f86d77a5af08aac4f6d6e39976c51858e9"
-dependencies = [
- "git2 0.21.0",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -949,18 +940,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "git2"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddddbf932745a6be37109b6112d3ee09696106f848449069d3a57bba937ab82e"
-dependencies = [
- "bitflags",
- "libc",
- "libgit2-sys",
- "log",
-]
-
-[[package]]
 name = "globset"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1062,13 +1041,12 @@ name = "hf-kernel-builder"
 version = "0.19.0-dev1"
 dependencies = [
  "base32",
- "built",
  "clap",
  "clap-markdown",
  "clap_complete",
  "dirs",
  "eyre",
- "git2 0.20.4",
+ "git2",
  "hf-hub",
  "indicatif",
  "itertools 0.13.0",

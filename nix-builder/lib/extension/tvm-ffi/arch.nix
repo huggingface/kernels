@@ -91,9 +91,10 @@
   # Revision to bake into the ops name.
   rev,
 
-  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
-  # in the build metadata.
-  kernelProvenance,
+  # Git provenance of the kernel source and `kernel-builder`, recorded in the
+  # build metadata: `{ kernel = { sha; dirty; } or null; builder = { sha; dirty; } or null; }`,
+  # or `null` when unknown.
+  provenance,
 
   src,
 }:
@@ -179,8 +180,6 @@ let
     )
   );
 
-  provenanceEnv = import ../provenance-env.nix { inherit kernelProvenance; };
-
 in
 
 stdenv.mkDerivation (
@@ -196,7 +195,7 @@ stdenv.mkDerivation (
       nvccThreads
       ;
 
-    inherit (provenanceEnv) doAddProvenance kernelSha kernelDirty;
+    provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);
 
     framework = "tvm-ffi";
 

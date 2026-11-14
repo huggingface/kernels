@@ -9,6 +9,9 @@
 
   self,
 
+  # Git provenance (`{ commit, dirty }` or `null`) of the `kernel-builder` flake.
+  builderProvenance ? null,
+
   # Hub repository to upload to (and optionally the branch).
   repoId,
   branch ? null,
@@ -51,8 +54,9 @@ let
   variantOf = buildSet: buildSet.variants.sdkVariant python;
 
   # SDK source provenance that is added to the metadata.
-  provenanceEnv = import ../extension/provenance-env.nix {
-    kernelProvenance = import ./flake-provenance.nix { inherit lib; } self;
+  provenance = {
+    kernel = import ./flake-provenance.nix { inherit lib; } self;
+    builder = builderProvenance;
   };
 
   # Check and finalize a variant. Copy the build output and run our standard
@@ -111,7 +115,7 @@ let
       pythonAbiVersion = python.version;
 
       # Provenance is added by the builder, replacing any that the SDK wrote.
-      inherit (provenanceEnv) doAddProvenance kernelSha kernelDirty;
+      provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);
 
       installPhase = ''
         runHook preInstall

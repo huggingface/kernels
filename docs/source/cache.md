@@ -1,6 +1,8 @@
 # Managing the Kernels cache
 
-`kernels` downloads a kernel build from the Hub the first time you load it. After that, loads of the same kernel, revision and build variant come from a local cache.
+`kernels` downloads a kernel build from the Hub the first time you load it.
+After that, loads of the same kernel, revision and build variant come from a
+local cache.
 
 The kernels cache is a regular Hugging Face Hub cache: kernel repositories live
 in the same directory as `models--…` and `datasets--…` repositories, and they
@@ -33,15 +35,16 @@ When `KERNELS_CACHE` is set, it is used only by `kernels`. Other Hugging Face
 tools keep using the Hub cache, so kernels stored in `KERNELS_CACHE` are not
 visible to them, and `hf cache` commands do not list them.
 
-A few details on how the setting is read:
+Use an absolute path: `kernels` does not expand `~` in `KERNELS_CACHE`.
 
-- A leading `~` is expanded to your home directory.
-- An empty value counts as unset.
-- The variable is read on every call, not at import time. You can change `os.environ["KERNELS_CACHE"]` between two `get_kernel` calls and the second call uses the new directory.
+The variable is read on every call, not at import time, so you can change
+`os.environ["KERNELS_CACHE"]` between two `get_kernel` calls and the second call
+uses the new directory.
 
-`kernels` uses the same token as other hub downloads, either `HF_TOKEN` or the token saved by `hf auth login`.
-A private kernel repository is cached like any public kernel, so on a shared machine keep the
-cache directory readable only by you.
+`kernels` uses the same token as other Hub downloads, either `HF_TOKEN` or the
+token saved by `hf auth login`. A private kernel repository is cached like any
+public kernel, so on a shared machine keep the cache directory readable only by
+you.
 
 If you use a Hub mirror through `HF_ENDPOINT`, kernels are downloaded from the
 mirror. The cache location is unaffected.
@@ -75,7 +78,9 @@ looks like this:
 ### `snapshots/`
 
 Each downloaded revision gets one snapshot directory, named after its commit.
-A snapshot contains only the files that were downloaded. `kernels` downloads only the build variant that matches your system (`build/<variant>/*`), so a snapshot usually holds one variant even when the repository has many.
+A snapshot contains only the files that were downloaded. `kernels` downloads
+only the build variant that matches your system (`build/<variant>/*`), so a
+snapshot usually holds one variant even when the repository has many.
 
 To populate more than one variant, use [`kernels download`](cli-download.md)
 with `--all-variants`, which is useful for building a cache that is shared
@@ -83,21 +88,28 @@ between machines with different hardware or PyTorch versions.
 
 ### `blobs/`
 
-`blobs/` stores file contents, named by their hash. Files in a snapshot are symlinks into `blobs`, or copies on systems without symlinks. Two revisions that share a file store it only once.
+`blobs/` stores file contents, named by their hash. Files in a snapshot are
+symlinks into `blobs/`, or copies on systems without symlinks. Two revisions
+that share a file store it only once.
 
 ### `refs/`
 
-`refs/` maps a branch or tag, such as `v1`, to its commit it points at. `kernels` downloads each kernel by commit, so it writes the ref itself when you load a kernel by version or revision. That's what lets `get_kernel(..., version=1)` work offline later.
+`refs/` maps a branch or tag, such as `v1`, to the commit it points at.
+`kernels` downloads each kernel by commit, so it writes the ref itself when you
+load a kernel by version or revision. That's what lets
+`get_kernel(..., version=1)` work offline later.
 
-You can delete refs. `kernels` writes them again the next time it downloads the kernel online. Until then, you can't download that branch or tag offline.
+You can delete refs. `kernels` writes them again the next time it downloads the
+kernel online. Until then, that branch or tag can't be resolved offline.
 
 ### `.verified-kernels/`
 
-`verified-kernels/` stores verification receipts. After a kernel passes verification, `kernels` writes a receipt, so later loads skip hashing its files and checking its signature, and are keyed by repo ID, commit and build variant. You can delete them safely. The kernel is then verified in full on its next load.
-stored inside the cache directory, pointing `KERNELS_CACHE` at a different
-directory also means the kernels there are verified again. See
-[Kernels security](security.md) for what is verified and what the receipts
-attest.
+`.verified-kernels/` holds verification receipts. Once a kernel passes
+verification, `kernels` writes a receipt keyed by repo ID, commit and build
+variant, so later loads skip hashing its files and skip verifying the signature
+again. Deleting the receipts is safe: the kernel is simply verified in full on
+its next load. See [Kernels security](security.md) for what is verified and what
+the receipts attest.
 
 ## Inspecting the cache
 
@@ -125,15 +137,16 @@ kernel code.
 ## Offline use
 
 Set `HF_HUB_OFFLINE=1` to make `kernels` resolve everything from the local
-cache, without Hub requests. `HF_HUB_OFFLINE` is read when `huggingface_hub` is imported, so set it before you start Python.
+cache, without Hub requests. `HF_HUB_OFFLINE` is read when `huggingface_hub` is
+imported, so set it before you start Python.
 
 ```bash
 export HF_HUB_OFFLINE=1
 ```
 
-In offline mode, `kernels` looks up versions and revisions in `refs/` and picks the build variant from the local snapshot. The kernel must already be
-in the cache. To add it to the cache, load the kernel once while
-online:
+In offline mode, `kernels` looks up versions and revisions in `refs/` and picks
+the build variant from the local snapshot. The kernel must already be in the
+cache. To add it to the cache, load the kernel once while online:
 
 ```python
 from kernels import get_kernel
@@ -150,9 +163,8 @@ kernels download .
 ```
 
 A locked project needs no refs offline, since the commit comes from
-`kernels.lock`. Add `--all-variants` to cache every build variant rather than
-only the one for the current system, which is what you want when the cache is
-shared with machines that have a different GPU or PyTorch version.
+`kernels.lock`. Use [`--all-variants`](cli-download.md) if the cache also needs
+to serve machines with a different GPU or PyTorch version.
 
 If the kernel is not cached, loading fails with an error. For a version:
 
@@ -190,7 +202,8 @@ RUN python -c 'from kernels import get_kernel; get_kernel("kernels-community/act
 ENV HF_HUB_OFFLINE=1
 ```
 
-To read from the cache for a single call without setting `HF_HUB_OFFLINE`, pass `local_files_only=True` to `install_kernel`:
+To read from the cache for a single call without setting `HF_HUB_OFFLINE`, pass
+`local_files_only=True` to `install_kernel`:
 
 ```python
 from kernels import install_kernel
@@ -200,12 +213,14 @@ variant_path = install_kernel("kernels-community/activation", version=1, local_f
 
 ## Cleaning up
 
-- Removing a `kernels--…` directory from the cache is safe. Delete a `kernels--...` directory to free space or force a fresh download. `kernels` downloads the kernel again the next time you load it.
+- Delete a `kernels--…` directory to free space or force a fresh download.
+  `kernels` downloads the kernel again the next time you load it.
 - Removing `.verified-kernels/` only costs re-verification on the next load.
 - When copying or moving a cache, preserve symlinks (`cp -a`, `tar`, `rsync -a`)
   to keep blobs deduplicated. Copying with symlinks resolved also works, but
   stores every file once per snapshot.
-- Don't edit cached files. A modified file fails digest verification the next time the kernel is verified in full.
+- Don't edit cached files. A modified file fails digest verification the next
+  time the kernel is verified in full.
 
 ## See also
 

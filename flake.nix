@@ -27,16 +27,15 @@
       rust-overlay,
     }:
     let
-      # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder`
-      # flake itself, so it can be burned into the binary at build time and
-      # recorded in the build metadata of the kernels it builds.
+      # Git provenance (`{ commit, dirty }` or `null`) of the `kernels`
+      # flake itself.
       builderProvenance = import ./nix-builder/lib/flake-outputs/flake-provenance.nix {
         inherit (nixpkgs) lib;
       } self;
 
       inherit
         (import ./nix-builder/lib/build-sets.nix {
-          inherit nixpkgs rust-overlay builderProvenance;
+          inherit nixpkgs rust-overlay;
         })
         mkBuildSets
         partitionBuildSetsBySystem
@@ -131,6 +130,7 @@
                   path
                   rev
                   self
+                  builderProvenance
                   doGetKernelCheck
                   pythonCheckInputs
                   pythonNativeCheckInputs
@@ -160,6 +160,7 @@
                   "overlays"
                 ]
                 // {
+                  inherit builderProvenance;
                   buildSets = buildSetsPerSystem.${system} or [ ];
                 }
               )
@@ -193,9 +194,7 @@
           in
           mkShell {
             nativeBuildInputs = [
-              # Avoid rebuilding kernel-builder in the dev shell when the tree
-              # becomes dirty. We don't care about provenance during development.
-              (kernel-builder.override { builderProvenance = null; })
+              kernel-builder
               nodejs # For hf-doc-builder.
               pinact
               pkg-config

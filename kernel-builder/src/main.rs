@@ -6,7 +6,6 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
 use kernels_common::config::{v6, Build, BuildCompat};
-use kernels_common::git::Oid;
 
 mod card;
 mod check_abi;
@@ -36,7 +35,7 @@ mod upload;
 use upload::{run_upload, RepoTypeArg, UploadArgs};
 
 mod provenance;
-use provenance::add_provenance;
+use provenance::{add_provenance, GitState};
 
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
@@ -50,13 +49,6 @@ use util::check_or_infer_kernel_dir;
 
 mod validate_builds;
 use validate_builds::check_builds;
-
-/// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
-/// crate (see `build.rs`), including the `kernel-builder` git provenance that is
-/// recorded in the build metadata of the kernels it builds.
-mod built_info {
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
 
 #[derive(Args, Debug)]
 struct NixArgs {
@@ -198,18 +190,16 @@ enum Commands {
     /// Add provenance to the metadata of built kernels or SDKs.
     #[command(hide = true)]
     AddProvenance {
+        /// JSON file with the provenance of the kernel (or SDK) and of the
+        /// `kernel-builder` sources (their git state). Unknown provenance must
+        /// be `null`, e.g.:
+        /// `{"kernel": {"commit": "<SHA>", "dirty": false}, "builder": null}`.
+        #[arg(name = "PROVENANCE")]
+        provenance: PathBuf,
+
         /// Directory with the build variants.
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
-
-        /// Full commit SHA of the kernel (or SDK) source. The kernel
-        /// provenance is omitted when absent.
-        #[arg(long)]
-        kernel_sha: Option<Oid>,
-
-        /// Mark the source as having uncommitted changes.
-        #[arg(long, requires = "kernel_sha")]
-        kernel_dirty: bool,
     },
 
     /// Spawn a kernel development shell.
@@ -407,10 +397,9 @@ fn main() -> Result<()> {
             unique_id,
         } => create_pyproject(kernel_dir, target_dir, force, unique_id),
         Commands::AddProvenance {
+            provenance,
             kernel_dir,
-            kernel_sha,
-            kernel_dirty,
-        } => add_provenance(kernel_dir, kernel_sha, kernel_dirty),
+        } => add_provenance(kernel_dir, GitState::from_file(provenance)?),
         Commands::Devshell {
             kernel_dir,
             variant,

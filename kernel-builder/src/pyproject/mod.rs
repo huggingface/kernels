@@ -13,7 +13,7 @@ use crate::{
     util::{check_or_infer_kernel_dir, check_or_infer_target_dir},
 };
 
-pub(crate) mod common;
+mod common;
 pub mod deps;
 pub mod fileset;
 mod kernel;

@@ -1,10 +1,6 @@
 {
   nixpkgs,
   rust-overlay,
-
-  # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder` flake,
-  # so it can be burned into the binary.
-  builderProvenance ? null,
 }:
 
 let
@@ -27,11 +23,7 @@ let
 
   inherit
     (import ./mk-build-set.nix {
-      inherit
-        nixpkgs
-        rust-overlay
-        builderProvenance
-        ;
+      inherit nixpkgs rust-overlay;
     })
     pkgsKey
     mkPkgs

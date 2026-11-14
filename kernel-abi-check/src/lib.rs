@@ -12,5 +12,8 @@ pub use python_abi::{check_python_abi, PythonAbiViolation};
 mod torch_stable_abi;
 pub use torch_stable_abi::{check_torch_stable_abi, TorchStableAbiViolation};
 
+mod symbols;
+pub use symbols::{undefined_symbols, UndefinedSymbol};
+
 mod version;
 pub use version::Version;

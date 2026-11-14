@@ -1,10 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
 
-use eyre::Result;
-use object::{BinaryFormat, ObjectSymbol, Symbol};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
+use crate::symbols::UndefinedSymbol;
 use crate::version::Version;
 
 static ABI_TOML: &str = include_str!("stable_abi.toml");
@@ -68,23 +67,13 @@ pub enum PythonAbiViolation {
 }
 
 /// Check for violations of the Python ABI policy.
-pub fn check_python_abi<'a>(
+pub fn check_python_abi(
     python_abi: &Version,
-    binary_format: BinaryFormat,
-    symbols: impl IntoIterator<Item = Symbol<'a, 'a>>,
-) -> Result<BTreeSet<PythonAbiViolation>> {
+    symbols: &[UndefinedSymbol],
+) -> BTreeSet<PythonAbiViolation> {
     let mut violations = BTreeSet::new();
     for symbol in symbols {
-        if !symbol.is_undefined() {
-            continue;
-        }
-
-        let mut symbol_name = symbol.name()?;
-
-        if matches!(binary_format, BinaryFormat::MachO) {
-            // Mach-O C symbol mangling adds an underscore.
-            symbol_name = symbol_name.strip_prefix("_").unwrap_or(symbol_name);
-        }
+        let symbol_name = symbol.name.as_str();
 
         match PYTHON_STABLE_ABI.get(symbol_name) {
             Some(abi_info) => {
@@ -105,5 +94,5 @@ pub fn check_python_abi<'a>(
         }
     }
 
-    Ok(violations)
+    violations
 }

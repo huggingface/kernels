@@ -5,7 +5,7 @@ from types import ModuleType
 
 from huggingface_hub import HfApi, constants
 
-from kernels._rust import KernelDependency, KernelVersion
+from kernels._rust import KernelDependency, KernelLocks, KernelVersion
 from kernels._versions import revision_or_version
 from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api
@@ -16,6 +16,7 @@ from kernels.locking import (
 from kernels.resolver import (
     HubCacheResolver,
     HubResolver,
+    LatestHubResolver,
     LockedHubCacheResolver,
     LockedHubResolver,
     NoopResolver,
@@ -41,6 +42,28 @@ def _get_local_kernel_overrides() -> Resolver:
         return NoopResolver()
     overrides = _parse_local_kernel_overrides(local_kerels)
     return RepoPathsResolver(local_kernels=overrides)
+
+
+def _use_latest_kernels() -> bool:
+    return os.environ.get("UNSTABLE_KERNELS_ALL_LATEST", "").upper() in {"1", "ON", "YES", "TRUE"}
+
+
+def _get_hub_resolver(*, trust_remote_code: bool | list[str], local_files_only: bool) -> Resolver:
+    if _use_latest_kernels():
+        return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+    if local_files_only:
+        return HubCacheResolver(trust_remote_code=trust_remote_code)
+    return HubResolver(trust_remote_code=trust_remote_code)
+
+
+def _get_locked_hub_resolver(
+    *, kernel_locks: KernelLocks, trust_remote_code: bool | list[str], local_files_only: bool
+) -> Resolver:
+    if _use_latest_kernels():
+        return LatestHubResolver(trust_remote_code=trust_remote_code, local_files_only=local_files_only)
+    if local_files_only:
+        return LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+    return LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
 
 
 @functools.lru_cache(maxsize=1)
@@ -161,11 +184,7 @@ def get_kernel(
 
     resolvers = [
         _get_local_kernel_overrides(),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
 
     validators: list[MetadataValidator] = default_metadata_validators()
@@ -188,6 +207,7 @@ def get_local_kernel(
     backend: str | None = None,
     trust_remote_code: bool | list[str] = False,
     user_agent: str | dict | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Import a kernel from a local kernel repository path.
@@ -207,8 +227,12 @@ def get_local_kernel(
             only kernels from trusted organisations are allowed. When ``True``, all
             repositories are allowed. A list of repository IDs allows only those
             repositories in addition to repositories from trusted organisations.
-
-
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -218,12 +242,12 @@ def get_local_kernel(
     resolvers = [
         RepoPathsResolver(local_kernels={str(repo_path): repo_path}),
         _get_local_kernel_overrides(),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
+
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
 
     return get_kernel_with_resolver(
         api=api,
@@ -232,7 +256,7 @@ def get_local_kernel(
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )
 
 
@@ -282,11 +306,7 @@ def has_kernel(
 
     resolvers = [
         _get_local_kernel_overrides(),
-        (
-            HubCacheResolver(trust_remote_code=trust_remote_code)
-            if constants.HF_HUB_OFFLINE
-            else HubResolver(trust_remote_code=trust_remote_code)
-        ),
+        _get_hub_resolver(trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE),
     ]
 
     try:
@@ -313,6 +333,7 @@ def load_kernel(
     *,
     lockfile: Path | None,
     backend: str | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -330,6 +351,12 @@ def load_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -339,7 +366,11 @@ def load_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=False)
+    resolver = _get_locked_hub_resolver(kernel_locks=kernel_locks, trust_remote_code=False, local_files_only=True)
+
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
 
     return get_kernel_with_resolver(
         # We need to provide the API, but it is never used, so no need for a
@@ -349,7 +380,7 @@ def load_kernel(
         kernel=kernel_dep,
         resolver=resolver,
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )
 
 
@@ -359,6 +390,7 @@ def get_locked_kernel(
     lockfile: Path | None,
     trust_remote_code: bool | list[str] = False,
     user_agent: str | dict | None = None,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Get a kernel using a lock file.
@@ -370,6 +402,12 @@ def get_locked_kernel(
             Path to the lockfile. If not provided, the lockfile will be loaded from the caller's package metadata.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -379,11 +417,13 @@ def get_locked_kernel(
     else:
         kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    resolver = (
-        LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
-        if constants.HF_HUB_OFFLINE
-        else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+    resolver = _get_locked_hub_resolver(
+        kernel_locks=kernel_locks, trust_remote_code=trust_remote_code, local_files_only=constants.HF_HUB_OFFLINE
     )
+
+    validators: list[MetadataValidator] = default_metadata_validators()
+    if check_arch:
+        validators.append(ArchValidator())
 
     return get_kernel_with_resolver(
         api=_get_hf_api(user_agent=user_agent),
@@ -391,5 +431,5 @@ def get_locked_kernel(
         kernel=kernel_dep,
         resolver=resolver,
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
-        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )

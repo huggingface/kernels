@@ -186,7 +186,9 @@ cached.
 > cache in offline mode, `kernels` skips the check and logs a warning. Trust was
 > established when the kernel was downloaded.
 
-To bake a cache into an image, populate it during the build and point
+### Download kernels into a container image
+
+To ship kernels in a container image, download them during the build and set
 `KERNELS_CACHE` (or `HF_HOME`) at the resulting directory at runtime:
 
 ```dockerfile

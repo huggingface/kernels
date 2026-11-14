@@ -47,7 +47,7 @@ repository is cached like any public kernel, so on a shared machine keep the
 cache directory readable only by you.
 
 If you use a Hub mirror through `HF_ENDPOINT`, kernels are downloaded from the
-mirror; the cache location is unaffected.
+mirror. The cache location is unaffected.
 
 ## On-disk layout
 

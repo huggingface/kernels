@@ -6,8 +6,8 @@ use eyre::{Context, Result};
 use object::{File, Object};
 
 use kernel_abi_check::{
-    check_macos, check_manylinux, check_python_abi, check_torch_stable_abi, MacOSViolation,
-    ManylinuxViolation, PythonAbiViolation, TorchStableAbiViolation, Version,
+    check_macos, check_manylinux, check_python_abi, check_torch_stable_abi, undefined_symbols,
+    MacOSViolation, ManylinuxViolation, PythonAbiViolation, TorchStableAbiViolation, Version,
 };
 use walkdir::WalkDir;
 
@@ -74,6 +74,8 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
     let binary_data = fs::read(path).context("Cannot open object file")?;
     let file = object::File::parse(&*binary_data).context("Cannot parse object")?;
 
+    let symbols = undefined_symbols(&file, &binary_data).context("Cannot read symbols")?;
+
     let mut manylinux_violations = BTreeSet::new();
     let mut macos_violations = BTreeSet::new();
 
@@ -90,7 +92,7 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
                 &args.manylinux,
                 file.architecture(),
                 file.endianness(),
-                file.symbols(),
+                &symbols,
             )?;
             print_manylinux_violations(&manylinux_violations, &args.manylinux)?;
         }
@@ -109,14 +111,13 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
         }
     }
 
-    let python_abi_violations = check_python_abi(&args.python_abi, file.format(), file.symbols())?;
+    let python_abi_violations = check_python_abi(&args.python_abi, &symbols);
     print_python_abi_violations(&python_abi_violations, &args.python_abi);
 
     let mut torch_stable_abi_violations = BTreeSet::new();
     if let Some(torch_stable_abi) = &args.torch_stable_abi {
         eprintln!("🔥 Checking for compatibility with Torch stable ABI version {torch_stable_abi}");
-        torch_stable_abi_violations =
-            check_torch_stable_abi(torch_stable_abi, file.format(), file.symbols())?;
+        torch_stable_abi_violations = check_torch_stable_abi(torch_stable_abi, &symbols)?;
         print_torch_stable_abi_violations(&torch_stable_abi_violations, torch_stable_abi);
     }
 

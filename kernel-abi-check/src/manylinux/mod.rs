@@ -1,12 +1,12 @@
 use std::collections::{BTreeSet, HashSet};
-use std::str;
 use std::{collections::HashMap, str::FromStr};
 
-use eyre::{bail, Context, ContextCompat, OptionExt, Result};
-use object::{Architecture, Endianness, ObjectSymbol, Symbol};
+use eyre::{bail, ContextCompat, OptionExt, Result};
+use object::{Architecture, Endianness};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
+use crate::symbols::UndefinedSymbol;
 use crate::Version;
 
 #[derive(Debug, Deserialize, Eq, Hash, PartialEq)]
@@ -52,11 +52,11 @@ pub enum ManylinuxViolation {
     },
 }
 
-pub fn check_manylinux<'a>(
+pub fn check_manylinux(
     manylinux_version: &str,
     architecture: Architecture,
     endianness: Endianness,
-    symbols: impl IntoIterator<Item = Symbol<'a, 'a>>,
+    symbols: &[UndefinedSymbol],
 ) -> Result<BTreeSet<ManylinuxViolation>> {
     let arch_str = architecture.arch_str(endianness)?;
     let symbol_versions = MANYLINUX_VERSIONS
@@ -71,38 +71,30 @@ pub fn check_manylinux<'a>(
     let mut violations = BTreeSet::new();
 
     for symbol in symbols {
-        if symbol.is_undefined() {
-            let symbol = symbol.name_bytes().context("Cannot get symbol name")?;
-            let symbol = str::from_utf8(symbol).context("Cannot parse symbol name as UTF-8")?;
+        let version_info = match &symbol.version {
+            Some(version_info) => version_info,
+            None => continue,
+        };
 
-            let mut symbol_parts = symbol.split('@');
-            let symbol_name = symbol_parts.next().context("Cannot get symbol name")?;
+        let mut version_parts = version_info.split('_');
 
-            let version_info = match symbol_parts.next() {
-                Some(version_info) => version_info,
-                None => continue,
-            };
+        let dep = version_parts
+            .next()
+            .ok_or_eyre("Cannot get symbol version name")?;
 
-            let mut version_parts = version_info.split('_');
+        let version = match version_parts.next() {
+            Some(version) => Version::from_str(version)?,
+            // We also get symbol versions like: libcudart.so.12
+            None => continue,
+        };
 
-            let dep = version_parts
-                .next()
-                .ok_or_eyre("Cannot get symbol version name")?;
-
-            let version = match version_parts.next() {
-                Some(version) => Version::from_str(version)?,
-                // We also get symbol versions like: libcudart.so.12
-                None => continue,
-            };
-
-            if let Some(versions) = symbol_versions.get(dep) {
-                if !versions.contains(&ManyLinuxSymbolVersion::Version(version.clone())) {
-                    violations.insert(ManylinuxViolation::Symbol {
-                        name: symbol_name.to_string(),
-                        dep: dep.to_string(),
-                        version: version.to_string(),
-                    });
-                }
+        if let Some(versions) = symbol_versions.get(dep) {
+            if !versions.contains(&ManyLinuxSymbolVersion::Version(version.clone())) {
+                violations.insert(ManylinuxViolation::Symbol {
+                    name: symbol.name.clone(),
+                    dep: dep.to_string(),
+                    version: version.to_string(),
+                });
             }
         }
     }

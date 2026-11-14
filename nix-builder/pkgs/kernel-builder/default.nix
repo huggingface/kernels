@@ -66,6 +66,7 @@ rustPlatform.buildRustPackage (
     '';
 
     setupHooks = [
+      ./add-provenance-hook.sh
       ./check-kernel-abi-hook.sh
       ./check-kernel-build-hook.sh
     ];

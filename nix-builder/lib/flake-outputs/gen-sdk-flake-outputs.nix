@@ -50,6 +50,11 @@ let
 
   variantOf = buildSet: buildSet.variants.sdkVariant python;
 
+  # SDK source provenance that is added to the metadata.
+  provenanceEnv = import ../extension/provenance-env.nix {
+    kernelProvenance = import ./flake-provenance.nix { inherit lib; } self;
+  };
+
   # Check and finalize a variant. Copy the build output and run our standard
   # kernel hooks on the copy.
   checkVariant =
@@ -104,6 +109,9 @@ let
       doInstallCheck = true;
       doAbiCheck = true;
       pythonAbiVersion = python.version;
+
+      # Provenance is added by the builder, replacing any that the SDK wrote.
+      inherit (provenanceEnv) doAddProvenance kernelSha kernelDirty;
 
       installPhase = ''
         runHook preInstall

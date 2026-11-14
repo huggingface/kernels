@@ -1,10 +1,8 @@
 use std::path::Path;
-use std::str::FromStr;
 
 use eyre::{Result, WrapErr};
 use git2::Repository;
 use kernels_common::config::Backend;
-use kernels_common::git::{GitStatus, Oid};
 use rand::Rng;
 
 pub fn random_identifier() -> String {
@@ -30,28 +28,10 @@ pub fn git_identifier(target_dir: impl AsRef<Path>) -> Result<String> {
     Ok(if dirty { format!("{rev}_dirty") } else { rev })
 }
 
-pub fn git_status(target_dir: impl AsRef<Path>) -> Option<GitStatus> {
-    let repo = Repository::discover(target_dir.as_ref()).ok()?;
-    let head = repo.head().ok()?;
-    let commit = head.peel_to_commit().ok()?;
-    let commit_oid = Oid::from_str(&commit.id().to_string()).ok()?;
-
-    let mut status_options = git2::StatusOptions::new();
-    status_options.include_untracked(false); // Ignore untracked files (like generated CMake files)
-    status_options.exclude_submodules(true);
-    let dirty = !repo.statuses(Some(&mut status_options)).ok()?.is_empty();
-
-    Some(GitStatus {
-        commit: commit_oid,
-        dirty,
-    })
-}
-
 /// Uniquely identifies a kernel for the purpose of ops-name generation.
 ///
 /// This type is intentionally small and atomic: it carries only what is
-/// needed to name a kernel's ops. Build provenance (git SHA, dirty flags,
-/// `kernel-builder` version) is handled separately when writing metadata.
+/// needed to name a kernel's ops.
 pub struct KernelIdentifier {
     name: String,
     unique_id: String,
@@ -99,11 +79,5 @@ mod tests {
 
         assert_eq!(id.unique_id(), "rev123");
         assert_eq!(id.to_string_for_backend(Backend::Cuda), "_relu_cuda_rev123");
-    }
-
-    #[test]
-    fn git_status_is_none_in_non_git_dir() {
-        let tmp = tempfile::tempdir().unwrap();
-        assert!(git_status(tmp.path()).is_none());
     }
 }

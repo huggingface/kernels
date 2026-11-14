@@ -179,7 +179,7 @@ let
     )
   );
 
-  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
+  provenanceEnv = import ../provenance-env.nix { inherit kernelProvenance; };
 
 in
 
@@ -196,6 +196,8 @@ stdenv.mkDerivation (
       nvccThreads
       ;
 
+    inherit (provenanceEnv) doAddProvenance kernelSha kernelDirty;
+
     framework = "tvm-ffi";
 
     # We run kernel-builder here rather than patchPhase or preConfigure,
@@ -205,7 +207,7 @@ stdenv.mkDerivation (
       mkdir -p $out
       cp -r --no-preserve=mode ${src}/* $out/
       ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-        --unique-id ${rev} ${provenanceFlags} $out
+        --unique-id ${rev} $out
     '';
 
     preConfigure =

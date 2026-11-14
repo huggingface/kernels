@@ -19,6 +19,8 @@ kernelLayoutCheckHook() {
     frameworkSrcDir="torch-ext"
   elif [ "${framework}" = "tvm-ffi" ]; then
     frameworkSrcDir="tvm-ffi-ext"
+  elif [ "${framework}" = "mlx" ]; then
+    frameworkSrcDir="mlx-ext"
   else
     echo "Unsupported framework: ${framework}"
     exit 1

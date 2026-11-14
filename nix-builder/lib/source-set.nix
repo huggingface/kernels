@@ -8,7 +8,8 @@ let
   nameToPath = path: name: path + "/${name}";
   kernels = kernelConfig.toml.kernel or { };
   extConfig =
-    kernelConfig.toml.torch or kernelConfig.toml.torch-noarch or kernelConfig.toml.tvm-ffi or { };
+    kernelConfig.toml.torch or kernelConfig.toml.torch-noarch or kernelConfig.toml.mlx-noarch
+      or kernelConfig.toml.tvm-ffi or { };
   pyExt =
     extConfig.pyext or [
       "py"
@@ -20,6 +21,7 @@ let
   ];
   torchExtPath = path + "/torch-ext";
   tvmFfiExtPath = path + "/tvm-ffi-ext";
+  mlxExtPath = path + "/mlx-ext";
   lockSet = fileset.maybeMissing (path + "/kernels.lock");
   cargoLockSet = fileset.maybeMissing (path + "/Cargo.lock");
   rustGitHashesSet = fileset.maybeMissing (path + "/rust-git-hashes.json");
@@ -30,8 +32,10 @@ let
           torchExtPath
         else if builtins.pathExists tvmFfiExtPath then
           tvmFfiExtPath
+        else if builtins.pathExists mlxExtPath then
+          mlxExtPath
         else
-          throw "Kernel should have torch-ext or tvm-ffi-ext directory";
+          throw "Kernel should have torch-ext, tvm-ffi-ext, or mlx-ext directory";
     in
     fileset.fileFilter pyFilter path;
   pyTestsSet =

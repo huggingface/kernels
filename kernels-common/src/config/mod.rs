@@ -61,7 +61,10 @@ impl Build {
     }
 
     pub fn is_noarch(&self) -> bool {
-        matches!(self.framework, Framework::TorchNoarch(_))
+        matches!(
+            self.framework,
+            Framework::TorchNoarch(_) | Framework::MlxNoarch(_)
+        )
     }
 
     pub fn branch(&self) -> Option<&str> {
@@ -92,12 +95,20 @@ impl Build {
 }
 
 pub enum Framework {
+    MlxNoarch(MlxNoarch),
     Torch(Torch),
     TorchNoarch(TorchNoarch),
     TvmFfi(TvmFfi),
 }
 
 impl Framework {
+    pub fn mlx_noarch(&self) -> Option<&MlxNoarch> {
+        match self {
+            Framework::MlxNoarch(mlx_noarch) => Some(mlx_noarch),
+            _ => None,
+        }
+    }
+
     pub fn torch(&self) -> Option<&Torch> {
         match self {
             Framework::Torch(torch) => Some(torch),
@@ -313,6 +324,16 @@ fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {
 }
 
 impl Torch {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
+        data_extensions(self.pyext.as_deref())
+    }
+}
+
+pub struct MlxNoarch {
+    pub pyext: Option<Vec<String>>,
+}
+
+impl MlxNoarch {
     pub fn data_extensions(&self) -> Option<Vec<String>> {
         data_extensions(self.pyext.as_deref())
     }
@@ -578,6 +599,8 @@ pub enum ConfigError {
     Migration { reason: String },
     #[error("Kernel `{name}`: {reason}")]
     InvalidKernel { name: String, reason: String },
+    #[error("Invalid framework configuration: {reason}")]
+    InvalidFramework { reason: String },
 }
 
 #[cfg(test)]
@@ -735,6 +758,72 @@ mod tests {
 
         let err = toml::from_str::<v6::Build>(config).unwrap_err().to_string();
         assert!(err.contains("unknown field `cuda-flags`"), "{err}");
+    }
+
+    #[test]
+    fn v6_mlx_noarch_round_trip() {
+        let config = r#"
+            [general]
+            name = "mlx-kernel"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["metal"]
+
+            [mlx-noarch]
+            pyext = ["py", "json"]
+        "#;
+
+        let parsed: v6::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        assert!(serialized.contains("[mlx-noarch]"), "{serialized}");
+        let build = Build::try_from(toml::from_str::<v6::Build>(&serialized).unwrap()).unwrap();
+
+        assert!(build.is_noarch());
+        let mlx_noarch = build.framework.mlx_noarch().unwrap();
+        assert_eq!(mlx_noarch.data_extensions(), Some(vec!["json".to_string()]));
+    }
+
+    #[test]
+    fn v6_mlx_noarch_rejects_invalid_config() {
+        let cases = [
+            (
+                r#"backends = ["metal", "cuda"]"#,
+                "[mlx-noarch]",
+                "only supports the `metal` backend, got `cuda`",
+            ),
+            (
+                r#"backends = ["cpu"]"#,
+                "[mlx-noarch]",
+                "only supports the `metal` backend, got `cpu`",
+            ),
+            (
+                r#"backends = ["metal"]"#,
+                "[mlx-noarch]\ncuda-capabilities = [\"9.0\"]",
+                "unknown field `cuda-capabilities`",
+            ),
+        ];
+
+        for (backends, framework, expected) in cases {
+            let config = format!(
+                r#"
+                [general]
+                name = "mlx-kernel"
+                version = 1
+                edition = 6
+                license = "Apache-2.0"
+                {backends}
+
+                {framework}
+                "#
+            );
+
+            let err = match toml::from_str::<v6::Build>(&config) {
+                Ok(build) => Build::try_from(build).err().unwrap().to_string(),
+                Err(err) => err.to_string(),
+            };
+            assert!(err.contains(expected), "{err}");
+        }
     }
 
     #[test]

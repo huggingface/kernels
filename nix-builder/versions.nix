@@ -359,6 +359,7 @@
     metal = true;
     systems = [ "aarch64-darwin" ];
     bundleBuild = true;
+    mlxVersion = "0.32";
   }
   {
     torchVersion = "2.15";

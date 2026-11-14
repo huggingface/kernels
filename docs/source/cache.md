@@ -98,11 +98,7 @@ that share a file also share its blob and the space it takes.
 
 ### `refs/`
 
-Maps a branch or tag, such as `v1`, to the commit it points at. Since kernels
-are downloaded by commit, `snapshot_download` would not create these refs on its
-own. `kernels` therefore records the ref itself when a kernel is fetched by
-version or revision, which is what makes `get_kernel(..., version=1)` resolvable
-later without a Hub request (see [offline use](#offline-use)).
+Maps a branch or tag, such as `v1`, to the commit it points at. `kernels` downloads each kernel by commit, so it writes the ref itself when you load a kernel by version or revision. That's what lets `get_kernel(..., version=1)` work offline later.
 
 You can delete refs. `kernels` writes them again the next time it downloads the kernel online. Until then, you can't download that branch or tag offline.
 

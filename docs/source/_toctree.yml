@@ -16,7 +16,7 @@
     - local: env
       title: Environment variables
     - local: cache
-      title: Kernels cache
+      title: Managing the kernels cache
     - local: integrating-kernels
       title: Projects using kernels
     - local: migration

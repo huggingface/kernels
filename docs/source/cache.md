@@ -1,4 +1,4 @@
-# Kernels cache
+# Managing the Kernels cache
 
 `kernels` downloads a kernel build from the Hub the first time you load it. After that, loads of the same kernel, revision and build variant come from a local cache.
 
@@ -10,7 +10,7 @@ is not reachable.
 
 ## Cache location
 
-The cache directory is resolved in this order, first match wins:
+`kernels` uses the first of these settings that's set:
 
 | Setting                     | Cache directory                          |
 | --------------------------- | ---------------------------------------- |
@@ -23,7 +23,7 @@ The cache directory is resolved in this order, first match wins:
 `KERNELS_CACHE` is the only setting that is specific to `kernels`. Set it when
 you want kernel builds somewhere other than the cache of your models, for
 example on a fast local disk of a GPU machine, on a shared volume, or in a
-directory that is baked into a container image:
+directory inside a container image:
 
 ```bash
 export KERNELS_CACHE=/mnt/fast-disk/kernels
@@ -39,9 +39,8 @@ A few details on how the setting is read:
 - An empty value counts as unset.
 - The variable is read on every call, not at import time. You can change `os.environ["KERNELS_CACHE"]` between two `get_kernel` calls and the second call uses the new directory.
 
-Kernels are downloaded with the same credentials as any other Hub download:
-`HF_TOKEN`, or the token written by `hf auth login`. A private kernel
-repository is cached like any public kernel, so on a shared machine keep the
+`kernels` uses the same token as other hub downloads, either `HF_TOKEN` or the token saved by `hf auth login`.
+A private kernel repository is cached like any public kernel, so on a shared machine keep the
 cache directory readable only by you.
 
 If you use a Hub mirror through `HF_ENDPOINT`, kernels are downloaded from the
@@ -84,22 +83,17 @@ between machines with different hardware or PyTorch versions.
 
 ### `blobs/`
 
-File contents, addressed by their hash. Entries in a snapshot are symlinks into
-`blobs/` (copies on systems where symlinks are not available), so two revisions
-that share a file also share its blob and the space it takes.
+`blobs/` stores file contents, named by their hash. Files in a snapshot are symlinks into `blobs`, or copies on systems without symlinks. Two revisions that share a file store it only once.
 
 ### `refs/`
 
-Maps a branch or tag, such as `v1`, to the commit it points at. `kernels` downloads each kernel by commit, so it writes the ref itself when you load a kernel by version or revision. That's what lets `get_kernel(..., version=1)` work offline later.
+`refs/` maps a branch or tag, such as `v1`, to its commit it points at. `kernels` downloads each kernel by commit, so it writes the ref itself when you load a kernel by version or revision. That's what lets `get_kernel(..., version=1)` work offline later.
 
 You can delete refs. `kernels` writes them again the next time it downloads the kernel online. Until then, you can't download that branch or tag offline.
 
 ### `.verified-kernels/`
 
-Verification receipts. A kernel that has been verified once gets a receipt, so
-that its files are not hashed and its signature is not verified again on every
-load. Receipts live at the top of the cache directory, not inside a repository,
-and are keyed by repo ID, commit and build variant. You can delete them safely. The kernel is then verified in full on its next load.
+`verified-kernels/` stores verification receipts. After a kernel passes verification, `kernels` writes a receipt, so later loads skip hashing its files and checking its signature, and are keyed by repo ID, commit and build variant. You can delete them safely. The kernel is then verified in full on its next load.
 stored inside the cache directory, pointing `KERNELS_CACHE` at a different
 directory also means the kernels there are verified again. See
 [Kernels security](security.md) for what is verified and what the receipts
@@ -137,9 +131,8 @@ cache, without Hub requests. `HF_HUB_OFFLINE` is read when `huggingface_hub` is 
 export HF_HUB_OFFLINE=1
 ```
 
-In offline mode, kernel versions and revisions are resolved from `refs/`, and
-the build variant is taken from the local snapshot. The kernel must already be
-in the cache. The simplest way to populate it is to load the kernel once while
+In offline mode, `kernels` looks up versions and revisions in `refs/` and picks the build variant from the local snapshot. The kernel must already be
+in the cache. To add it to the cache, load the kernel once while
 online:
 
 ```python
@@ -161,7 +154,7 @@ A locked project needs no refs offline, since the commit comes from
 only the one for the current system, which is what you want when the cache is
 shared with machines that have a different GPU or PyTorch version.
 
-If the kernel is not cached, loading fails with a clear message. For a version:
+If the kernel is not cached, loading fails with an error. For a version:
 
 ```text
 Version 1 of 'kernels-community/activation' is not available in the local cache

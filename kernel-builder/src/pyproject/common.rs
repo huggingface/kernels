@@ -31,18 +31,25 @@ pub(crate) fn kernel_builder_version() -> KernelBuilderVersion {
     }
 }
 
+/// Provenance of a build: the `kernel-builder` that is running, and the git
+/// state of the kernel source (when provided).
+pub(crate) fn provenance(kernel: Option<GitStatus>) -> Provenance {
+    Provenance {
+        kernel_builder: kernel_builder_version(),
+        kernel,
+    }
+}
+
 pub fn write_metadata(
     build: &Build,
     kernel_id: &KernelIdentifier,
-    provenance: Option<&Provenance>,
     file_set: &mut FileSet,
 ) -> Result<()> {
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
-        let mut metadata =
+        let metadata =
             Metadata::for_backend(build, kernel_id.to_string_for_backend(*backend), *backend)?;
-        metadata.provenance = provenance.cloned();
 
         serde_json::to_writer_pretty(writer, &metadata)?;
     }

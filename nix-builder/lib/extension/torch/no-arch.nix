@@ -80,7 +80,7 @@ let
     ++ [ torch ];
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
   metalSupport = buildConfig.metal or false;
-  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
+  provenanceEnv = import ../provenance-env.nix { inherit kernelProvenance; };
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -88,11 +88,13 @@ stdenv.mkDerivation (prevAttrs: {
 
   inherit doKernelBuildCheck kernelDeps moduleName;
 
+  inherit (provenanceEnv) doAddProvenance kernelSha kernelDirty;
+
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --unique-id ${rev} ${provenanceFlags} $out
+      --unique-id ${rev} $out
   '';
 
   framework = "torch";

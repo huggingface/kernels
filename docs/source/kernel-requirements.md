@@ -114,18 +114,15 @@ metadata. Currently the following top-level keys are supported:
   When either `dirty` flag is set, the kernel was built from uncommitted
   sources and cannot be reliably reproduced.
 
+  The provenance is added by `kernel-builder` as part of the build, together
+  with the `digest`. Builds that were not made with the Nix builder (for
+  example, a local build from the output of `create-pyproject`) do not have a
+  `provenance`.
+
   > **Note:** For Nix builds, dirtiness follows Nix's flake tree status, which
   > also counts **untracked** files (including an uncommitted `flake.lock`).
   > Commit your `flake.lock` (and avoid stray untracked files) so that clean
-  > builds are not flagged as dirty. Local `create-pyproject` runs only
-  > consider changes to tracked files.
-
-  > **Note:** The kernel `commit`/`dirty` are captured at the moment
-  > `create-pyproject` runs, so they describe the source tree as it was _then_.
-  > Running `create-pyproject` and committing afterwards is bad practice: the
-  > recorded provenance keeps pointing at the pre-commit state (a stale `commit`,
-  > and `dirty: true` if the tree was dirty) even though the committed source
-  > differs. Generate the metadata from the final, committed source instead.
+  > builds are not flagged as dirty.
 
 Example `metadata.json`:
 

@@ -35,6 +35,9 @@ use list_variants::list_variants;
 mod upload;
 use upload::{run_upload, RepoTypeArg, UploadArgs};
 
+mod provenance;
+use provenance::add_provenance;
+
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
@@ -190,16 +193,22 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         unique_id: Option<String>,
+    },
 
-        /// Full commit SHA of the kernel source, recorded in the build
-        /// metadata. When absent, it is detected from the kernel's git
-        /// repository (used by Nix builds where the source has no `.git`).
+    /// Add provenance to the metadata of built kernels or SDKs.
+    #[command(hide = true)]
+    AddProvenance {
+        /// Directory with the build variants.
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// Full commit SHA of the kernel (or SDK) source. The kernel
+        /// provenance is omitted when absent.
         #[arg(long)]
         kernel_sha: Option<Oid>,
 
-        /// Mark the kernel source as having uncommitted changes in the build
-        /// metadata. Only meaningful together with `--kernel-sha`.
-        #[arg(long)]
+        /// Mark the source as having uncommitted changes.
+        #[arg(long, requires = "kernel_sha")]
         kernel_dirty: bool,
     },
 
@@ -396,16 +405,12 @@ fn main() -> Result<()> {
             force,
             target_dir,
             unique_id,
-            kernel_sha,
-            kernel_dirty,
-        } => create_pyproject(
+        } => create_pyproject(kernel_dir, target_dir, force, unique_id),
+        Commands::AddProvenance {
             kernel_dir,
-            target_dir,
-            force,
-            unique_id,
             kernel_sha,
             kernel_dirty,
-        ),
+        } => add_provenance(kernel_dir, kernel_sha, kernel_dirty),
         Commands::Devshell {
             kernel_dir,
             variant,

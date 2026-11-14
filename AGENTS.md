@@ -72,8 +72,9 @@ therefore we always set the active Torch using `overrideTorch` (also see
 ### Kernel flakes
 
 Kernels call `genKernelFlakeOutputs` from
-`nix-builder/lib/gen-flake-outputs.nix` through the top-level flake to create
-their flake outputs (see e.g. `examples/kernels/relu/flake.nix`).
+`nix-builder/lib/flake-outputs/gen-kernel-flake-outputs.nix` through the
+top-level flake to create their flake outputs (see e.g.
+`examples/kernels/relu/flake.nix`).
 
 By default, a kernel flake builds a bundle of kernels for all (supported)
 variants. When working on a single backend, it is more efficient to build a

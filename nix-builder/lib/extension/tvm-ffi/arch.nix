@@ -91,9 +91,10 @@
   # Revision to bake into the ops name.
   rev,
 
-  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
-  # in the build metadata.
-  kernelProvenance,
+  # Git provenance of the kernel source and `kernel-builder`, recorded in the
+  # build metadata: `{ kernel = { sha; dirty; } or null; builder = { sha; dirty; } or null; }`,
+  # or `null` when unknown.
+  provenance,
 
   src,
 }:
@@ -179,8 +180,6 @@ let
     )
   );
 
-  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
-
 in
 
 stdenv.mkDerivation (
@@ -196,6 +195,8 @@ stdenv.mkDerivation (
       nvccThreads
       ;
 
+    provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);
+
     framework = "tvm-ffi";
 
     # We run kernel-builder here rather than patchPhase or preConfigure,
@@ -205,7 +206,7 @@ stdenv.mkDerivation (
       mkdir -p $out
       cp -r --no-preserve=mode ${src}/* $out/
       ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-        --unique-id ${rev} ${provenanceFlags} $out
+        --unique-id ${rev} $out
     '';
 
     preConfigure =

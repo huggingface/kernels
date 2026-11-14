@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use kernels_common::config::{Backend, Build, General, Torch};
-use kernels_common::metadata::Provenance;
 use minijinja::context;
 
 use crate::pyproject::common::{
@@ -271,7 +270,6 @@ pub fn write_torch_ext(
     env: &minijinja::Environment,
     build: &Build,
     kernel_id: &KernelIdentifier,
-    provenance: Option<&Provenance>,
 ) -> Result<FileSet> {
     let torch_ext = match build.framework.torch() {
         Some(torch_ext) => torch_ext,
@@ -295,7 +293,7 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(build, kernel_id, provenance, &mut file_set)?;
+    write_metadata(build, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }

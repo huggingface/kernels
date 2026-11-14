@@ -6,8 +6,6 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_common::config::{Build, Framework};
-use kernels_common::git::{GitStatus, Oid};
-use kernels_common::metadata::Provenance;
 use minijinja::Environment;
 
 use crate::{
@@ -15,7 +13,7 @@ use crate::{
     util::{check_or_infer_kernel_dir, check_or_infer_target_dir},
 };
 
-pub(crate) mod common;
+mod common;
 pub mod deps;
 pub mod fileset;
 mod kernel;
@@ -25,21 +23,17 @@ mod tvm_ffi;
 
 pub use fileset::FileSet;
 
-pub fn create_pyproject_file_set(
-    build: Build,
-    kernel_id: &KernelIdentifier,
-    provenance: Option<&Provenance>,
-) -> Result<FileSet> {
+pub fn create_pyproject_file_set(build: Build, kernel_id: &KernelIdentifier) -> Result<FileSet> {
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
-        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?
+        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id)?
     } else if build.is_noarch() {
-        torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
+        torch::write_torch_ext_noarch(&env, &build, kernel_id)?
     } else {
-        torch::write_torch_ext(&env, &build, kernel_id, provenance)?
+        torch::write_torch_ext(&env, &build, kernel_id)?
     };
 
     Ok(file_set)
@@ -50,31 +44,13 @@ pub fn create_pyproject(
     target_dir: Option<PathBuf>,
     force: bool,
     unique_id: Option<String>,
-    kernel_sha: Option<Oid>,
-    kernel_dirty: bool,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = Build::open(&kernel_dir)?;
 
-    // Assemble build provenance. Prefer an explicitly provided kernel git
-    // provenance (e.g. passed by Nix builds, where the source tree has no
-    // `.git`); fall back to detecting it from the kernel's git repository. The
-    // `kernel-builder` provenance is always the one baked into this binary at
-    // compile time.
-    let kernel = kernel_sha
-        .map(|commit| GitStatus {
-            commit,
-            dirty: kernel_dirty,
-        })
-        .or_else(|| ops_identifier::git_status(&kernel_dir));
-    let provenance = Provenance {
-        kernel_builder: common::kernel_builder_version(),
-        kernel,
-    };
-
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
-    let file_set = create_pyproject_file_set(build, &kernel_id, Some(&provenance))?;
+    let file_set = create_pyproject_file_set(build, &kernel_id)?;
     file_set.write(&target_dir, force)?;
 
     Ok(())
@@ -90,10 +66,9 @@ pub fn clean_pyproject(
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = Build::open(&kernel_dir)?;
-    // Provenance is irrelevant when computing the set of files to clean.
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
 
-    let generated_files = create_pyproject_file_set(build, &kernel_id, None)?.into_names();
+    let generated_files = create_pyproject_file_set(build, &kernel_id)?.into_names();
 
     if generated_files.is_empty() {
         eprintln!("No generated artifacts found to clean.");

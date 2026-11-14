@@ -6,6 +6,8 @@
 rec {
   torch = import ./torch.nix { inherit lib buildConfig; };
   tvm-ffi = import ./tvm-ffi.nix { inherit lib buildConfig; };
+  sdk = import ./sdk.nix { inherit lib buildConfig; };
+  sdkVariant = python: sdk.variant python;
 
   kernelVariant =
     kernelConfig:

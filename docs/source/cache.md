@@ -37,9 +37,7 @@ A few details on how the setting is read:
 
 - A leading `~` is expanded to your home directory.
 - An empty value counts as unset.
-- The variable is read on every call, not at import time. You can change
-  `KERNELS_CACHE` (or `os.environ["KERNELS_CACHE"]`) between two `get_kernel`
-  calls and the second call uses the new directory.
+- The variable is read on every call, not at import time. You can change `os.environ["KERNELS_CACHE"]` between two `get_kernel` calls and the second call uses the new directory.
 
 Kernels are downloaded with the same credentials as any other Hub download:
 `HF_TOKEN`, or the token written by `hf auth login`. A private kernel

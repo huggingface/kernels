@@ -1,9 +1,6 @@
 # Kernels cache
 
-`kernels` downloads a kernel build from the Hub the first time you load it and
-then loads it from a local cache. Later loads of the same kernel, revision and
-build variant are served from that cache, so the kernel files are downloaded
-only once.
+`kernels` downloads a kernel build from the Hub the first time you load it. After that, loads of the same kernel, revision and build variant come from a local cache.
 
 The kernels cache is a regular Hugging Face Hub cache: kernel repositories live
 in the same directory as `models--…` and `datasets--…` repositories, and they

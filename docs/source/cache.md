@@ -78,10 +78,7 @@ looks like this:
 ### `snapshots/`
 
 Each downloaded revision gets one snapshot directory, named after its commit.
-The directory is a checkout of that commit that only contains the files that
-were actually downloaded. Kernels are downloaded by commit, and `kernels` only
-fetches the build variant that matches your system (`build/<variant>/*`), so a
-snapshot typically holds a single variant even when the repository has many.
+A snapshot contains only the files that were downloaded. `kernels` downloads only the build variant that matches your system (`build/<variant>/*`), so a snapshot usually holds one variant even when the repository has many.
 
 To populate more than one variant, use [`kernels download`](cli-download.md)
 with `--all-variants`, which is useful for building a cache that is shared

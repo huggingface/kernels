@@ -1,48 +1,26 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use eyre::Result;
 use itertools::Itertools;
 
 use kernels_common::config::{Backend, Build};
-use kernels_common::git::{GitStatus, Oid};
-use kernels_common::metadata::{KernelBuilderVersion, Metadata, Provenance};
+use kernels_common::metadata::Metadata;
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
 static ADD_BUILD_METADATA_PY: &str = include_str!("templates/torch/add_build_metadata.py");
 
-/// `kernel-builder` provenance baked in at compile time.
-///
-/// The git provenance is gathered by the `built` crate (see `build.rs`). In
-/// build sandboxes without a `.git` (e.g. Nix), the derivation supplies it via
-/// `built`'s `BUILT_OVERRIDE_hf_kernel_builder_GIT_*` environment variables.
-pub(crate) fn kernel_builder_version() -> KernelBuilderVersion {
-    let git = crate::built_info::GIT_COMMIT_HASH
-        .and_then(|sha| Oid::from_str(sha).ok())
-        .map(|commit| GitStatus {
-            commit,
-            dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
-        });
-    KernelBuilderVersion {
-        version: env!("CARGO_PKG_VERSION").to_owned(),
-        git,
-    }
-}
-
 pub fn write_metadata(
     build: &Build,
     kernel_id: &KernelIdentifier,
-    provenance: Option<&Provenance>,
     file_set: &mut FileSet,
 ) -> Result<()> {
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
-        let mut metadata =
+        let metadata =
             Metadata::for_backend(build, kernel_id.to_string_for_backend(*backend), *backend)?;
-        metadata.provenance = provenance.cloned();
 
         serde_json::to_writer_pretty(writer, &metadata)?;
     }

@@ -6,7 +6,6 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
 use kernels_common::config::{v6, Build, BuildCompat};
-use kernels_common::git::Oid;
 
 mod card;
 mod check_abi;
@@ -35,6 +34,9 @@ use list_variants::list_variants;
 mod upload;
 use upload::{run_upload, RepoTypeArg, UploadArgs};
 
+mod provenance;
+use provenance::{add_provenance, GitState};
+
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
@@ -47,13 +49,6 @@ use util::check_or_infer_kernel_dir;
 
 mod validate_builds;
 use validate_builds::check_builds;
-
-/// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
-/// crate (see `build.rs`), including the `kernel-builder` git provenance that is
-/// recorded in the build metadata of the kernels it builds.
-mod built_info {
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
 
 #[derive(Args, Debug)]
 struct NixArgs {
@@ -190,17 +185,21 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         unique_id: Option<String>,
+    },
 
-        /// Full commit SHA of the kernel source, recorded in the build
-        /// metadata. When absent, it is detected from the kernel's git
-        /// repository (used by Nix builds where the source has no `.git`).
-        #[arg(long)]
-        kernel_sha: Option<Oid>,
+    /// Add provenance to the metadata of built kernels or SDKs.
+    #[command(hide = true)]
+    AddProvenance {
+        /// JSON file with the provenance of the kernel (or SDK) and of the
+        /// `kernel-builder` sources (their git state). Unknown provenance must
+        /// be `null`, e.g.:
+        /// `{"kernel": {"commit": "<SHA>", "dirty": false}, "builder": null}`.
+        #[arg(name = "PROVENANCE")]
+        provenance: PathBuf,
 
-        /// Mark the kernel source as having uncommitted changes in the build
-        /// metadata. Only meaningful together with `--kernel-sha`.
-        #[arg(long)]
-        kernel_dirty: bool,
+        /// Directory with the build variants.
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
     },
 
     /// Spawn a kernel development shell.
@@ -396,16 +395,11 @@ fn main() -> Result<()> {
             force,
             target_dir,
             unique_id,
-            kernel_sha,
-            kernel_dirty,
-        } => create_pyproject(
+        } => create_pyproject(kernel_dir, target_dir, force, unique_id),
+        Commands::AddProvenance {
+            provenance,
             kernel_dir,
-            target_dir,
-            force,
-            unique_id,
-            kernel_sha,
-            kernel_dirty,
-        ),
+        } => add_provenance(kernel_dir, GitState::from_file(provenance)?),
         Commands::Devshell {
             kernel_dir,
             variant,

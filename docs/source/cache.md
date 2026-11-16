@@ -163,7 +163,7 @@ kernels download .
 ```
 
 A locked project needs no refs offline, since the commit comes from
-`kernels.lock`. Use [`--all-variants`](cli-download.md) if the cache also needs
+`kernels.lock`. Use [`--all-variants`](cli-download) if the cache also needs
 to serve machines with a different GPU or PyTorch version.
 
 If the kernel is not cached, loading fails with an error. For a version:

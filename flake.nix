@@ -27,16 +27,15 @@
       rust-overlay,
     }:
     let
-      # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder`
-      # flake itself, so it can be burned into the binary at build time and
-      # recorded in the build metadata of the kernels it builds.
-      builderProvenance = import ./nix-builder/lib/flake-provenance.nix {
+      # Git provenance (`{ commit, dirty }` or `null`) of the `kernels`
+      # flake itself.
+      builderProvenance = import ./nix-builder/lib/flake-outputs/flake-provenance.nix {
         inherit (nixpkgs) lib;
       } self;
 
       inherit
         (import ./nix-builder/lib/build-sets.nix {
-          inherit nixpkgs rust-overlay builderProvenance;
+          inherit nixpkgs rust-overlay;
         })
         mkBuildSets
         partitionBuildSetsBySystem
@@ -68,6 +67,15 @@
           }) systems
         );
       buildPerSystem = mkBuildPerSystem systems;
+
+      # Build sets for the given overlays and Torch versions (a function from
+      # the default version set to the versions to build for), by system.
+      mkBuildSetsPerSystem =
+        overlays: torchVersions:
+        assert
+          (builtins.isFunction torchVersions)
+          || abort "`torchVersions` must be a function taking one argument (the default version set, flattened to one entry per system)";
+        partitionBuildSetsBySystem (mkBuildSets overlays (torchVersions torchVersions') systems);
 
       # The lib output consists of two parts:
       #
@@ -110,28 +118,52 @@
             # is built with. They are applied after the standard builder overlays.
             overlays ? [ ],
           }:
-          assert
-            (builtins.isFunction torchVersions)
-            || abort "`torchVersions` must be a function taking one argument (the default version set, flattened to one entry per system)";
           let
-            buildSets = mkBuildSets overlays (torchVersions torchVersions') systems;
-            buildSetsPerSystem = partitionBuildSetsBySystem buildSets;
+            buildSetsPerSystem = mkBuildSetsPerSystem overlays torchVersions;
           in
           flake-utils.lib.eachSystem systems (
             system:
-            nixpkgs.legacyPackages.${system}.callPackage ./nix-builder/lib/gen-flake-outputs.nix {
-              inherit
-                system
-                path
-                rev
-                self
-                doGetKernelCheck
-                pythonCheckInputs
-                pythonNativeCheckInputs
-                ;
-              build = buildPerSystem.${system};
-              buildSets = buildSetsPerSystem.${system} or [ ];
-            }
+            nixpkgs.legacyPackages.${system}.callPackage
+              ./nix-builder/lib/flake-outputs/gen-kernel-flake-outputs.nix
+              {
+                inherit
+                  path
+                  rev
+                  self
+                  builderProvenance
+                  doGetKernelCheck
+                  pythonCheckInputs
+                  pythonNativeCheckInputs
+                  ;
+                build = buildPerSystem.${system};
+                buildSets = buildSetsPerSystem.${system} or [ ];
+              }
+          );
+
+        # Generate flake outputs for an SDK (for all supported systems).
+        genSdkFlakeOutputs =
+          {
+            torchVersions ? _: torchVersions',
+            overlays ? [ ],
+            ...
+          }@args:
+          let
+            buildSetsPerSystem = mkBuildSetsPerSystem overlays torchVersions;
+          in
+          flake-utils.lib.eachSystem systems (
+            system:
+            nixpkgs.legacyPackages.${system}.callPackage
+              ./nix-builder/lib/flake-outputs/gen-sdk-flake-outputs.nix
+              (
+                builtins.removeAttrs args [
+                  "torchVersions"
+                  "overlays"
+                ]
+                // {
+                  inherit builderProvenance;
+                  buildSets = buildSetsPerSystem.${system} or [ ];
+                }
+              )
           );
       };
     in
@@ -162,9 +194,7 @@
           in
           mkShell {
             nativeBuildInputs = [
-              # Avoid rebuilding kernel-builder in the dev shell when the tree
-              # becomes dirty. We don't care about provenance during development.
-              (kernel-builder.override { builderProvenance = null; })
+              kernel-builder
               nodejs # For hf-doc-builder.
               pinact
               pkg-config

@@ -1,14 +1,7 @@
-{
-  # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder` flake,
-  # burned into the binary. It cannot be detected from `.git` in the build
-  # sandbox.
-  builderProvenance ? null,
-}:
-
 final: prev:
 {
   # Local packages/hooks.
-  kernel-builder = final.callPackage ./pkgs/kernel-builder { inherit builderProvenance; };
+  kernel-builder = final.callPackage ./pkgs/kernel-builder { };
 
   kernel-port = final.callPackage ./pkgs/kernel-port { };
 

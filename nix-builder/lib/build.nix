@@ -185,7 +185,7 @@ rec {
       rev,
       doGetKernelCheck,
       stripRPath ? false,
-      kernelProvenance,
+      provenance,
     }:
     let
       inherit (lib) fileset;
@@ -232,7 +232,7 @@ rec {
           kernelDeps
           pythonDeps
           backendPythonDeps
-          kernelProvenance
+          provenance
           ;
         kernelName = kernelConfig.name;
         variant = variants.kernelVariant kernelConfig;
@@ -250,7 +250,7 @@ rec {
           kernelDeps
           pythonDeps
           backendPythonDeps
-          kernelProvenance
+          provenance
           ;
 
         cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
@@ -284,7 +284,7 @@ rec {
           kernelDeps
           pythonDeps
           backendPythonDeps
-          kernelProvenance
+          provenance
           ;
 
         inherit torchStableAbiVersion;
@@ -302,7 +302,7 @@ rec {
       doGetKernelCheck,
       bundleOnly,
       buildSets,
-      kernelProvenance,
+      provenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -316,7 +316,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
-              kernelProvenance
+              provenance
               ;
             stripRPath = true;
           };
@@ -332,7 +332,7 @@ rec {
       rev,
       doGetKernelCheck,
       buildSets,
-      kernelProvenance,
+      provenance,
     }:
     let
       extensions = mkDistTorchExtensions {
@@ -341,7 +341,7 @@ rec {
           path
           rev
           doGetKernelCheck
-          kernelProvenance
+          provenance
           ;
         bundleOnly = true;
       };
@@ -397,7 +397,10 @@ rec {
               doGetKernelCheck
               ;
             # Dev/test shells do not record build provenance.
-            kernelProvenance = null;
+            provenance = {
+              kernel = null;
+              builder = null;
+            };
           };
         in
         {
@@ -453,7 +456,7 @@ rec {
       buildSets,
       doGetKernelCheck,
       pythonCheckInputs,
-      kernelProvenance,
+      provenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -471,7 +474,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
-              kernelProvenance
+              provenance
               ;
           };
           testPython = buildSet.python3.withPackages (
@@ -551,7 +554,10 @@ rec {
               doGetKernelCheck
               ;
             # Dev/test shells do not record build provenance.
-            kernelProvenance = null;
+            provenance = {
+              kernel = null;
+              builder = null;
+            };
           };
           rustCudaToolkitEnv = lib.optionalAttrs (extension ? rustCudaToolkit) {
             CUDA_TOOLKIT_PATH = "${extension.rustCudaToolkit}";

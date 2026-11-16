@@ -51,9 +51,10 @@
   # The variant that the build is expected to produce.
   variant,
 
-  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
-  # in the build metadata.
-  kernelProvenance,
+  # Git provenance of the kernel source and `kernel-builder`, recorded in the
+  # build metadata: `{ kernel = { sha; dirty; } or null; builder = { sha; dirty; } or null; }`,
+  # or `null` when unknown.
+  provenance,
 }:
 
 # Extra validation - the environment should correspind to the build config.
@@ -80,7 +81,6 @@ let
     ++ [ torch ];
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
   metalSupport = buildConfig.metal or false;
-  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -88,11 +88,13 @@ stdenv.mkDerivation (prevAttrs: {
 
   inherit doKernelBuildCheck kernelDeps moduleName;
 
+  provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);
+
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --unique-id ${rev} ${provenanceFlags} $out
+      --unique-id ${rev} $out
   '';
 
   framework = "torch";

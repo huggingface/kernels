@@ -330,6 +330,8 @@ impl Torch {
 }
 
 pub struct MlxNoarch {
+    /// Minimum Metal version that the kernel requires.
+    pub metal_version: Version<2>,
     pub pyext: Option<Vec<String>>,
 }
 
@@ -771,6 +773,7 @@ mod tests {
             backends = ["metal"]
 
             [mlx-noarch]
+            metal-version = "4.0"
             pyext = ["py", "json"]
         "#;
 
@@ -781,6 +784,7 @@ mod tests {
 
         assert!(build.is_noarch());
         let mlx_noarch = build.framework.mlx_noarch().unwrap();
+        assert_eq!(mlx_noarch.metal_version, Version::new([4, 0]));
         assert_eq!(mlx_noarch.data_extensions(), Some(vec!["json".to_string()]));
     }
 
@@ -789,18 +793,28 @@ mod tests {
         let cases = [
             (
                 r#"backends = ["metal", "cuda"]"#,
-                "[mlx-noarch]",
+                "[mlx-noarch]\nmetal-version = \"4.0\"",
                 "only supports the `metal` backend, got `cuda`",
             ),
             (
                 r#"backends = ["cpu"]"#,
-                "[mlx-noarch]",
+                "[mlx-noarch]\nmetal-version = \"4.0\"",
                 "only supports the `metal` backend, got `cpu`",
             ),
             (
                 r#"backends = ["metal"]"#,
-                "[mlx-noarch]\ncuda-capabilities = [\"9.0\"]",
+                "[mlx-noarch]\nmetal-version = \"4.0\"\ncuda-capabilities = [\"9.0\"]",
                 "unknown field `cuda-capabilities`",
+            ),
+            (
+                r#"backends = ["metal"]"#,
+                "[mlx-noarch]",
+                "missing field `metal-version`",
+            ),
+            (
+                r#"backends = ["metal"]"#,
+                "[mlx-noarch]\nmetal-version = \"4\"",
+                "Version has 1 components, expected 2",
             ),
         ];
 

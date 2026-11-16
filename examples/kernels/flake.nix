@@ -452,7 +452,7 @@
         {
           name = "relu-mlx-kernel";
           path = ./relu-mlx;
-          drv = sys: out: out.packages.${sys}.redistributable.mlx-metal;
+          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
         }
       ];
 

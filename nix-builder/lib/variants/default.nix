@@ -22,7 +22,7 @@ rec {
   kernelArchVariant =
     kernelConfig:
     if kernelConfig.isMlxNoarch then
-      mlx.arch
+      mlx.arch kernelConfig
     else if kernelConfig.isTvmFfi then
       tvm-ffi.arch
     else

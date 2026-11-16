@@ -4,6 +4,7 @@ from packaging.version import Version
 
 from kernels.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
 from kernels.variants import (
+    _MIN_MACOS_FOR_METAL_VERSION,
     ArchVariant,
     Noarch,
     Python,
@@ -82,7 +83,8 @@ STABLE_ABI_VARIANT_STRINGS = [
 ]
 
 NOARCH_VARIANT_STRINGS = [
-    "mlx-metal",
+    "mlx-metal-3.2",
+    "mlx-metal-4.0",
     "torch-cpu",
     "torch-cuda",
     "torch-metal",
@@ -609,8 +611,8 @@ def test_resolve_noarch_cann():
     assert rejected == {"torch-npu"}
 
 
-def _resolve_mlx_noarch(*, mlx_available: bool):
-    variants = [parse_variant(s) for s in ["mlx-cuda", "mlx-metal"]]
+def _resolve_mlx_noarch(*, mlx_available: bool = True, macos_version: str = "26.0"):
+    variants = [parse_variant(s) for s in ["mlx-cuda-12.8", "mlx-metal-3.2", "mlx-metal-4.0", "mlx-metal-4.1"]]
     return _resolve_variant_for_system(
         variants=variants,
         selected_backend=Metal(),
@@ -619,23 +621,53 @@ def _resolve_mlx_noarch(*, mlx_available: bool):
         torch_version=None,
         torch_cxx11_abi=None,
         tvm_ffi_version=None,
-        macos_version=Version("26.0"),
+        macos_version=Version(macos_version),
         mlx_available=mlx_available,
     )
 
 
 def test_resolve_noarch_mlx():
-    result, trace = _resolve_mlx_noarch(mlx_available=True)
-    assert [v.variant_str for v in result] == ["mlx-metal"]
-    rejected = {vs.variant.variant_str for vs in trace if isinstance(vs, VariantRejected)}
-    assert rejected == {"mlx-cuda"}
+    # Metal 4.0 (macOS 26) accepts kernels that need Metal 4.0 or older, the
+    # newest compatible variant is preferred.
+    result, trace = _resolve_mlx_noarch()
+    assert [v.variant_str for v in result] == ["mlx-metal-4.0", "mlx-metal-3.2"]
+    rejected = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
+    assert set(rejected) == {"mlx-cuda-12.8", "mlx-metal-4.1"}
+    assert "newer than the system Metal version" in rejected["mlx-metal-4.1"]
+
+
+@pytest.mark.parametrize(
+    "macos_version,expected",
+    [
+        ("27.0", ["mlx-metal-4.1", "mlx-metal-4.0", "mlx-metal-3.2"]),
+        ("26.2", ["mlx-metal-4.0", "mlx-metal-3.2"]),
+        ("15.0", ["mlx-metal-3.2"]),
+        ("14.5", []),
+    ],
+)
+def test_resolve_noarch_mlx_metal_version(macos_version, expected):
+    result, _ = _resolve_mlx_noarch(macos_version=macos_version)
+    assert [v.variant_str for v in result] == expected
+
+
+def test_metal_version_table_is_monotonic():
+    # A newer Metal version cannot be supported by an older macOS version.
+    min_macos = [macos for _, macos in sorted(_MIN_MACOS_FOR_METAL_VERSION.items())]
+    assert min_macos == sorted(min_macos)
 
 
 def test_resolve_noarch_mlx_requires_mlx():
     result, trace = _resolve_mlx_noarch(mlx_available=False)
     assert result == []
     reasons = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
-    assert "MLX is not installed" in reasons["mlx-metal"]
+    assert "MLX is not installed" in reasons["mlx-metal-4.0"]
+
+
+def test_mlx_noarch_requires_backend_version():
+    with pytest.raises(ValueError):
+        parse_variant("mlx-metal")
+    # Only MLX variants have a backend version.
+    assert parse_variant("torch-metal").backend.version is None
 
 
 def test_mlx_arch_variants_are_not_supported_yet():

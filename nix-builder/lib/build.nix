@@ -232,7 +232,7 @@ rec {
           kernelDeps
           pythonDeps
           backendPythonDeps
-          kernelProvenance
+          provenance
           ;
         kernelName = kernelConfig.name;
         variant = variants.kernelVariant kernelConfig;

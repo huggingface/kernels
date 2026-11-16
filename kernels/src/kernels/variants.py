@@ -35,6 +35,25 @@ logger = logging.getLogger(__name__)
 # load at runtime.
 _METAL_MIN_MACOS_VERSION = Version("26.0")
 
+# Metal language versions by minimum macOS version.
+_MIN_MACOS_FOR_METAL_VERSION: dict[Version, Version] = {
+    Version("3.1"): Version("0"),
+    Version("3.2"): Version("15.0"),
+    Version("4.0"): Version("26.0"),
+    Version("4.1"): Version("27.0"),
+}
+
+
+def _metal_version(macos_version: Version | None) -> Version | None:
+    """The highest Metal language version supported by the given macOS version."""
+    if macos_version is None:
+        return None
+    return max(
+        (metal for metal, min_macos in _MIN_MACOS_FOR_METAL_VERSION.items() if macos_version >= min_macos),
+        default=None,
+    )
+
+
 # Python ABI of the compiled parts of a kernel:
 #
 # - `abi3`: stable ABI, for Python builds with a GIL.
@@ -128,7 +147,12 @@ class TorchStableAbi:
 
     @staticmethod
     def parse(s: str, *, legacy: bool = True) -> "TorchStableAbi":
-        version = _parse_version(TorchStableAbi._LEGACY_VARIANT_REGEX, TorchStableAbi._VARIANT_REGEX, s, legacy)
+        version = _parse_version(
+            TorchStableAbi._LEGACY_VARIANT_REGEX,
+            TorchStableAbi._VARIANT_REGEX,
+            s,
+            legacy,
+        )
         if version is None:
             raise ValueError(f"Invalid Torch stable ABI variant string: {s!r}")
         return TorchStableAbi(version=version, legacy=legacy)
@@ -264,18 +288,32 @@ class System:
 @strict
 @dataclass(unsafe_hash=True)
 class Noarch:
-    """Backend of noarch variants. Noarch variants only specify the name of
-    the backend, since they do not have compiled parts."""
+    """Backend of noarch variants. Most Noarch variants only specify the name
+    of the backend, but MLX also specifies the minimum version of the backend
+    that is required."""
+
+    _VERSIONED_REGEX: ClassVar[re.Pattern] = re.compile(r"(?P<name>.+)-(?P<major>\d+)\.(?P<minor>\d+)")
 
     backend_name: str
+    version: Version | None = None
 
     @property
     def variant_str(self) -> str:
-        return self.backend_name
+        if self.version is None:
+            return self.backend_name
+        return f"{self.backend_name}-{self.version.major}.{self.version.minor}"
 
     @staticmethod
-    def parse(s: str) -> "Noarch":
-        return Noarch(backend_name=s)
+    def parse(s: str, *, versioned: bool = False) -> "Noarch":
+        if not versioned:
+            return Noarch(backend_name=s)
+        m = Noarch._VERSIONED_REGEX.fullmatch(s)
+        if m is None:
+            raise ValueError(f"Invalid versioned noarch backend, expected `[name]-[major].[minor]`, got: {s!r}")
+        return Noarch(
+            backend_name=m.group("name"),
+            version=Version(f"{m.group('major')}.{m.group('minor')}"),
+        )
 
 
 @strict
@@ -450,8 +488,11 @@ def parse_variant(variant_str: str) -> Variant:
         # noarch: e.g. "torch-cpu"
         return NoarchVariant(framework=TorchNoarch(), backend=Noarch.parse("-".join(parts[1:])))
     elif parts[0] == "mlx" and len(parts) >= 2 and not parts[1][:1].isdigit():
-        # noarch: e.g. "mlx-metal". Versioned (arch) MLX variants are not supported yet.
-        return NoarchVariant(framework=MlxNoarch(), backend=Noarch.parse("-".join(parts[1:])))
+        # noarch: e.g. "mlx-metal-4.0". Versioned (arch) MLX variants are not supported yet.
+        return NoarchVariant(
+            framework=MlxNoarch(),
+            backend=Noarch.parse("-".join(parts[1:]), versioned=True),
+        )
     elif parts[0].startswith("torch"):
         # Legacy format: `torch210[-cxx11]-...`.
         legacy = True
@@ -768,6 +809,16 @@ def _check_variants(
                     )
                 )
                 continue
+            if v.backend.version is not None and v.backend.backend_name == "metal":
+                system_metal_version = _metal_version(macos_version)
+                if system_metal_version is None or system_metal_version < v.backend.version:
+                    result.append(
+                        VariantRejected(
+                            variant=v,
+                            reason=f"Metal version ({v.backend.version}) is newer than the system Metal version ({system_metal_version})",
+                        )
+                    )
+                    continue
         elif isinstance(v, SdkVariant):
             reason = None
             if v.python is not None:
@@ -844,7 +895,13 @@ def _sort_variants(
                 backend_order = -v.backend.version.minor
             else:
                 backend_order = 0
-            return (decision_order, framework_order, *abi_version_order, backend_order, *_python_order(v.python))
+            return (
+                decision_order,
+                framework_order,
+                *abi_version_order,
+                backend_order,
+                *_python_order(v.python),
+            )
         elif isinstance(v, SdkVariant):
             if v.python is not None:
                 if v.backend is None:
@@ -854,14 +911,24 @@ def _sort_variants(
                     backend_order = -v.backend.version.minor
                 else:
                     backend_order = 0
-                return (decision_order, 3, 0, 0, backend_order, *_python_order(v.python))
+                return (
+                    decision_order,
+                    3,
+                    0,
+                    0,
+                    backend_order,
+                    *_python_order(v.python),
+                )
             elif v.backend is not None:
                 return (decision_order, 5, 0, 0, 0, 0, 0, 0)
             return (decision_order, 6, 0, 0, 0, 0, 0, 0)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.backend.backend_name == "universal" else 0
-            return (decision_order, 4, 0, 0, universal_order, 0, 0, 0)
+            # Prefer the highest backend version.
+            version = v.backend.version
+            version_order = (-version.major, -version.minor) if version is not None else (0, 0)
+            return (decision_order, 4, 0, 0, universal_order, *version_order, 0)
 
     return sorted(variants, key=sort_key)
 

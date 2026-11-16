@@ -33,7 +33,67 @@ jobs:
         with:
           name: huggingface
           #authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      # For now we only test that there are no regressions in building macOS
-      # kernels. Also run tests once we have a macOS runner.
       - name: Build all Metal example kernels
         run: nix build -L ./examples/kernels#ci-build-metal
+      - name: Copy kernel artifacts
+        run: cp -rL result/* .
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: built-kernels-metal
+          path: |
+            relu-kernel
+            relu-metal-cpp-kernel
+          retention-days: 1
+          if-no-files-found: error
+
+  test:
+    permissions:
+      contents: read
+    name: Test Metal kernels
+    needs: build
+    runs-on:
+      group: hfc-mac-mini-m1-16
+    timeout-minutes: 60
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download kernel artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: built-kernels-metal
+          path: .
+
+      - name: Install uv and set the Python version
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+
+      - name: Install test dependencies and kernels from source
+        # Keep Torch aligned with torchVersion in examples/kernels/flake.nix.
+        run: |
+          uv venv
+          uv pip install "torch==2.13.0" numpy pytest ./kernels
+
+      - name: Run Metal tests
+        env:
+          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel
+          PYTORCH_ENABLE_MPS_FALLBACK: "0"
+        run: |
+          .venv/bin/python - <<'PY'
+          import torch
+
+          if not torch.backends.mps.is_available():
+              raise SystemExit("Metal tests require an available MPS device.")
+          PY
+
+          # Run separately because both suites contain a test_relu.py module.
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu/tests
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-metal-cpp/tests

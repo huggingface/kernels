@@ -6,9 +6,9 @@ local cache.
 
 The kernels cache is a regular Hugging Face Hub cache: kernel repositories live
 in the same directory as `models--…` and `datasets--…` repositories, and they
-use the same layout (`refs/`, `blobs/`, `snapshots/`). This page describes how
-the cache is configured, what is stored in it, and how to use it when the Hub
-is not reachable.
+use the same layout (`refs/`, `blobs/`, `snapshots/`, `trees/`). This page
+describes how the cache is configured, what is stored in it, and how to use it
+when the Hub is not reachable.
 
 ## Cache location
 
@@ -51,56 +51,34 @@ mirror. The cache location is unaffected.
 
 ## On-disk layout
 
-Kernel repositories use the `kernels--<org>--<name>` prefix. A cache holding
-one version of [`kernels-community/activation`](https://huggingface.co/kernels/kernels-community/activation)
+Kernel repositories use the `kernels--<org>--<name>` prefix and are laid out like
+any other Hub repository. See the
+[Hugging Face Hub cache guide](https://huggingface.co/docs/huggingface_hub/en/guides/manage-cache)
+for `refs/`, `blobs/`, `snapshots/` and `trees/`. A cache holding one version of
+[`kernels-community/activation`](https://huggingface.co/kernels/kernels-community/activation)
 looks like this:
 
 ```text
 <cache-dir>/
 ├── kernels--kernels-community--activation/
+│   ├── blobs/
+│   │   └── 9f2c1d…            # file contents, addressed by hash
 │   ├── refs/
 │   │   ├── main
 │   │   └── v1
-│   ├── blobs/
-│   │   └── 9f2c1d…            # file contents, addressed by hash
-│   └── snapshots/
-│       └── 4d1a8e…/           # one directory per downloaded commit
-│           └── build/
-│               └── torch28-cxx11-cu128-x86_64-linux/
-│                   ├── metadata.json
-│                   └── activation/
-│                       └── __init__.py
+│   ├── snapshots/
+│   │   └── 4d1a8e…/           # one directory per downloaded commit
+│   │       └── build/
+│   │           └── torch28-cxx11-cu128-x86_64-linux/
+│   │               ├── metadata.json
+│   │               └── activation/
+│   │                   └── __init__.py
+│   └── trees/
+│       └── 4d1a8e….json       # cached file listing for that commit
 └── .verified-kernels/
     ├── digest/v1/
     └── signature/v1/
 ```
-
-### `snapshots/`
-
-Each downloaded revision gets one snapshot directory, named after its commit.
-A snapshot contains only the files that were downloaded. `kernels` downloads
-only the build variant that matches your system (`build/<variant>/*`), so a
-snapshot usually holds one variant even when the repository has many.
-
-To populate more than one variant, use [`kernels download`](cli-download.md)
-with `--all-variants`, which is useful for building a cache that is shared
-between machines with different hardware or PyTorch versions.
-
-### `blobs/`
-
-`blobs/` stores file contents, named by their hash. Files in a snapshot are
-symlinks into `blobs/`, or copies on systems without symlinks. Two revisions
-that share a file store it only once.
-
-### `refs/`
-
-`refs/` maps a branch or tag, such as `v1`, to the commit it points at.
-`kernels` downloads each kernel by commit, so it writes the ref itself when you
-load a kernel by version or revision. That's what lets
-`get_kernel(..., version=1)` work offline later.
-
-You can delete refs. `kernels` writes them again the next time it downloads the
-kernel online. Until then, that branch or tag can't be resolved offline.
 
 ### `.verified-kernels/`
 

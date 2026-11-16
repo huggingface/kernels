@@ -52,7 +52,7 @@ mirror. The cache location is unaffected.
 ## On-disk layout
 
 Kernel repositories use the `kernels--<org>--<name>` prefix. A cache holding
-one version of [`kernels-community/activation`](https://huggingface.co/kernels-community/activation)
+one version of [`kernels-community/activation`](https://huggingface.co/kernels/kernels-community/activation)
 looks like this:
 
 ```text

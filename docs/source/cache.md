@@ -1,4 +1,4 @@
-# Managing the Kernels cache
+# Managing the kernels cache
 
 `kernels` downloads a kernel build from the Hub the first time you load it.
 After that, loads of the same kernel, revision and build variant come from a

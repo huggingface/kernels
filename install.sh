@@ -56,8 +56,15 @@ install_nix() {
     return 0
   fi
 
+  local installer_args=(install --no-confirm)
+
+  # macOS requires relaxed sandboxing to access the Metal compiler.
+  if [ "$(uname -s)" = "Darwin" ]; then
+    installer_args+=(--extra-conf "sandbox = relaxed")
+  fi
+
   info "Installing Determinate Nix..."
-  curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
+  curl -fsSL https://install.determinate.systems/nix | sh -s -- "${installer_args[@]}"
 
   # Source the Nix profile so nix is available in this shell.
   if [ -f "$NIX_PROFILE_SCRIPT" ]; then
@@ -104,14 +111,7 @@ EOF
 install_kernel_builder() {
   info "Installing kernel-builder..."
 
-  local nix_args=(--accept-flake-config)
-
-  # macOS requires relaxed sandboxing to access the Metal compiler.
-  if [ "$(uname -s)" = "Darwin" ]; then
-    nix_args+=(--extra-conf "sandbox = relaxed")
-  fi
-
-  nix profile add "${nix_args[@]}" "${FLAKE_REF}#kernel-builder"
+  nix profile add --accept-flake-config "${FLAKE_REF}#kernel-builder"
 
   # Symlink the kernel-builder binary to /usr/local/bin for easy access
   sudo ln -sf "$HOME/.nix-profile/bin/kernel-builder" /usr/local/bin/kernel-builder

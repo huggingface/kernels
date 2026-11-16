@@ -75,7 +75,6 @@ a variant was built from a working tree with uncommitted changes. To keep
 these builds from slipping by unnoticed:
 
 - `kernel-builder upload` prints a warning listing every dirty variant it is
-  about to publish, and injects a warning banner into the uploaded
-  `README.md` (built from `CARD.md`) naming those variants.
+  about to publish.
 - The `kernels` loader emits a warning when a kernel variant it loads was
   built from a dirty tree.

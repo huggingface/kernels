@@ -9,7 +9,7 @@
 
   self,
 
-  # Git provenance (`{ commit, dirty }` or `null`) of the `kernel-builder` flake.
+  # Git provenance (`{ commit, dirty }` or `null`) of the `kernels` flake.
   builderProvenance ? null,
 
   # Hub repository to upload to (and optionally the branch).
@@ -31,9 +31,6 @@
   # Build one variant of the SDK, called with `{ buildSet, variant, rev,
   # buildSets }` where `buildSets`. Returns a derivation.
   mkVariant,
-
-  # Additional packages to include in the flake's packages.
-  extraPackages ? _: { },
 }:
 
 let
@@ -65,7 +62,7 @@ let
     {
       buildSet,
       variant,
-      kernel,
+      sdk,
     }:
     let
       inherit (buildSet)
@@ -121,32 +118,30 @@ let
         runHook preInstall
 
         mkdir -p $out
-        cp -r ${kernel}/. $out/
+        cp -r ${sdk}/. $out/
         chmod -R u+w $out
 
         runHook postInstall
       '';
     };
 
-  variantSets = lib.listToAttrs (
-    map (buildSet: {
-      name = variantOf buildSet;
-      value = mkVariant {
-        inherit buildSet rev;
-        variant = variantOf buildSet;
-        buildSets = applicableBuildSets;
-      };
-    }) applicableBuildSets
-  );
   variantDrvs = lib.listToAttrs (
-    map (buildSet: {
-      name = variantOf buildSet;
-      value = checkVariant {
-        inherit buildSet;
+    map (
+      buildSet:
+      let
         variant = variantOf buildSet;
-        kernel = variantSets.${variantOf buildSet}.kernel;
-      };
-    }) applicableBuildSets
+      in
+      {
+        name = variant;
+        value = checkVariant {
+          inherit buildSet variant;
+          sdk = mkVariant {
+            inherit buildSet variant rev;
+            buildSets = applicableBuildSets;
+          };
+        };
+      }
+    ) applicableBuildSets
   );
 
   testPython =
@@ -220,14 +215,4 @@ import ./gen-flake-outputs.nix {
           '';
         }) sets
       );
-
-  extraPackages =
-    args:
-    extraPackages (
-      args
-      // {
-        inherit variantSets;
-        buildSets = applicableBuildSets;
-      }
-    );
 }

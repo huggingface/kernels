@@ -253,7 +253,7 @@ class DigestValidator:
                 if mode == "warn":
                     logger.warning(
                         f"{kernel_str}: {result}\n"
-                        f"Loading the kernel anyway, because KERNELS_DIGEST_VALIDATION=warn is set.",
+                        f'Loading the kernel anyway, because KERNELS_DIGEST_VALIDATION="warn" is set.',
                         stacklevel=3,
                     )
                 else:

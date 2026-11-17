@@ -634,7 +634,7 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
         macos_version=macos_version,
         python_version=Version(f"{sys.version_info.major}.{sys.version_info.minor}"),
         free_threaded=_is_free_threaded_build(),
-        mlx_available=has_mlx,
+        has_mlx=has_mlx,
     )
 
 
@@ -649,7 +649,7 @@ def _resolve_variant_for_system(
     macos_version: Version | None = None,
     python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
     free_threaded: bool = False,
-    mlx_available: bool = True,
+    has_mlx: bool = True,
 ) -> tuple[list[Variant], list[Decision]]:
     """Resolve the best matching variant given explicit system parameters.
 
@@ -669,7 +669,7 @@ def _resolve_variant_for_system(
         macos_version,
         python_version,
         free_threaded,
-        mlx_available,
+        has_mlx,
     )
     trace = _sort_variants(trace)
 
@@ -743,7 +743,7 @@ def _check_variants(
     macos_version: Version | None = None,
     python_version: Version = _ABI3T_MIN_PYTHON_VERSION,
     free_threaded: bool = False,
-    mlx_available: bool = True,
+    has_mlx: bool = True,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
     result: list[Decision] = []
@@ -797,7 +797,7 @@ def _check_variants(
                 result.append(VariantRejected(variant=v, reason=reason))
                 continue
         elif isinstance(v, NoarchVariant):
-            if isinstance(v.framework, MlxNoarch) and not mlx_available:
+            if isinstance(v.framework, MlxNoarch) and not has_mlx:
                 result.append(VariantRejected(variant=v, reason="MLX is not installed in the environment"))
                 continue
             # Only noarch variants with a matching backend or "universal"

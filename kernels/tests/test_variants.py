@@ -611,7 +611,7 @@ def test_resolve_noarch_cann():
     assert rejected == {"torch-npu"}
 
 
-def _resolve_mlx_noarch(*, mlx_available: bool = True, macos_version: str = "26.0"):
+def _resolve_mlx_noarch(*, has_mlx: bool = True, macos_version: str = "26.0"):
     variants = [parse_variant(s) for s in ["mlx-cuda-12.8", "mlx-metal-3.2", "mlx-metal-4.0", "mlx-metal-4.1"]]
     return _resolve_variant_for_system(
         variants=variants,
@@ -622,7 +622,7 @@ def _resolve_mlx_noarch(*, mlx_available: bool = True, macos_version: str = "26.
         torch_cxx11_abi=None,
         tvm_ffi_version=None,
         macos_version=Version(macos_version),
-        mlx_available=mlx_available,
+        has_mlx=has_mlx,
     )
 
 
@@ -657,7 +657,7 @@ def test_metal_version_table_is_monotonic():
 
 
 def test_resolve_noarch_mlx_requires_mlx():
-    result, trace = _resolve_mlx_noarch(mlx_available=False)
+    result, trace = _resolve_mlx_noarch(has_mlx=False)
     assert result == []
     reasons = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
     assert "MLX is not installed" in reasons["mlx-metal-4.0"]

@@ -8,12 +8,12 @@ from typing import ClassVar, Optional, Protocol, runtime_checkable
 from huggingface_hub.dataclasses import strict
 from packaging.version import Version
 
-from kernels.compat import has_torch
+from kernels.compat import has_mlx, has_torch
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, legacy: bool) -> Version | None:
+def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, variant_str: str, legacy: bool) -> Version | None:
     """
     Parse a versioned variant string with the regex for the legacy or the new
     variant string format. Both regexes capture the major and minor version.
@@ -21,7 +21,7 @@ def _parse_version(legacy_regex: re.Pattern, new_regex: re.Pattern, s: str, lega
     Legacy regexes should parse non-dotted versions like `rocm72`, whereas
     new regexes should parse dotted versions like `rocm-7.2`.
     """
-    m = (legacy_regex if legacy else new_regex).fullmatch(s)
+    m = (legacy_regex if legacy else new_regex).fullmatch(variant_str)
     if not m:
         return None
     return Version(f"{m.group(1)}.{m.group(2)}")
@@ -275,30 +275,30 @@ def parse_backend(parts: list[str], *, legacy: bool = True) -> Backend:
     if legacy:
         if len(parts) != 1:
             raise ValueError(f"Invalid backend variant parts, expected a single part, got: {parts!r}")
-        s = parts[0]
-        if s == "cpu":
+        backend_name = parts[0]
+        if backend_name == "cpu":
             return CPU.parse(parts)
-        elif s == "metal":
+        elif backend_name == "metal":
             return Metal.parse(parts)
-        elif s == "neuron":
+        elif backend_name == "neuron":
             return Neuron.parse(parts)
-        elif s == "tpu":
+        elif backend_name == "tpu":
             return TPU.parse(parts)
-        elif s.startswith("cu"):
+        elif backend_name.startswith("cu"):
             return CUDA.parse(parts)
-        elif s.startswith("rocm"):
+        elif backend_name.startswith("rocm"):
             return ROCm.parse(parts)
-        elif s.startswith("xpu"):
+        elif backend_name.startswith("xpu"):
             return XPU.parse(parts)
-        elif s.startswith("cann"):
+        elif backend_name.startswith("cann"):
             return CANN.parse(parts)
         raise ValueError(f"Unknown backend variant parts: {parts!r}")
 
-    name = parts[0] if parts else ""
-    if name in _UNVERSIONED_BACKENDS:
-        return _UNVERSIONED_BACKENDS[name].parse(parts)
-    elif name in _VERSIONED_BACKENDS:
-        return _VERSIONED_BACKENDS[name].parse(parts, legacy=False)
+    backend_name = parts[0] if parts else ""
+    if backend_name in _UNVERSIONED_BACKENDS:
+        return _UNVERSIONED_BACKENDS[backend_name].parse(parts)
+    elif backend_name in _VERSIONED_BACKENDS:
+        return _VERSIONED_BACKENDS[backend_name].parse(parts, legacy=False)
     raise ValueError(f"Unknown backend variant parts: {parts!r}")
 
 
@@ -340,6 +340,12 @@ def _backend() -> Backend:
         cuda = _get_cuda()
         if cuda is not None:
             return cuda
+
+        if has_mlx:
+            import mlx.core as mx  # type: ignore[import-not-found]
+
+            if mx.metal.is_available():
+                return Metal()
 
         return CPU()
 

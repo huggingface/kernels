@@ -73,6 +73,8 @@ in
         ]
     );
 
+  mkMlxNoArchExtension = callPackage ./mlx/no-arch.nix { inherit overrideTorch; };
+
   mkTvmFfiExtension = callPackage ./tvm-ffi/arch.nix {
     inherit
       clr

@@ -24,6 +24,7 @@ rec {
         "cpu"
         "cudaVersion"
         "metal"
+        "mlxVersion"
         "ptxasVersion"
         "rocmVersion"
         "tpu"

@@ -257,3 +257,28 @@ def test_run_benchmark_against_baseline(fake_kernel_repo, tmp_path, capsys):
     err = capsys.readouterr().err
     assert "Base median(ms)" in err
     assert "ReluBenchmark.small" in err
+
+
+def test_run_benchmark_downloads_benchmarks_from_kernel_repo(fake_kernel_repo, monkeypatch):
+    import kernels
+
+    calls = []
+
+    class FakeApi:
+        def snapshot_download(self, **kwargs):
+            calls.append(kwargs)
+            return str(fake_kernel_repo)
+
+    monkeypatch.setattr(benchmark, "_get_hf_api", lambda: FakeApi())
+    # Benchmarks call `kernel.relu`, so reuse the fake local kernel.
+    monkeypatch.setattr(kernels, "get_kernel", lambda repo_id, revision: kernels.get_local_kernel(None))
+
+    benchmark.run_benchmark("kernels-community/relu", branch=None, version=2, iterations=2, warmup=0)
+    assert calls == [
+        {
+            "repo_id": "kernels-community/relu",
+            "repo_type": "kernel",
+            "revision": "v2",
+            "allow_patterns": ["benchmarks/**"],
+        }
+    ]

@@ -709,7 +709,18 @@ def run_benchmark(
     if is_local:
         repo_path = repo_id_path.resolve()
     else:
-        repo_path = Path(str(_get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)))
+        repo_path = Path(
+            str(
+                # Only the benchmark scripts are needed, the kernel itself is
+                # loaded (for the current variant only) by the runner.
+                _get_hf_api().snapshot_download(
+                    repo_id=repo_id,
+                    repo_type="kernel",
+                    revision=revision,
+                    allow_patterns=["benchmarks/**"],
+                )
+            )
+        )
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 

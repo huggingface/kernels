@@ -80,7 +80,7 @@
       # The lib output consists of two parts:
       #
       # - Per-system build functions.
-      # - `genFlakeOutputs`, which can be used by downstream flakes to make
+      # - `genKernelFlakeOutputs`, which can be used by downstream flakes to make
       #   standardized outputs (for all supported systems).
       lib = rec {
         allBuildVariantsJSON =
@@ -92,10 +92,6 @@
                 torchVersions';
           in
           builtins.toJSON buildVariants;
-        genFlakeOutputs = builtins.throw ''
-          `genFlakeOutputs` was renamed to `genKernelFlakeOutputs` and will be removed
-          in kernel-builder 0.14.
-        '' genKernelFlakeOutputs;
         genKernelFlakeOutputs =
           {
             path,

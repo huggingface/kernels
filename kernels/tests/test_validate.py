@@ -402,6 +402,83 @@ def test_digest_validator_raises_on_mismatch(tmp_path, make_metadata, recorded_d
     assert "test-kernel" in str(exc_info.value)
 
 
+_DIGEST_MISMATCH = DigestVerificationResult.DigestVerificationFailure(
+    violations=[DigestViolation.MissingFile("kernel.py")]
+)
+
+
+@pytest.mark.parametrize("value", [None, "", "error", "ERROR", " Error "])
+def test_digest_validator_raises_on_mismatch_in_error_mode(
+    tmp_path, make_metadata, recorded_digest_verifications, monkeypatch, value
+):
+    _, results = recorded_digest_verifications
+    results.append(_DIGEST_MISMATCH)
+    if value is None:
+        monkeypatch.delenv("KERNELS_DIGEST_VALIDATION", raising=False)
+    else:
+        monkeypatch.setenv("KERNELS_DIGEST_VALIDATION", value)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with pytest.raises(RuntimeError, match="do not match the digest"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+
+@pytest.mark.parametrize("value", ["warn", "WARN", " Warn "])
+def test_digest_validator_warns_on_mismatch_in_warn_mode(
+    tmp_path, make_metadata, recorded_digest_verifications, monkeypatch, caplog, value
+):
+    _, results = recorded_digest_verifications
+    results.append(_DIGEST_MISMATCH)
+    monkeypatch.setenv("KERNELS_DIGEST_VALIDATION", value)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+    assert str(_DIGEST_MISMATCH) in caplog.text
+    assert "test-kernel" in caplog.text
+    assert "KERNELS_DIGEST_VALIDATION=warn" in caplog.text
+
+
+def test_digest_validator_warn_mode_is_quiet_on_success(
+    tmp_path, make_metadata, recorded_digest_verifications, monkeypatch, caplog
+):
+    monkeypatch.setenv("KERNELS_DIGEST_VALIDATION", "warn")
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+    assert caplog.text == ""
+
+
+@pytest.mark.parametrize("value", ["warning", "off", "0", "true"])
+def test_digest_validator_rejects_invalid_mode(
+    tmp_path, make_metadata, recorded_digest_verifications, monkeypatch, value
+):
+    monkeypatch.setenv("KERNELS_DIGEST_VALIDATION", value)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with pytest.raises(ValueError, match="KERNELS_DIGEST_VALIDATION"):
+        DigestValidator().validate_kernel(kernel=kernel)
+
+
+def test_digest_validator_reads_mode_at_validation_time(
+    tmp_path, make_metadata, recorded_digest_verifications, monkeypatch
+):
+    _, results = recorded_digest_verifications
+    results.extend([_DIGEST_MISMATCH, _DIGEST_MISMATCH])
+    monkeypatch.delenv("KERNELS_DIGEST_VALIDATION", raising=False)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+    validator = DigestValidator()
+
+    with pytest.raises(RuntimeError):
+        validator.validate_kernel(kernel=kernel)
+
+    monkeypatch.setenv("KERNELS_DIGEST_VALIDATION", "warn")
+    validator.validate_kernel(kernel=kernel)
+
+
 def test_default_kernel_validators_check_signature_and_digest():
     validators = default_kernel_validators()
     assert [type(validator) for validator in validators] == [SignatureValidator, DigestValidator]

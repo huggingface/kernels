@@ -22,6 +22,7 @@ from huggingface_hub.utils import (
 
 from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
+from kernels._internals.cli.benchmark_results import build_records, write_records
 from kernels._internals.hf_hub import _get_hf_api
 
 logger = logging.getLogger(__name__)
@@ -812,9 +813,22 @@ def run_benchmark(
         benchmark_script_sha=script_sha,
     )
 
+    records = build_records(
+        timing_results,
+        machine_info,
+        repo_id=repo_id,
+        revision=revision,
+        kernel_sha=kernel_sha,
+        benchmark_sha=script_sha,
+        warmup=warmup,
+    )
+
     if output:
-        with open(output, "w") as f:
-            json.dump(result.to_payload(), f, indent=2)
+        if Path(output).suffix == ".jsonl":
+            write_records(output, records)
+        else:
+            with open(output, "w") as f:
+                json.dump(result.to_payload(), f, indent=2)
         print(f"Results saved to: {output}", file=sys.stderr)
 
     if print_json:

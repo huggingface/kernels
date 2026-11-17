@@ -133,7 +133,8 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Save JSON results to file",
+        help="Save results to file. A .jsonl file gets one record per workload (loadable with `datasets`), "
+        "other extensions get the legacy JSON payload",
     )
     benchmark_parser.add_argument(
         "--json",

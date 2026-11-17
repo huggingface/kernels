@@ -88,10 +88,10 @@ Tune warmup and iteration count:
 kernels benchmark kernels-community/activation@v1 --warmup 20 --iterations 200
 ```
 
-Save results to a file (JSON):
+Save results to a file:
 
 ```bash
-kernels benchmark kernels-community/activation@v1 --output results.json
+kernels benchmark kernels-community/activation@v1 --output results.jsonl
 ```
 
 Benchmark a local kernel checkout (must contain `benchmarks/`):
@@ -103,7 +103,28 @@ kernels benchmark ./my_kernel
 ## Output
 
 - By default, a table is printed (timings in ms).
-- `--output <file>.json` writes a JSON payload to disk.
+- `--output <file>.jsonl` writes one record per workload as JSON Lines.
+- `--output <file>.json` writes the legacy JSON payload.
+
+### Result records
+
+Each JSON Lines record is a flat row that describes one workload of one run:
+what was benchmarked (`repo_id`, `revision`, `kernel_sha`, `benchmark_sha`,
+`benchmark`, `workload`), where (`gpu`, `backend`, `cpu`, `os`,
+`torch_version`, `kernels_version`), how (`iterations`, `warmup`), and the
+results (`mean_ms`, `median_ms`, `std_ms`, `min_ms`, `max_ms`, `q1_ms`,
+`q3_ms`, `iqr_ms`, `outliers`, `verified`, `ref_mean_ms`, `ref_median_ms`,
+`speedup`, and the raw `samples_ms` and `ref_samples_ms`). Records from one
+run share a `run_id`.
+
+Because every record is self-contained, files from many runs can be
+concatenated and loaded as a single table, for example with 🤗 Datasets:
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("json", data_files="results/*.jsonl", split="train")
+```
 
 ## Writing Benchmark Scripts
 

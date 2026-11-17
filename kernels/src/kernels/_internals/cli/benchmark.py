@@ -22,7 +22,9 @@ from huggingface_hub.utils import (
 
 from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
-from kernels._internals.cli.benchmark_results import build_records, write_records
+from kernels._internals.cli.benchmark_compare import DEFAULT_THRESHOLD
+from kernels._internals.cli.benchmark_compare import report as compare_report
+from kernels._internals.cli.benchmark_results import build_records, read_records, write_records
 from kernels._internals.hf_hub import _get_hf_api
 
 logger = logging.getLogger(__name__)
@@ -712,6 +714,9 @@ def run_benchmark(
     print_json: bool = False,
     visual: str | None = None,
     rasterized: bool = False,
+    baseline: str | None = None,
+    threshold: float = DEFAULT_THRESHOLD,
+    fail_on_regression: bool = False,
 ) -> BenchmarkResult:
     if MISSING_DEPS:
         print(
@@ -720,6 +725,9 @@ def run_benchmark(
         )
         print("Install with: pip install 'kernels[benchmark]'", file=sys.stderr)
         sys.exit(1)
+
+    # Read the baseline first, so that a bad path fails before benchmarking.
+    baseline_records = read_records(baseline) if baseline else None
 
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
@@ -887,5 +895,13 @@ def run_benchmark(
     if upload:
         submit_benchmark(repo_id=repo_id, result=result)
         print("Benchmark submitted successfully!", file=sys.stderr)
+
+    if baseline_records is not None:
+        compare_report(
+            baseline_records,
+            records,
+            threshold=threshold,
+            fail_on_regression=fail_on_regression,
+        )
 
     return result

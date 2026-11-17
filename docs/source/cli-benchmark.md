@@ -127,6 +127,32 @@ from datasets import load_dataset
 ds = load_dataset("json", data_files="results/*.jsonl", split="train")
 ```
 
+## Comparing runs
+
+Save a run as JSON Lines and pass it as a baseline to a later run, for example
+to check whether a kernel or builder change affected performance:
+
+```bash
+kernels benchmark ./my_kernel --output base.jsonl
+# ... make changes and rebuild ...
+kernels benchmark ./my_kernel --baseline base.jsonl
+```
+
+Two saved runs can also be compared directly:
+
+```bash
+kernels benchmark-compare base.jsonl new.jsonl
+```
+
+Workloads are compared by their median time. A workload is reported as faster or
+slower only when its median changed by more than `--threshold` (default `0.05`,
+i.e. 5%) _and_ the interquartile ranges of the two runs do not overlap. A
+warning is printed when the runs were made on a different GPU, backend, or
+PyTorch version.
+
+Use `--fail-on-regression` to exit with a non-zero status when any workload got
+slower, which is useful in CI.
+
 ## Writing Benchmark Scripts
 
 Benchmark scripts must live under `benchmarks/` in the kernel repository and

@@ -245,79 +245,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     let repo = repo_handle::<T>(&api, &repo_id);
 
-    let refs = repo
-        .list_refs()
-        .send()
-        .wrap_err("Cannot list repository refs")?;
-    let branch_exists = refs.branches.iter().any(|r| r.name == branch);
-    // Commit the new branch is created from, so that the cleanup below can be
-    // pinned to it.
-    let base_commit = refs
-        .branches
-        .iter()
-        .find(|r| r.name == MAIN_BRANCH)
-        .map(|r| r.target_commit.clone());
-
-    let is_new_version_branch = if branch_exists {
-        false
-    } else {
-        match repo
-            .create_branch()
-            .branch(&branch)
-            .maybe_revision(base_commit.clone())
-            .send()
-        {
-            Ok(()) => true,
-            // Another upload (e.g. a sibling CI job) created the branch after
-            // we listed the refs, use it as an existing branch.
-            Err(HFError::Conflict { .. }) => false,
-            Err(err) => {
-                return Err(err).wrap_err_with(|| {
-                    if args.create_pr {
-                        format!(
-                            "Pull requests can only target an existing branch. Ask a \
-                             maintainer of `{repo_id}` to create the branch `{branch}` first."
-                        )
-                    } else {
-                        format!("Cannot create branch `{branch}`")
-                    }
-                });
-            }
-        }
-    };
+    let is_new_version_branch = prepare_version_branch(&repo, &repo_id, &branch, args.create_pr)?;
     eprintln!(
         "Using branch `{branch}`{}",
         if is_new_version_branch { " (new)" } else { "" }
     );
-
-    // A new branch inherits the build and benchmark files of `main`. Remove
-    // them in a separate commit right away, so that every upload, including
-    // this one, only replaces files of its own variants. Uploads to the same
-    // branch from concurrent jobs then cannot delete each other's files.
-    //
-    // The commit is pinned to the base commit, so it is refused when another
-    // upload already committed to the branch. The inherited files are kept in
-    // that case, since they cannot be told apart from that upload anymore.
-    if is_new_version_branch {
-        if let Some(base_commit) = &base_commit {
-            let cleanup_ops = new_branch_cleanup_ops(&list_repo_files(&repo, base_commit));
-            if !cleanup_ops.is_empty() {
-                if let Err(err) = repo
-                    .create_commit()
-                    .operations(cleanup_ops)
-                    .commit_message(NEW_BRANCH_CLEANUP_COMMIT_MESSAGE.to_owned())
-                    .revision(branch.clone())
-                    .parent_commit(base_commit.clone())
-                    .send()
-                {
-                    eprintln!(
-                        "Warning: cannot remove files inherited from `{MAIN_BRANCH}` on \
-                         `{branch}`, keeping them: {err}"
-                    );
-                }
-            }
-        }
-    }
 
     // With --create-pr, update the open pull request of an earlier upload
     // rather than opening a sibling one. Uploads from different CI jobs (or
@@ -334,18 +266,13 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             .map_or_else(|| branch.to_owned(), |pr| pr.git_ref.clone())
     };
 
-    // Diff against the pull request when updating one, since it may already
-    // differ from the branch it targets.
-    let main_existing_files = list_repo_files(&repo, &revision_of(MAIN_BRANCH));
-    let version_existing_files = list_repo_files(&repo, &revision_of(&branch));
-
-    let operations_by_branch = collect_commit_ops(
+    let operations_by_branch = plan_upload(
+        &repo,
         &kernel_dir,
         &build_dir,
         &variants,
         &branch,
-        &main_existing_files,
-        &version_existing_files,
+        revision_of,
     )?;
     let mut pull_requests: Vec<PullRequest> = Vec::new();
 
@@ -703,20 +630,254 @@ fn try_find_open_upload_prs<T: RepoType>(
     Ok(prs)
 }
 
+/// Outcome of creating a branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CreateBranch {
+    Created,
+    AlreadyExists,
+}
+
+/// Outcome of a commit pinned to a parent commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PinnedCommit {
+    Committed,
+    /// The branch head is not the parent commit anymore.
+    Refused,
+}
+
+/// The Hub calls that prepare a version branch and plan an upload to it.
+///
+/// Implemented for Hub repositories, and by an in-memory Hub in the tests,
+/// which runs concurrent uploads in every order of these calls.
+trait UploadHub {
+    /// The head commit of every branch.
+    fn branch_heads(&self) -> std::result::Result<BTreeMap<String, String>, HFError>;
+
+    /// Create `branch` from `revision` (`main` if `None`).
+    fn create_branch(
+        &self,
+        branch: &str,
+        revision: Option<&str>,
+    ) -> std::result::Result<CreateBranch, HFError>;
+
+    /// The ids of all commits in the history of `revision`.
+    fn commit_history(&self, revision: &str) -> std::result::Result<HashSet<String>, HFError>;
+
+    /// The paths of all files at `revision`.
+    fn files(&self, revision: &str) -> std::result::Result<BTreeSet<String>, HFError>;
+
+    /// Commit `operations` to `branch`, unless its head is not `parent_commit`.
+    fn commit_pinned(
+        &self,
+        branch: &str,
+        operations: Vec<CommitOperation>,
+        commit_message: &str,
+        parent_commit: &str,
+    ) -> std::result::Result<PinnedCommit, HFError>;
+}
+
+impl<T: RepoType> UploadHub for HFRepositorySync<T> {
+    fn branch_heads(&self) -> std::result::Result<BTreeMap<String, String>, HFError> {
+        Ok(self
+            .list_refs()
+            .send()?
+            .branches
+            .into_iter()
+            .map(|r| (r.name, r.target_commit))
+            .collect())
+    }
+
+    fn create_branch(
+        &self,
+        branch: &str,
+        revision: Option<&str>,
+    ) -> std::result::Result<CreateBranch, HFError> {
+        match HFRepositorySync::create_branch(self)
+            .branch(branch)
+            .maybe_revision(revision.map(ToOwned::to_owned))
+            .send()
+        {
+            Ok(()) => Ok(CreateBranch::Created),
+            Err(HFError::Conflict { .. }) => Ok(CreateBranch::AlreadyExists),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn commit_history(&self, revision: &str) -> std::result::Result<HashSet<String>, HFError> {
+        Ok(self
+            .list_commits()
+            .revision(revision.to_owned())
+            .send()?
+            .into_iter()
+            .map(|commit| commit.id)
+            .collect())
+    }
+
+    fn files(&self, revision: &str) -> std::result::Result<BTreeSet<String>, HFError> {
+        Ok(self
+            .list_tree()
+            .revision(revision.to_owned())
+            .recursive(true)
+            .send()?
+            .into_iter()
+            .filter_map(|entry| match entry {
+                hf_hub::repository::RepoTreeEntry::File { path, .. } => Some(path),
+                hf_hub::repository::RepoTreeEntry::Directory { .. } => None,
+            })
+            .collect())
+    }
+
+    fn commit_pinned(
+        &self,
+        branch: &str,
+        operations: Vec<CommitOperation>,
+        commit_message: &str,
+        parent_commit: &str,
+    ) -> std::result::Result<PinnedCommit, HFError> {
+        match self
+            .create_commit()
+            .operations(operations)
+            .commit_message(commit_message.to_owned())
+            .revision(branch.to_owned())
+            .parent_commit(parent_commit.to_owned())
+            .send()
+        {
+            Ok(_) => Ok(PinnedCommit::Committed),
+            Err(err) if is_parent_commit_mismatch(&err) => Ok(PinnedCommit::Refused),
+            Err(err) => Err(err),
+        }
+    }
+}
+
+/// Whether a commit was refused because its `parent_commit` is not the
+/// branch head anymore.
+fn is_parent_commit_mismatch(err: &HFError) -> bool {
+    match err {
+        HFError::Conflict { .. } => true,
+        HFError::Http { context } => context.status.as_u16() == 412,
+        _ => false,
+    }
+}
+
 /// List the paths of all files at `revision`, or an empty set if the listing
 /// fails (e.g. the revision does not exist yet in a fresh repository).
-fn list_repo_files<T: RepoType>(repo: &HFRepositorySync<T>, revision: &str) -> BTreeSet<String> {
-    repo.list_tree()
-        .revision(revision.to_owned())
-        .recursive(true)
-        .send()
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|entry| match entry {
-            hf_hub::repository::RepoTreeEntry::File { path, .. } => Some(path),
-            hf_hub::repository::RepoTreeEntry::Directory { .. } => None,
-        })
-        .collect()
+fn list_repo_files(hub: &impl UploadHub, revision: &str) -> BTreeSet<String> {
+    hub.files(revision).unwrap_or_default()
+}
+
+/// Make sure that the version branch exists and holds no files inherited
+/// from `main`. Returns whether this upload created the branch.
+fn prepare_version_branch(
+    hub: &impl UploadHub,
+    repo_id: &str,
+    branch: &str,
+    create_pr: bool,
+) -> Result<bool> {
+    let heads = hub.branch_heads().wrap_err("Cannot list repository refs")?;
+    let created = if heads.contains_key(branch) {
+        false
+    } else {
+        // Another upload (e.g. a sibling CI job) may create the branch after
+        // we listed the refs, use it as an existing branch then.
+        hub.create_branch(branch, heads.get(MAIN_BRANCH).map(String::as_str))
+            .wrap_err_with(|| {
+                if create_pr {
+                    format!(
+                        "Pull requests can only target an existing branch. Ask a \
+                         maintainer of `{repo_id}` to create the branch `{branch}` first."
+                    )
+                } else {
+                    format!("Cannot create branch `{branch}`")
+                }
+            })?
+            == CreateBranch::Created
+    };
+
+    // Must run before the version branch files are listed.
+    clean_inherited_files(hub, branch, create_pr)?;
+
+    Ok(created)
+}
+
+/// Remove the build and benchmark files a version branch inherited from
+/// `main`, if the branch has no commits of its own yet.
+///
+/// Every upload calls this before it lists the files of the version branch,
+/// not only the upload that created the branch. The cleanup commit is pinned
+/// to the branch head with `parent_commit`, so it can only land as the first
+/// commit on the branch. Since every upload tries it before its own first
+/// commit, the first commit on a new branch is always the cleanup, however
+/// concurrent uploads interleave or crash. Uploads therefore never see
+/// inherited files, and dropped variants never stay on the branch.
+///
+/// The branch head is compared with the history of `main` rather than its
+/// current head, since `main` may have moved since the branch was created.
+fn clean_inherited_files(hub: &impl UploadHub, branch: &str, create_pr: bool) -> Result<()> {
+    let heads = hub.branch_heads().wrap_err("Cannot list repository refs")?;
+    let head = heads
+        .get(branch)
+        .ok_or_else(|| eyre!("Branch `{branch}` does not exist"))?;
+
+    let main_history = hub
+        .commit_history(MAIN_BRANCH)
+        .wrap_err_with(|| format!("Cannot list the commits of `{MAIN_BRANCH}`"))?;
+    if !main_history.contains(head) {
+        return Ok(());
+    }
+
+    let inherited_files = hub
+        .files(head)
+        .wrap_err_with(|| format!("Cannot list the files of branch `{branch}`"))?;
+    let cleanup_ops = new_branch_cleanup_ops(&inherited_files);
+    if cleanup_ops.is_empty() {
+        return Ok(());
+    }
+    let n_files = cleanup_ops.len();
+
+    match hub.commit_pinned(branch, cleanup_ops, NEW_BRANCH_CLEANUP_COMMIT_MESSAGE, head) {
+        Ok(PinnedCommit::Committed) => {
+            eprintln!("Removed {n_files} file(s) inherited from `{MAIN_BRANCH}` on `{branch}`");
+            Ok(())
+        }
+        // Another upload committed first, which means that the cleanup has
+        // already landed.
+        Ok(PinnedCommit::Refused) => Ok(()),
+        // Pull request uploads may lack write access to the branch itself.
+        Err(err @ (HFError::Forbidden { .. } | HFError::AuthRequired { .. })) if create_pr => {
+            eprintln!(
+                "Warning: cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`, \
+                 keeping them: {err}"
+            );
+            Ok(())
+        }
+        Err(err) => Err(err).wrap_err_with(|| {
+            format!("Cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`")
+        }),
+    }
+}
+
+/// The operations of an upload, per branch. Diffs against `revision_of` each
+/// branch, which is the pull request ref when updating an open pull request,
+/// since it may already differ from the branch it targets.
+fn plan_upload(
+    hub: &impl UploadHub,
+    kernel_dir: &Path,
+    build_dir: &Path,
+    variants: &[PathBuf],
+    branch: &str,
+    revision_of: impl Fn(&str) -> String,
+) -> Result<BTreeMap<String, Vec<CommitOperation>>> {
+    let main_existing_files = list_repo_files(hub, &revision_of(MAIN_BRANCH));
+    let version_existing_files = list_repo_files(hub, &revision_of(branch));
+
+    collect_commit_ops(
+        kernel_dir,
+        build_dir,
+        variants,
+        branch,
+        &main_existing_files,
+        &version_existing_files,
+    )
 }
 
 /// Operations that remove the build and benchmark files a new branch
@@ -965,6 +1126,9 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
         .filter(|e| e.file_type().is_file())
         .map(|e| e.into_path())
 }
+
+#[cfg(test)]
+mod race_tests;
 
 #[cfg(test)]
 mod tests {

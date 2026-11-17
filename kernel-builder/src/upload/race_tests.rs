@@ -1,0 +1,911 @@
+//! Concurrent uploads to a new version branch, run against an in-memory Hub.
+//!
+//! Every Hub call is a scheduling point: a deterministic scheduler lets one
+//! upload at a time make its next Hub call, so the tests can run every order
+//! of the calls of concurrent uploads (or many random ones), like CI jobs
+//! that upload the variants of a new version in parallel. After every run,
+//! the branch is checked: all uploads succeed, the files of every upload are
+//! there, and no file inherited from `main` is left.
+
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+    sync::{Condvar, Mutex},
+};
+
+use eyre::Result;
+use hf_hub::{
+    repository::{AddSource, CommitOperation},
+    HFError,
+};
+
+use super::{
+    plan_upload, prepare_version_branch, CreateBranch, PinnedCommit, UploadHub, MAIN_BRANCH,
+};
+
+const BRANCH: &str = "v2";
+const MAIN_CONTENT: &str = "main";
+/// Content of the files of an earlier upload to an existing version branch.
+const EARLIER_CONTENT: &str = "earlier";
+
+// ---- scheduler ----
+
+thread_local! {
+    static JOB: Cell<usize> = const { Cell::new(usize::MAX) };
+}
+
+/// The branches a Hub call reads and writes. Two calls of different jobs
+/// give the same result in either order unless one writes a branch the
+/// other uses, so only the order of such dependent calls is explored.
+#[derive(Clone, Debug, Default)]
+struct Access {
+    reads_all: bool,
+    reads: BTreeSet<String>,
+    writes: BTreeSet<String>,
+}
+
+impl Access {
+    fn read_all() -> Self {
+        Access {
+            reads_all: true,
+            ..Access::default()
+        }
+    }
+
+    /// Reads `revision`, unless it is a commit id, since commits are immutable.
+    fn read(revision: &str) -> Self {
+        let is_commit_id =
+            revision.starts_with('c') && revision[1..].chars().all(|c| c.is_ascii_digit());
+        Access {
+            reads: if is_commit_id {
+                BTreeSet::new()
+            } else {
+                BTreeSet::from([revision.to_owned()])
+            },
+            ..Access::default()
+        }
+    }
+
+    fn write(branch: &str) -> Self {
+        Access {
+            writes: BTreeSet::from([branch.to_owned()]),
+            ..Access::default()
+        }
+    }
+
+    fn depends_on(&self, other: &Access) -> bool {
+        let writes_used_by = |a: &Access, b: &Access| {
+            (b.reads_all && !a.writes.is_empty())
+                || a.writes
+                    .iter()
+                    .any(|w| b.reads.contains(w) || b.writes.contains(w))
+        };
+        writes_used_by(self, other) || writes_used_by(other, self)
+    }
+}
+
+#[derive(Default)]
+struct SchedState {
+    live: BTreeSet<usize>,
+    waiting: BTreeMap<usize, Access>,
+    running: Option<usize>,
+    crash: HashSet<usize>,
+    choices: Option<Choices>,
+    /// The rest of the run is equivalent to an earlier run, and the remaining
+    /// jobs are crashed to end it.
+    stopped: bool,
+}
+
+/// Runs one job at a time: a job runs until its next Hub call, then waits
+/// until the scheduler picks it again.
+#[derive(Default)]
+struct Scheduler {
+    state: Mutex<SchedState>,
+    cv: Condvar,
+}
+
+impl Scheduler {
+    /// Called by a job before every Hub call. Returns `false` if the job
+    /// should crash at this call.
+    fn yield_now(&self, access: Access) -> bool {
+        let job = JOB.get();
+        let mut state = self.state.lock().unwrap();
+        state.running = None;
+        state.waiting.insert(job, access);
+        self.schedule(&mut state);
+        while state.running != Some(job) {
+            state = self.cv.wait(state).unwrap();
+        }
+        !state.crash.contains(&job)
+    }
+
+    fn finish(&self) {
+        let job = JOB.get();
+        let mut state = self.state.lock().unwrap();
+        state.live.remove(&job);
+        state.running = None;
+        self.schedule(&mut state);
+    }
+
+    /// Once every live job waits for its next Hub call, pick the job to run.
+    /// The job that yields picks, so there is no separate scheduler thread.
+    fn schedule(&self, state: &mut SchedState) {
+        if state.running.is_some() || state.waiting.len() != state.live.len() {
+            return;
+        }
+        let ready: Vec<(usize, Access)> = state
+            .waiting
+            .iter()
+            .map(|(job, access)| (*job, access.clone()))
+            .collect();
+        let Some(&(first, _)) = ready.first() else {
+            return;
+        };
+        let picked = if state.stopped {
+            None
+        } else {
+            state.choices.as_mut().unwrap().pick(ready)
+        };
+        let (job, crash) = picked.unwrap_or_else(|| {
+            state.stopped = true;
+            (first, true)
+        });
+        state.waiting.remove(&job);
+        if crash {
+            state.crash.insert(job);
+        }
+        state.running = Some(job);
+        self.cv.notify_all();
+    }
+}
+
+// ---- in-memory Hub ----
+
+#[derive(Clone)]
+struct Commit {
+    parent: Option<String>,
+    /// File path to content.
+    files: BTreeMap<String, String>,
+}
+
+struct RepoState {
+    commits: HashMap<String, Commit>,
+    branches: BTreeMap<String, String>,
+    next_id: usize,
+    /// Whether deleting a file that does not exist fails the commit. The
+    /// tests run with both, since either may be the behavior of the Hub.
+    strict_deletes: bool,
+    /// Hub calls in the order they ran, for failure reports.
+    log: Vec<String>,
+}
+
+/// A Hub repository in memory.
+struct FakeHub {
+    sched: Scheduler,
+    repo: Mutex<RepoState>,
+}
+
+fn crashed() -> HFError {
+    HFError::CacheNotEnabled
+}
+
+impl FakeHub {
+    fn new(main_files: BTreeMap<String, String>, options: Options) -> Self {
+        let files = main_files;
+        let strict_deletes = options.strict_deletes;
+        let hub = FakeHub {
+            sched: Scheduler::default(),
+            repo: Mutex::new(RepoState {
+                commits: HashMap::from([(
+                    "c0".to_owned(),
+                    Commit {
+                        parent: None,
+                        files,
+                    },
+                )]),
+                branches: BTreeMap::from([(MAIN_BRANCH.to_owned(), "c0".to_owned())]),
+                next_id: 1,
+                strict_deletes,
+                log: Vec::new(),
+            }),
+        };
+        {
+            let mut repo = hub.repo.lock().unwrap();
+            match options.start {
+                Start::NewBranch => {}
+                Start::AtMainCommit => {
+                    repo.branches.insert(BRANCH.to_owned(), "c0".to_owned());
+                }
+                Start::OwnCommits => {
+                    repo.commits.insert(
+                        "c1".to_owned(),
+                        Commit {
+                            parent: Some("c0".to_owned()),
+                            files: earlier_upload_files(),
+                        },
+                    );
+                    repo.branches.insert(BRANCH.to_owned(), "c1".to_owned());
+                    repo.next_id = 2;
+                }
+            }
+        }
+        hub
+    }
+
+    /// Yield to the scheduler, then run `f` on the repository.
+    fn call<R>(
+        &self,
+        access: Access,
+        what: impl FnOnce() -> String,
+        f: impl FnOnce(&mut RepoState) -> std::result::Result<R, HFError>,
+    ) -> std::result::Result<R, HFError> {
+        let alive = self.sched.yield_now(access);
+        let mut repo = self.repo.lock().unwrap();
+        let job = JOB.get();
+        if !alive {
+            repo.log.push(format!("job {job}: crashed"));
+            return Err(crashed());
+        }
+        repo.log.push(format!("job {job}: {}", what()));
+        f(&mut repo)
+    }
+
+    fn branch_files(&self, branch: &str) -> BTreeMap<String, String> {
+        let repo = self.repo.lock().unwrap();
+        repo.commits[&repo.branches[branch]].files.clone()
+    }
+
+    fn log(&self) -> String {
+        self.repo.lock().unwrap().log.join("\n")
+    }
+
+    /// Unpinned commit, like the upload commits of `run_upload_typed`.
+    fn commit(
+        &self,
+        branch: &str,
+        operations: Vec<CommitOperation>,
+    ) -> std::result::Result<(), HFError> {
+        self.call(
+            Access::write(branch),
+            || format!("commit {} op(s) to `{branch}`", operations.len()),
+            |repo| repo.apply(branch, &operations),
+        )
+    }
+}
+
+impl RepoState {
+    fn resolve(&self, revision: &str) -> Option<String> {
+        self.branches.get(revision).cloned().or_else(|| {
+            self.commits
+                .contains_key(revision)
+                .then(|| revision.to_owned())
+        })
+    }
+
+    fn not_found(revision: &str) -> HFError {
+        HFError::RevisionNotFound {
+            repo_id: "fake".to_owned(),
+            revision: revision.to_owned(),
+            context: None,
+        }
+    }
+
+    fn apply(
+        &mut self,
+        branch: &str,
+        operations: &[CommitOperation],
+    ) -> std::result::Result<(), HFError> {
+        let head = self
+            .resolve(branch)
+            .ok_or_else(|| Self::not_found(branch))?;
+        let mut files = self.commits[&head].files.clone();
+        for op in operations {
+            match op {
+                CommitOperation::Add {
+                    path_in_repo,
+                    source,
+                } => {
+                    let content = match source {
+                        AddSource::File(path) => fs::read_to_string(path).unwrap(),
+                        AddSource::Bytes(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+                        _ => unimplemented!("unsupported add source"),
+                    };
+                    files.insert(path_in_repo.clone(), content);
+                }
+                CommitOperation::Delete { path_in_repo } => {
+                    if files.remove(path_in_repo).is_none() && self.strict_deletes {
+                        return Err(HFError::EntryNotFound {
+                            path: path_in_repo.clone(),
+                            repo_id: "fake".to_owned(),
+                            context: None,
+                        });
+                    }
+                }
+            }
+        }
+        let id = format!("c{}", self.next_id);
+        self.next_id += 1;
+        self.commits.insert(
+            id.clone(),
+            Commit {
+                parent: Some(head),
+                files,
+            },
+        );
+        self.branches.insert(branch.to_owned(), id);
+        Ok(())
+    }
+}
+
+impl UploadHub for FakeHub {
+    fn branch_heads(&self) -> std::result::Result<BTreeMap<String, String>, HFError> {
+        self.call(
+            Access::read_all(),
+            || "list refs".to_owned(),
+            |repo| Ok(repo.branches.clone()),
+        )
+    }
+
+    fn create_branch(
+        &self,
+        branch: &str,
+        revision: Option<&str>,
+    ) -> std::result::Result<CreateBranch, HFError> {
+        let mut access = Access::write(branch);
+        access.reads = Access::read(revision.unwrap_or(MAIN_BRANCH)).reads;
+        self.call(
+            access,
+            || format!("create `{branch}` from {revision:?}"),
+            |repo| {
+                if repo.branches.contains_key(branch) {
+                    return Ok(CreateBranch::AlreadyExists);
+                }
+                let revision = revision.unwrap_or(MAIN_BRANCH);
+                let commit = repo
+                    .resolve(revision)
+                    .ok_or_else(|| RepoState::not_found(revision))?;
+                repo.branches.insert(branch.to_owned(), commit);
+                Ok(CreateBranch::Created)
+            },
+        )
+    }
+
+    fn commit_history(&self, revision: &str) -> std::result::Result<HashSet<String>, HFError> {
+        self.call(
+            Access::read(revision),
+            || format!("list commits of `{revision}`"),
+            |repo| {
+                let mut history = HashSet::new();
+                let mut next = repo.resolve(revision);
+                while let Some(id) = next {
+                    next = repo.commits[&id].parent.clone();
+                    history.insert(id);
+                }
+                Ok(history)
+            },
+        )
+    }
+
+    fn files(&self, revision: &str) -> std::result::Result<BTreeSet<String>, HFError> {
+        self.call(
+            Access::read(revision),
+            || format!("list files of `{revision}`"),
+            |repo| {
+                let id = repo
+                    .resolve(revision)
+                    .ok_or_else(|| RepoState::not_found(revision))?;
+                Ok(repo.commits[&id].files.keys().cloned().collect())
+            },
+        )
+    }
+
+    fn commit_pinned(
+        &self,
+        branch: &str,
+        operations: Vec<CommitOperation>,
+        _commit_message: &str,
+        parent_commit: &str,
+    ) -> std::result::Result<PinnedCommit, HFError> {
+        self.call(
+            Access::write(branch),
+            || {
+                format!(
+                    "commit {} op(s) to `{branch}` pinned to {parent_commit}",
+                    operations.len()
+                )
+            },
+            |repo| {
+                if repo.branches.get(branch).map(String::as_str) != Some(parent_commit) {
+                    return Ok(PinnedCommit::Refused);
+                }
+                repo.apply(branch, &operations)?;
+                Ok(PinnedCommit::Committed)
+            },
+        )
+    }
+}
+
+// ---- uploads ----
+
+/// The build of one upload job: some variants with a few files each.
+struct Job {
+    kernel_dir: PathBuf,
+    build_dir: PathBuf,
+    variants: Vec<PathBuf>,
+    /// Repository path to content, of every file the job uploads.
+    files: BTreeMap<String, String>,
+}
+
+impl Job {
+    fn new(root: &Path, name: &str, variants: &[&str]) -> Job {
+        let kernel_dir = root.join(name);
+        let build_dir = kernel_dir.join("build");
+        let mut files = BTreeMap::new();
+        let mut variant_dirs = Vec::new();
+        for variant in variants {
+            let dir = build_dir.join(variant);
+            fs::create_dir_all(&dir).unwrap();
+            for file in ["__init__.py", "_ops.py", "kernel.so"] {
+                let content = format!("{name}:{variant}/{file}");
+                fs::write(dir.join(file), &content).unwrap();
+                files.insert(format!("build/{variant}/{file}"), content);
+            }
+            variant_dirs.push(dir);
+        }
+        fs::write(build_dir.join("CARD.md"), "card").unwrap();
+        Job {
+            kernel_dir,
+            build_dir,
+            variants: variant_dirs,
+            files,
+        }
+    }
+}
+
+/// The steps of a direct upload in `run_upload_typed`.
+fn upload(hub: &FakeHub, job: &Job) -> Result<()> {
+    prepare_version_branch(hub, "fake", BRANCH, false)?;
+    let operations_by_branch = plan_upload(
+        hub,
+        &job.kernel_dir,
+        &job.build_dir,
+        &job.variants,
+        BRANCH,
+        str::to_owned,
+    )?;
+    for (branch, operations) in operations_by_branch {
+        if !operations.is_empty() {
+            hub.commit(&branch, operations)?;
+        }
+    }
+    Ok(())
+}
+
+/// Another commit on `main` while the uploads run.
+fn move_main(hub: &FakeHub) -> Result<()> {
+    hub.commit(
+        MAIN_BRANCH,
+        vec![CommitOperation::Add {
+            path_in_repo: "README.md".to_owned(),
+            source: AddSource::Bytes(b"updated".to_vec().into()),
+        }],
+    )?;
+    Ok(())
+}
+
+/// `main` with an earlier version: the variants `old-a` and `old-b` are not
+/// built anymore and must not end up on the new version branch.
+fn main_files() -> BTreeMap<String, String> {
+    let mut files = BTreeMap::from([
+        ("README.md".to_owned(), "readme".to_owned()),
+        (
+            "benchmarks/benchmark_x.py".to_owned(),
+            MAIN_CONTENT.to_owned(),
+        ),
+    ]);
+    for variant in ["torch-a", "torch-b", "old-a", "old-b"] {
+        for file in ["__init__.py", "_ops.py", "kernel.so", "stale.so"] {
+            files.insert(format!("build/{variant}/{file}"), MAIN_CONTENT.to_owned());
+        }
+    }
+    files
+}
+
+/// An earlier upload to the version branch: `torch-a` with a file that the
+/// new build does not have, and `torch-c`, which the new uploads do not build.
+fn earlier_upload_files() -> BTreeMap<String, String> {
+    let mut files = BTreeMap::from([("README.md".to_owned(), "readme".to_owned())]);
+    for variant in ["torch-a", "torch-c"] {
+        for file in ["__init__.py", "_ops.py", "kernel.so", "stale.so"] {
+            files.insert(
+                format!("build/{variant}/{file}"),
+                EARLIER_CONTENT.to_owned(),
+            );
+        }
+    }
+    files
+}
+
+// ---- exploration ----
+
+/// A point in a run where the scheduler picked a job.
+struct Node {
+    /// The jobs waiting for their next Hub call, with its access.
+    ready: Vec<(usize, Access)>,
+    /// Jobs that need not run here: every run that does is equivalent to a
+    /// run explored before.
+    sleep: BTreeSet<usize>,
+    tried: BTreeSet<usize>,
+    current: usize,
+}
+
+impl Node {
+    fn access(&self, job: usize) -> &Access {
+        &self.ready.iter().find(|(j, _)| *j == job).unwrap().1
+    }
+
+    fn untried(&self) -> Option<usize> {
+        self.ready
+            .iter()
+            .map(|(job, _)| *job)
+            .find(|job| !self.sleep.contains(job) && !self.tried.contains(job))
+    }
+}
+
+/// Depth-first search over the orders of Hub calls, re-running the uploads
+/// from the start for every order. Uses sleep sets (Godefroid) to skip orders
+/// that only swap independent calls, which still reaches every outcome.
+#[derive(Default)]
+struct Explorer {
+    stack: Vec<Node>,
+    depth: usize,
+}
+
+impl Explorer {
+    /// Pick the job to run, or `None` if the rest of this run is equivalent
+    /// to a run explored before.
+    fn pick(&mut self, ready: Vec<(usize, Access)>) -> Option<usize> {
+        let depth = self.depth;
+        self.depth += 1;
+        if let Some(node) = self.stack.get(depth) {
+            debug_assert_eq!(
+                node.ready.iter().map(|(job, _)| *job).collect::<Vec<_>>(),
+                ready.iter().map(|(job, _)| *job).collect::<Vec<_>>(),
+                "uploads are not deterministic"
+            );
+            return Some(node.current);
+        }
+
+        let sleep = match self.stack.last() {
+            None => BTreeSet::new(),
+            Some(parent) => {
+                let ran = parent.access(parent.current);
+                parent
+                    .sleep
+                    .iter()
+                    .chain(&parent.tried)
+                    .copied()
+                    .filter(|job| *job != parent.current)
+                    .filter(|job| !parent.access(*job).depends_on(ran))
+                    .collect()
+            }
+        };
+        let current = ready
+            .iter()
+            .map(|(job, _)| *job)
+            .find(|job| !sleep.contains(job))?;
+        self.stack.push(Node {
+            ready,
+            sleep,
+            tried: BTreeSet::new(),
+            current,
+        });
+        Some(current)
+    }
+
+    /// Move to the next order to explore. Returns `false` when all are done.
+    fn backtrack(&mut self) -> bool {
+        self.depth = 0;
+        while let Some(node) = self.stack.last_mut() {
+            node.tried.insert(node.current);
+            if let Some(next) = node.untried() {
+                node.current = next;
+                return true;
+            }
+            self.stack.pop();
+        }
+        false
+    }
+}
+
+/// How the scheduler picks the next job.
+enum Choices {
+    All(Explorer),
+    /// Pick at random, and crash a job at a Hub call with `crash_odds`.
+    Random {
+        rng: u64,
+        crash_odds: u64,
+    },
+}
+
+impl Choices {
+    fn next_u64(rng: &mut u64) -> u64 {
+        // xorshift64*
+        *rng ^= *rng >> 12;
+        *rng ^= *rng << 25;
+        *rng ^= *rng >> 27;
+        rng.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+
+    /// The job to run, and whether it crashes; `None` to stop this run.
+    fn pick(&mut self, ready: Vec<(usize, Access)>) -> Option<(usize, bool)> {
+        match self {
+            Choices::All(explorer) => explorer.pick(ready).map(|job| (job, false)),
+            Choices::Random { rng, crash_odds } => {
+                let job = ready[(Self::next_u64(rng) % ready.len() as u64) as usize].0;
+                let crash = *crash_odds > 0 && Self::next_u64(rng) % *crash_odds == 0;
+                Some((job, crash))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Options {
+    start: Start,
+    /// Also commit to `main` while the uploads run.
+    move_main: bool,
+    strict_deletes: bool,
+}
+
+/// The version branch before the uploads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Start {
+    /// It does not exist yet: the first uploads of a new version.
+    NewBranch,
+    /// It exists and points to a commit of `main`, so it has no uploads yet
+    /// and is cleaned like a new branch.
+    AtMainCommit,
+    /// It has an earlier upload (`earlier_upload_files`).
+    OwnCommits,
+}
+
+impl Options {
+    fn all(start: Start, move_main: bool) -> [Options; 2] {
+        [true, false].map(|strict_deletes| Options {
+            start,
+            move_main,
+            strict_deletes,
+        })
+    }
+}
+
+/// Run the jobs (and `main` moving, if `move_main_too`) concurrently under
+/// `choices`, then check the version branch.
+/// Returns whether the run was checked, i.e. not stopped as equivalent to an
+/// earlier one.
+fn run_once(jobs: &[Job], options: Options, choices: &mut Choices) -> bool {
+    let hub = FakeHub::new(main_files(), options);
+    let n_threads = jobs.len() + usize::from(options.move_main);
+    {
+        let mut state = hub.sched.state.lock().unwrap();
+        state.live = (0..n_threads).collect();
+        state.choices = Some(std::mem::replace(
+            choices,
+            Choices::Random {
+                rng: 0,
+                crash_odds: 0,
+            },
+        ));
+    }
+
+    let results: Vec<Result<()>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..n_threads)
+            .map(|id| {
+                let hub = &hub;
+                scope.spawn(move || {
+                    JOB.set(id);
+                    let result = match jobs.get(id) {
+                        Some(job) => upload(hub, job),
+                        None => move_main(hub),
+                    };
+                    hub.sched.finish();
+                    result
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+
+    let stopped = {
+        let mut state = hub.sched.state.lock().unwrap();
+        *choices = state.choices.take().unwrap();
+        state.stopped
+    };
+    if !stopped {
+        check(&hub, jobs, options, &results);
+    }
+    !stopped
+}
+
+fn check(hub: &FakeHub, jobs: &[Job], options: Options, results: &[Result<()>]) {
+    let fail = |msg: String| -> ! {
+        panic!(
+            "{msg}\n\nWith {options:?}, Hub calls in the order they ran:\n{}",
+            hub.log()
+        );
+    };
+
+    let crashed: HashSet<usize> = hub.sched.state.lock().unwrap().crash.clone();
+    for (id, result) in results.iter().enumerate() {
+        if let Err(err) = result {
+            if !crashed.contains(&id) {
+                fail(format!("job {id} failed: {err:?}"));
+            }
+        }
+    }
+
+    let succeeded: Vec<usize> = (0..jobs.len())
+        .filter(|id| results[*id].is_ok() && !crashed.contains(id))
+        .collect();
+    if succeeded.is_empty() {
+        return;
+    }
+    let files = hub.branch_files(BRANCH);
+
+    for (path, content) in &files {
+        let under_build = path.starts_with("build/") || path.starts_with("benchmarks/");
+        if under_build && content == MAIN_CONTENT {
+            fail(format!(
+                "`{path}` inherited from `{MAIN_BRANCH}` is still on `{BRANCH}`"
+            ));
+        }
+    }
+    // The variants that the successful uploads replaced hold only files of
+    // those uploads, and the other variants of an earlier upload are kept.
+    let built: BTreeSet<&str> = succeeded
+        .iter()
+        .flat_map(|id| jobs[*id].files.keys())
+        .filter_map(|path| path.split('/').nth(1))
+        .collect();
+    for path in files.keys() {
+        let variant = path
+            .strip_prefix("build/")
+            .and_then(|p| p.split('/').next());
+        if variant.is_some_and(|v| built.contains(v))
+            && !jobs.iter().any(|job| job.files.contains_key(path))
+        {
+            fail(format!("stale `{path}` is still on `{BRANCH}`"));
+        }
+    }
+    if options.start == Start::OwnCommits {
+        for (path, content) in earlier_upload_files() {
+            let variant = path
+                .strip_prefix("build/")
+                .and_then(|p| p.split('/').next());
+            let replaced = variant.is_some_and(|v| built.contains(v)) || path == "README.md";
+            if !replaced && files.get(&path) != Some(&content) {
+                fail(format!(
+                    "`{path}` of the earlier upload was changed: {:?}",
+                    files.get(&path)
+                ));
+            }
+        }
+    }
+
+    for id in succeeded {
+        for (path, content) in &jobs[id].files {
+            // Another job may upload the same variant, e.g. a re-run.
+            let uploaded_by_some_job = files.get(path).is_some_and(|actual| {
+                actual == content || jobs.iter().any(|job| job.files.get(path) == Some(actual))
+            });
+            if !uploaded_by_some_job {
+                fail(format!(
+                    "`{path}` of job {id} is missing or wrong: {:?}",
+                    files.get(path)
+                ));
+            }
+        }
+    }
+}
+
+/// Run every order of the Hub calls of the jobs, up to equivalence. Returns
+/// the number of runs that were checked.
+fn run_all_orders(jobs: &[Job], options: Options) -> usize {
+    let mut choices = Choices::All(Explorer::default());
+    let mut checked = 0;
+    loop {
+        checked += usize::from(run_once(jobs, options, &mut choices));
+        let Choices::All(explorer) = &mut choices else {
+            unreachable!()
+        };
+        if !explorer.backtrack() {
+            return checked;
+        }
+    }
+}
+
+fn run_random_orders(jobs: &[Job], options: Options, runs: u64, crash_odds: u64) {
+    for seed in 1..=runs {
+        let mut choices = Choices::Random {
+            rng: seed.wrapping_mul(0x9e37_79b9_7f4a_7c15),
+            crash_odds,
+        };
+        run_once(jobs, options, &mut choices);
+    }
+}
+
+/// Run `f` with every `Options`, in parallel.
+fn for_all_options(start: Start, move_main: bool, f: impl Fn(Options) + Sync) {
+    std::thread::scope(|scope| {
+        for options in Options::all(start, move_main) {
+            let f = &f;
+            scope.spawn(move || f(options));
+        }
+    });
+}
+
+#[test]
+fn two_uploads_create_branch_concurrently_in_every_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    for_all_options(Start::NewBranch, false, |options| {
+        let runs = run_all_orders(&jobs, options);
+        assert!(runs > 100, "only {runs} orders were run with {options:?}");
+    });
+}
+
+#[test]
+fn two_uploads_while_main_moves_in_every_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    for_all_options(Start::NewBranch, true, |options| {
+        run_all_orders(&jobs, options);
+    });
+}
+
+#[test]
+fn three_uploads_with_rerun_and_crashes_in_random_orders() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+        // A re-run of job 1.
+        Job::new(tmp.path(), "job2", &["torch-b"]),
+    ];
+    for_all_options(Start::NewBranch, true, |options| {
+        run_random_orders(&jobs, options, 3000, 25)
+    });
+}
+
+#[test]
+fn two_uploads_to_branch_with_earlier_upload_in_every_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    for_all_options(Start::OwnCommits, true, |options| {
+        run_all_orders(&jobs, options);
+    });
+}
+
+#[test]
+fn two_uploads_to_branch_at_main_commit_in_every_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    for_all_options(Start::AtMainCommit, false, |options| {
+        run_all_orders(&jobs, options);
+    });
+}

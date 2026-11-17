@@ -177,6 +177,9 @@ struct RepoState {
     /// Whether deleting a file that does not exist fails the commit. The
     /// tests run with both, since either may be the behavior of the Hub.
     strict_deletes: bool,
+    /// The number of upcoming pinned commits to refuse although their parent
+    /// commit is the branch head, like a conflict for another reason.
+    spurious_refusals: usize,
     /// Hub calls in the order they ran, for failure reports.
     log: Vec<String>,
 }
@@ -208,6 +211,7 @@ impl FakeHub {
                 branches: BTreeMap::from([(MAIN_BRANCH.to_owned(), "c0".to_owned())]),
                 next_id: 1,
                 strict_deletes,
+                spurious_refusals: options.spurious_refusals,
                 log: Vec::new(),
             }),
         };
@@ -420,6 +424,10 @@ impl UploadHub for FakeHub {
                 if repo.branches.get(branch).map(String::as_str) != Some(parent_commit) {
                     return Ok(PinnedCommit::Refused);
                 }
+                if repo.spurious_refusals > 0 {
+                    repo.spurious_refusals -= 1;
+                    return Ok(PinnedCommit::Refused);
+                }
                 repo.apply(branch, &operations)?;
                 Ok(PinnedCommit::Committed)
             },
@@ -466,13 +474,18 @@ impl Job {
 
 /// The steps of a direct upload in `run_upload_typed`.
 fn upload(hub: &FakeHub, job: &Job) -> Result<()> {
-    prepare_version_branch(hub, "fake", BRANCH, false)?;
+    upload_to(hub, job, BRANCH)
+}
+
+/// The steps of a direct upload to `branch` in `run_upload_typed`.
+fn upload_to(hub: &FakeHub, job: &Job, branch: &str) -> Result<()> {
+    prepare_version_branch(hub, "fake", branch, false)?;
     let operations_by_branch = plan_upload(
         hub,
         &job.kernel_dir,
         &job.build_dir,
         &job.variants,
-        BRANCH,
+        branch,
         str::to_owned,
     )?;
     for (branch, operations) in operations_by_branch {
@@ -658,6 +671,8 @@ struct Options {
     /// Also commit to `main` while the uploads run.
     move_main: bool,
     strict_deletes: bool,
+    /// See `RepoState::spurious_refusals`.
+    spurious_refusals: usize,
 }
 
 /// The version branch before the uploads.
@@ -678,6 +693,7 @@ impl Options {
             start,
             move_main,
             strict_deletes,
+            spurious_refusals: 0,
         })
     }
 }
@@ -906,6 +922,82 @@ fn two_uploads_to_branch_at_main_commit_in_every_order() {
         Job::new(tmp.path(), "job1", &["torch-b"]),
     ];
     for_all_options(Start::AtMainCommit, false, |options| {
+        run_all_orders(&jobs, options);
+    });
+}
+
+/// Run `f` as the only job, in a run without crashes.
+fn run_alone<R>(hub: &FakeHub, f: impl FnOnce() -> R) -> R {
+    {
+        let mut state = hub.sched.state.lock().unwrap();
+        state.live = BTreeSet::from([0]);
+        state.choices = Some(Choices::Random {
+            rng: 1,
+            crash_odds: 0,
+        });
+    }
+    JOB.set(0);
+    let result = f();
+    hub.sched.finish();
+    result
+}
+
+#[test]
+fn upload_to_main_keeps_other_variants() {
+    let tmp = tempfile::tempdir().unwrap();
+    let job = Job::new(tmp.path(), "job0", &["torch-a"]);
+    for options in Options::all(Start::NewBranch, false) {
+        let hub = FakeHub::new(main_files(), options);
+        run_alone(&hub, || upload_to(&hub, &job, MAIN_BRANCH)).unwrap();
+
+        let files = hub.branch_files(MAIN_BRANCH);
+        for (path, content) in main_files() {
+            if path.starts_with("build/torch-a/") || path == "README.md" {
+                continue;
+            }
+            assert_eq!(
+                files.get(&path),
+                Some(&content),
+                "`{path}` on `{MAIN_BRANCH}` was changed by an upload of `torch-a` \
+                 with {options:?}\n\nHub calls:\n{}",
+                hub.log()
+            );
+        }
+        for (path, content) in &job.files {
+            assert_eq!(files.get(path), Some(content), "`{path}` was not uploaded");
+        }
+        assert!(
+            !files.contains_key("build/torch-a/stale.so"),
+            "stale `build/torch-a/stale.so` is still on `{MAIN_BRANCH}`"
+        );
+    }
+}
+
+/// A refused cleanup must not be taken as proof that another upload cleaned
+/// the branch: the Hub may refuse a commit for another reason.
+#[test]
+fn upload_after_spurious_cleanup_refusal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [Job::new(tmp.path(), "job0", &["torch-a"])];
+    for start in [Start::NewBranch, Start::AtMainCommit] {
+        for mut options in Options::all(start, false) {
+            options.spurious_refusals = 1;
+            let hub = FakeHub::new(main_files(), options);
+            let result = run_alone(&hub, || upload(&hub, &jobs[0]));
+            check(&hub, &jobs, options, &[result]);
+        }
+    }
+}
+
+#[test]
+fn two_uploads_after_spurious_cleanup_refusal_in_every_order() {
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    for_all_options(Start::NewBranch, false, |mut options| {
+        options.spurious_refusals = 1;
         run_all_orders(&jobs, options);
     });
 }

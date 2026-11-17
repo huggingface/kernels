@@ -154,7 +154,23 @@ def main():
         action="store_true",
         help="Output PNG and GIF formats instead of SVG",
     )
+    benchmark_parser.add_argument(
+        "--baseline",
+        type=str,
+        default=None,
+        help="Compare against a previous run saved with `--output <file>.jsonl`",
+    )
+    _add_compare_arguments(benchmark_parser)
     benchmark_parser.set_defaults(func=run_benchmark)
+
+    benchmark_compare_parser = subparsers.add_parser(
+        "benchmark-compare",
+        help="Compare two benchmark runs saved with `kernels benchmark --output <file>.jsonl`",
+    )
+    benchmark_compare_parser.add_argument("base", type=str, help="Results of the base run (.jsonl)")
+    benchmark_compare_parser.add_argument("new", type=str, help="Results of the new run (.jsonl)")
+    _add_compare_arguments(benchmark_compare_parser)
+    benchmark_compare_parser.set_defaults(func=run_benchmark_compare)
 
     verify_signature_parser = subparsers.add_parser(
         "verify-signature",
@@ -240,10 +256,38 @@ def _check_moved(_args):
     sys.exit(1)
 
 
+def _add_compare_arguments(parser):
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.05,
+        help="Relative change of the median that counts as faster/slower (default: 0.05)",
+    )
+    parser.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help="Exit with a non-zero status when a workload got slower",
+    )
+
+
+def run_benchmark_compare(args):
+    from kernels._internals.cli import benchmark_compare
+
+    benchmark_compare.run_compare(
+        args.base,
+        args.new,
+        threshold=args.threshold,
+        fail_on_regression=args.fail_on_regression,
+    )
+
+
 def run_benchmark(args):
     from kernels._internals.cli import benchmark
 
     benchmark.run_benchmark(
+        baseline=args.baseline,
+        threshold=args.threshold,
+        fail_on_regression=args.fail_on_regression,
         repo_id=args.repo_id,
         branch=args.branch,
         version=args.version,

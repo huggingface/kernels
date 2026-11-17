@@ -168,3 +168,92 @@ def test_read_records_rejects_newer_schema(tmp_path):
     path.write_text(json.dumps({"schema_version": benchmark_results.SCHEMA_VERSION + 1}) + "\n")
     with pytest.raises(ValueError, match="unsupported"):
         benchmark_results.read_records(path)
+
+
+def _record(benchmark_name, workload, median, q1, q3, **extra):
+    from kernels._internals.cli.benchmark_results import SCHEMA_VERSION
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "repo_id": "kernels-community/relu",
+        "revision": "v1",
+        "kernel_sha": "abc1234",
+        "benchmark": benchmark_name,
+        "workload": workload,
+        "gpu": "Fake GPU",
+        "backend": "CUDA 12.8",
+        "torch_version": "2.10.0",
+        "median_ms": median,
+        "q1_ms": q1,
+        "q3_ms": q3,
+        **extra,
+    }
+
+
+def test_compare_records_classifies_workloads():
+    from kernels._internals.cli.benchmark_compare import Status, compare_records
+
+    base = [
+        _record("B", "faster", 10.0, 9.9, 10.1),
+        _record("B", "noisy", 10.0, 5.0, 15.0),
+        _record("B", "removed", 1.0, 0.9, 1.1),
+        _record("B", "slower", 10.0, 9.9, 10.1),
+        _record("B", "small_change", 10.0, 9.9, 10.1),
+    ]
+    new = [
+        _record("B", "added", 1.0, 0.9, 1.1),
+        _record("B", "faster", 5.0, 4.9, 5.1),
+        _record("B", "noisy", 12.0, 6.0, 18.0),
+        _record("B", "slower", 12.0, 11.9, 12.1),
+        _record("B", "small_change", 10.2, 10.1, 10.3),
+    ]
+    comparison = compare_records(base, new, threshold=0.05)
+    statuses = {w.key: w.status for w in comparison.workloads}
+    assert statuses == {
+        "B.added": Status.ADDED,
+        "B.faster": Status.FASTER,
+        "B.noisy": Status.UNCHANGED,
+        "B.removed": Status.REMOVED,
+        "B.slower": Status.SLOWER,
+        "B.small_change": Status.UNCHANGED,
+    }
+    assert [w.key for w in comparison.regressions] == ["B.slower"]
+    assert comparison.context_mismatches == {}
+
+
+def test_compare_records_reports_context_mismatch():
+    from kernels._internals.cli.benchmark_compare import compare_records
+
+    base = [_record("B", "w", 1.0, 0.9, 1.1)]
+    new = [_record("B", "w", 1.0, 0.9, 1.1, gpu="Other GPU")]
+    assert compare_records(base, new).context_mismatches == {"gpu": ("Fake GPU", "Other GPU")}
+
+
+def test_compare_fail_on_regression(tmp_path, capsys):
+    from kernels._internals.cli.benchmark_compare import run_compare
+    from kernels._internals.cli.benchmark_results import write_records
+
+    base, new = tmp_path / "base.jsonl", tmp_path / "new.jsonl"
+    write_records(base, [_record("B", "w", 1.0, 0.99, 1.01)])
+    write_records(new, [_record("B", "w", 2.0, 1.99, 2.01)])
+
+    run_compare(str(base), str(new))
+    assert "1 slower" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit) as e:
+        run_compare(str(base), str(new), fail_on_regression=True)
+    assert e.value.code == 1
+
+
+def test_run_benchmark_against_baseline(fake_kernel_repo, tmp_path, capsys):
+    output = tmp_path / "base.jsonl"
+    benchmark.run_benchmark(
+        str(fake_kernel_repo), branch=None, version=None, iterations=5, warmup=1, output=str(output)
+    )
+    capsys.readouterr()
+    benchmark.run_benchmark(
+        str(fake_kernel_repo), branch=None, version=None, iterations=5, warmup=1, baseline=str(output)
+    )
+    err = capsys.readouterr().err
+    assert "Base median(ms)" in err
+    assert "ReluBenchmark.small" in err

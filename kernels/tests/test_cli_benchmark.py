@@ -49,3 +49,82 @@ def test_machine_info_cpu(machine_info):
     info = machine_info(CPU())
     assert info.gpu == "N/A"
     assert info.backend == "CPU"
+
+
+def test_timing_results_stats():
+    t = benchmark._timing_results([1.0, 2.0, 3.0, 4.0, 100.0], ref_times_ms=[10.0, 20.0, 30.0])
+    assert t.iterations == 5
+    assert t.mean_ms == 22.0
+    assert t.median_ms == 3.0
+    assert t.min_ms == 1.0
+    assert t.max_ms == 100.0
+    assert t.outliers == 1
+    assert t.ref_mean_ms == 20.0
+    assert t.ref_median_ms == 20.0
+    assert t.samples_ms == [1.0, 2.0, 3.0, 4.0, 100.0]
+    assert t.ref_samples_ms == [10.0, 20.0, 30.0]
+
+
+def test_time_fn_runs_warmup_and_iterations():
+    calls = []
+    samples = benchmark._time_fn(lambda: calls.append(1), iterations=7, warmup=3)
+    assert len(calls) == 10
+    assert len(samples) == 7
+    assert all(s >= 0 for s in samples)
+
+
+FAKE_BENCHMARK_SCRIPT = """
+import torch
+
+from kernels._internals.benchmark import Benchmark
+
+
+class ReluBenchmark(Benchmark):
+    seed = 0
+
+    def setup(self):
+        self.x = torch.randn(64, 64)
+        self.out = torch.empty_like(self.x)
+
+    def benchmark_small(self):
+        self.kernel.relu(self.out, self.x)
+
+    def verify_small(self):
+        return torch.relu(self.x)
+
+    def benchmark_unverified(self):
+        self.kernel.relu(self.out, self.x)
+"""
+
+
+@pytest.fixture
+def fake_kernel_repo(tmp_path, monkeypatch):
+    """A local kernel repo with a benchmark script and a fake loaded kernel."""
+    (tmp_path / "benchmarks").mkdir()
+    (tmp_path / "benchmarks" / "benchmark_relu.py").write_text(FAKE_BENCHMARK_SCRIPT)
+
+    def relu(out, x):
+        out.copy_(torch.relu(x))
+
+    fake_kernel = SimpleNamespace(__name__="relu_abc1234", relu=relu)
+    import kernels
+
+    monkeypatch.setattr(kernels, "get_local_kernel", lambda path: fake_kernel)
+    monkeypatch.setattr(benchmark, "_backend", lambda: CPU())
+    return tmp_path
+
+
+def test_run_benchmark_local(fake_kernel_repo):
+    result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=5, warmup=1)
+    assert result.kernel_commit_sha == "abc1234"
+
+    small = result.timing_results["ReluBenchmark.small"]
+    assert small.verified is True
+    assert small.iterations == 5
+    assert len(small.samples_ms) == 5
+    assert small.ref_mean_ms is not None
+    assert len(small.ref_samples_ms) == 5
+
+    unverified = result.timing_results["ReluBenchmark.unverified"]
+    assert unverified.verified is None
+    assert unverified.ref_mean_ms is None

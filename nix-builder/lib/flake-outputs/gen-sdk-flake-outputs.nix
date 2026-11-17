@@ -20,8 +20,8 @@
   name,
 
   # Python version and ABI that the SDK is built for, e.g.
-  # `{ version = "3.12"; abi = "abi3"; }`. Only `abi3` is currently
-  # supported.
+  # `{ version = "3.12"; abi = "abi3"; }`. The ABI is one of: abi3,
+  # abi3t, gil, nogil.
   python,
 
   # Directory with tests, run with pytest. Tests marked with `kernels_ci`
@@ -38,13 +38,26 @@ let
     self.shortRev or self.dirtyShortRev or self.lastModifiedDate
   );
 
+  stableAbi = lib.hasPrefix "abi3" python.abi;
+
+  isFreeThreaded = python3: lib.hasSuffix "t" python3.executable;
+
   # Ensure that the Python of the build sets can build/load SDKs for the
-  # Python version of the SDK.
+  # Python version and ABI of the SDK.
   checkPython =
     buildSet:
-    lib.assertMsg
-      (!(lib.hasPrefix "abi3" python.abi) || lib.versionAtLeast buildSet.python3.version python.version)
-      "Build set Python ${buildSet.python3.version} cannot load an SDK for Python ${python.version} (${python.abi})";
+    let
+      inherit (buildSet) python3;
+      message = "Build set Python ${python3.version} (${python3.executable}) cannot load an SDK for Python ${python.version} (${python.abi})";
+    in
+    lib.assertMsg (
+      if stableAbi then
+        lib.versionAtLeast python3.version python.version
+        && (python.abi == "abi3t" || !(isFreeThreaded python3))
+      else
+        lib.versions.majorMinor python3.version == lib.versions.majorMinor python.version
+        && isFreeThreaded python3 == (python.abi == "nogil")
+    ) message;
 
   applicableBuildSets = lib.filter checkPython buildSets;
 
@@ -77,9 +90,6 @@ let
       loadCheckPython = python3.withPackages (_: [ torch ]);
       kernels = overrideTorch python3.pkgs.kernels;
     in
-    assert lib.assertMsg (
-      python.abi == "abi3"
-    ) "Only abi3 SDKs are supported, got ABI `${python.abi}` for `${name}`";
     pkgs.stdenv.mkDerivation {
       name = "${name}-${variant}";
 
@@ -108,8 +118,9 @@ let
       inherit variant;
 
       doInstallCheck = true;
+
       doAbiCheck = true;
-      pythonAbiVersion = python.version;
+      pythonAbiVersion = if stableAbi then python.version else "none";
 
       # Provenance is added by the builder, replacing any that the SDK wrote.
       provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::{collections::BTreeSet, fs};
 
 use clap::Args;
@@ -26,13 +27,42 @@ pub struct CheckAbiArgs {
     #[arg(long, value_name = "VERSION", default_value = "15.0")]
     macos: Version,
 
-    /// Python ABI version.
+    /// Python ABI version (or `none` to skip the check).
     #[arg(short, long, value_name = "VERSION", default_value = "3.9")]
-    python_abi: Version,
+    python_abi: PythonAbiCheck,
 
     /// Torch stable ABI version.
     #[arg(long, value_name = "VERSION")]
     torch_stable_abi: Option<Version>,
+}
+
+/// Python ABI check flag values.
+#[derive(Clone, Debug)]
+enum PythonAbiCheck {
+    Version(Version),
+    None,
+}
+
+impl FromStr for PythonAbiCheck {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value == "none" {
+            return Ok(Self::None);
+        }
+        Version::from_str(value)
+            .map(Self::Version)
+            .map_err(|err| format!("expected a version or `none`: {err}"))
+    }
+}
+
+impl PythonAbiCheck {
+    fn description(&self) -> String {
+        match self {
+            Self::Version(version) => format!("Python ABI version {version}"),
+            Self::None => "no Python ABI check".to_string(),
+        }
+    }
 }
 
 /// Recursively walk a directory and return all file paths.
@@ -82,9 +112,9 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
     match file {
         File::Elf32(_) | File::Elf64(_) => {
             eprintln!(
-                "🐍 Checking for compatibility with {} and Python ABI version {}: {}",
+                "🐍 Checking for compatibility with {} and {}: {}",
                 args.manylinux,
-                args.python_abi,
+                args.python_abi.description(),
                 path.to_string_lossy(),
             );
 
@@ -98,9 +128,9 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
         }
         File::MachO32(_) | File::MachO64(_) => {
             eprintln!(
-                "🐍 Checking for compatibility with macOS {}, and Python ABI version {}: {}",
+                "🐍 Checking for compatibility with macOS {}, and {}: {}",
                 args.macos,
-                args.python_abi,
+                args.python_abi.description(),
                 path.to_string_lossy(),
             );
             macos_violations = check_macos(&file, &args.macos)?;
@@ -111,8 +141,11 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
         }
     }
 
-    let python_abi_violations = check_python_abi(&args.python_abi, &symbols);
-    print_python_abi_violations(&python_abi_violations, &args.python_abi);
+    let mut python_abi_violations = BTreeSet::new();
+    if let PythonAbiCheck::Version(python_abi) = &args.python_abi {
+        python_abi_violations = check_python_abi(python_abi, &symbols);
+        print_python_abi_violations(&python_abi_violations, python_abi);
+    }
 
     let mut torch_stable_abi_violations = BTreeSet::new();
     if let Some(torch_stable_abi) = &args.torch_stable_abi {

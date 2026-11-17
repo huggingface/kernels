@@ -214,7 +214,7 @@ Check the ABI compatibility of a kernel extension
 * `--macos <VERSION>` — macOS version
 
   Default value: `15.0`
-* `-p`, `--python-abi <VERSION>` — Python ABI version
+* `-p`, `--python-abi <VERSION>` — Python ABI version (or `none` to skip the Python stable ABI check)
 
   Default value: `3.9`
 * `--torch-stable-abi <VERSION>` — Torch stable ABI version

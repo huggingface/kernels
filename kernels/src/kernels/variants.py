@@ -59,11 +59,15 @@ def _metal_version(macos_version: Version | None) -> Version | None:
 # - `abi3`: stable ABI, for Python builds with a GIL.
 # - `abi3t`: stable ABI for Python >= 3.15 free-threaded builds (PEP 803).
 #            Also works with >= 3.15 GIL-enabled builds.
+# - `gil`: non-stable ABI, for Python builds with a GIL.
+# - `nogil`: non-stable ABI, for Python builds without a GIL.
 #
 # Variants in the legacy variant string format do not have a Python ABI tag
 # and are always `abi3`.
-PythonAbi = Literal["abi3", "abi3t"]
+PythonAbi = Literal["abi3", "abi3t", "gil", "nogil"]
 _PYTHON_ABIS: tuple[str, ...] = get_args(PythonAbi)
+
+_STABLE_ABIS: tuple[str, ...] = ("abi3", "abi3t")
 
 # In variant strings, the Python version and ABI are preceded by the marker
 # `cpython`, e.g. `cpython-3.12-abi3`.
@@ -72,6 +76,9 @@ _PYTHON_VERSION_REGEX = re.compile(r"(\d+)\.(\d+)")
 
 # Minimum Python version for abi3t.
 _ABI3T_MIN_PYTHON_VERSION = Version("3.15")
+
+# Free-threaded Python (nogil) is only supported starting with Python 3.13.
+_NOGIL_MIN_PYTHON_VERSION = Version("3.13")
 
 # ABI version for legacy build variants.
 _LEGACY_PYTHON_VERSION = Version("3.9")
@@ -224,6 +231,13 @@ class Python:
             )
         if self.abi == "abi3t" and self.version < _ABI3T_MIN_PYTHON_VERSION:
             raise ValueError(f"abi3t requires Python {_ABI3T_MIN_PYTHON_VERSION} or later, not {self.version}")
+        if self.abi == "nogil" and self.version < _NOGIL_MIN_PYTHON_VERSION:
+            raise ValueError(f"nogil requires Python {_NOGIL_MIN_PYTHON_VERSION} or later, not {self.version}")
+
+    @property
+    def is_stable(self) -> bool:
+        """Return whether kernel/sdk uses the stable ABI."""
+        return self.abi in _STABLE_ABIS
 
     @property
     def variant_str(self) -> str:
@@ -239,7 +253,7 @@ class Python:
 
         * The marker `cpython`.
         * The Python version (e.g. `3.12`).
-        * The ABI tag (`abi3` or `abi3t`).
+        * The ABI tag (`abi3`, `abi3t`, `gil`, or `nogil`).
         """
         if len(parts) != 3:
             raise ValueError(
@@ -327,6 +341,10 @@ class ArchVariant:
     backend: Backend
     python: Python
     system: System
+
+    def __post_init__(self):
+        if not self.python.is_stable:
+            raise ValueError(f"Kernels must use a stable ABI ({_STABLE_ABIS!r}), not {self.python.abi!r}")
 
     @property
     def variant_str(self) -> str:
@@ -688,6 +706,14 @@ def _python_mismatch(python: Python, python_version: Version, free_threaded: boo
     if python.abi == "abi3" and free_threaded:
         # Free-threaded builds do not load abi3 extensions.
         return "abi3 is not supported on free-threaded Python, abi3t is required"
+    if not python.is_stable:
+        if python.abi == "gil" and free_threaded:
+            return "gil is not supported on free-threaded Python, nogil is required"
+        if python.abi == "nogil" and not free_threaded:
+            return "nogil requires free-threaded Python"
+        if (python_version.major, python_version.minor) != (python.version.major, python.version.minor):
+            return f"Python {python.version} is required, system Python version is {python_version}"
+        return None
     if python_version < python.version:
         return f"Python {python.version} or later is required, system Python version is {python_version}"
     return None
@@ -840,11 +866,13 @@ def _check_variants(
     return result
 
 
+_PYTHON_ABI_ORDER: tuple[str, ...] = ("gil", "nogil", "abi3", "abi3t")
+
+
 def _python_order(python: Python) -> tuple[int, int, int]:
-    """Sort key for the Python version and ABI: abi3 before abi3t, then higher
-    Python versions first."""
+    """Sort key for the Python version and ABI."""
     return (
-        _PYTHON_ABIS.index(python.abi),
+        _PYTHON_ABI_ORDER.index(python.abi),
         -python.version.major,
         -python.version.minor,
     )
@@ -867,10 +895,9 @@ def _sort_variants(
     7. SDK kernels for a specific backend.
     8. SDK kernels that are framework and backend-agnostic.
 
-    Arch kernels that are otherwise equal are ordered by Python ABI: abi3
-    before abi3t, since GIL-enabled builds prefer abi3 (abi3 variants are never
-    accepted on free-threaded builds). Then the highest Python version comes
-    first (a higher Python version is preferred, like for wheel tags).
+    Arch kernels that are otherwise equal are ordered by Python ABI, in
+    priority order: gil, nogil, abi3, abi3t. Then the highest Python version
+    comes first (a higher Python version is preferred, like for wheel tags).
     """
 
     def sort_key(vs: Decision) -> tuple[int, ...]:

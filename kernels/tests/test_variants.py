@@ -96,24 +96,32 @@ NOARCH_VARIANT_STRINGS = [
     "torch-universal",
 ]
 
+# Version-specific ABIs are only supported for SDKs, `nogil` requires Python 3.13.
+SDK_PYTHON_VERSION_ABIS = PYTHON_VERSION_ABIS + [
+    "cpython-3.12-gil",
+    "cpython-3.13-gil",
+    "cpython-3.13-nogil",
+    "cpython-3.15-nogil",
+]
+
 SDK_VARIANT_STRINGS = (
     ["sdk"]
     + [f"sdk-{backend}" for backend in ["cpu", "cuda", "metal", "rocm", "xpu", "cann"]]
     + [
         f"sdk-{backend}-{python_abi}-{system}"
         for backend in ["cpu", "cuda-12.6", "cuda-13.0", "rocm-6.3", "rocm-6.4", "xpu-2025.2", "cann-8.1"]
-        for python_abi in PYTHON_VERSION_ABIS
+        for python_abi in SDK_PYTHON_VERSION_ABIS
         for system in ["aarch64-linux", "x86_64-linux"]
     ]
     + [
         f"sdk-{backend}-{python_abi}-aarch64-darwin"
         for backend in ["cpu", "metal"]
-        for python_abi in PYTHON_VERSION_ABIS
+        for python_abi in SDK_PYTHON_VERSION_ABIS
     ]
     # Compiled, backend-agnostic.
     + [
         f"sdk-{python_abi}-{system}"
-        for python_abi in PYTHON_VERSION_ABIS
+        for python_abi in SDK_PYTHON_VERSION_ABIS
         for system in ["aarch64-linux", "x86_64-linux", "aarch64-darwin"]
     ]
 )
@@ -1755,3 +1763,96 @@ def test_resolve_stable_abi_preferred_over_torch(linux_abi):
     assert result[0].variant_str == "torch-stable-abi211-cu128-x86_64-linux"
     assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
     assert {vs.variant for vs in trace} == set(variants)
+
+
+@pytest.mark.parametrize("abi", ["gil", "nogil"])
+def test_sdk_version_specific_abi(abi: str):
+    variant = parse_variant(f"sdk-cuda-12.8-cpython-3.13-{abi}-x86_64-linux")
+    assert isinstance(variant, SdkVariant)
+    assert variant.python == Python(version=Version("3.13"), abi=abi, legacy=False)  # type: ignore[arg-type]
+    assert not variant.python.is_stable
+    assert variant.variant_str == f"sdk-cuda-12.8-cpython-3.13-{abi}-x86_64-linux"
+
+
+@pytest.mark.parametrize("abi", ["abi3", "abi3t"])
+def test_python_stable_abis_are_stable(abi: str):
+    assert Python(version=Version("3.15"), abi=abi, legacy=False).is_stable  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("python_version", ["3.9", "3.12"])
+def test_python_nogil_requires_python_3_13(python_version: str):
+    with pytest.raises(ValueError, match="nogil requires Python 3.13"):
+        Python(version=Version(python_version), abi="nogil", legacy=False)
+
+
+@pytest.mark.parametrize("abi", ["gil", "nogil"])
+def test_python_version_specific_abi_not_legacy(abi: str):
+    with pytest.raises(ValueError, match="legacy"):
+        Python(version=Version("3.13"), abi=abi, legacy=True)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "variant_str",
+    [
+        "torch-2.10-cuda-12.8-cpython-3.12-gil-x86_64-linux",
+        "torch-2.10-cuda-12.8-cpython-3.13-nogil-x86_64-linux",
+        "torch-2.10-cpu-cpython-3.13-nogil-aarch64-darwin",
+        "tvm-ffi-0.1-cuda-12.8-cpython-3.12-gil-x86_64-linux",
+    ],
+)
+def test_kernel_variants_reject_version_specific_abi(variant_str: str):
+    # Kernels must use a stable ABI.
+    with pytest.raises(ValueError):
+        parse_variant(variant_str)
+
+
+def test_arch_variant_rejects_version_specific_abi():
+    with pytest.raises(ValueError, match="stable ABI"):
+        ArchVariant(
+            framework=parse_variant("torch-2.10-cuda-12.8-cpython-3.15-abi3t-x86_64-linux").framework,  # type: ignore[union-attr]
+            backend=CUDA(Version("12.8")),
+            python=Python(version=Version("3.12"), abi="gil", legacy=False),
+            system=System(platform="x86_64", os="linux"),
+        )
+
+
+SDK_PYTHON_VARIANTS = [
+    "sdk-cuda-12.8-cpython-3.12-abi3-x86_64-linux",
+    "sdk-cuda-12.8-cpython-3.15-abi3t-x86_64-linux",
+    "sdk-cuda-12.8-cpython-3.12-gil-x86_64-linux",
+    "sdk-cuda-12.8-cpython-3.13-gil-x86_64-linux",
+    "sdk-cuda-12.8-cpython-3.13-nogil-x86_64-linux",
+    "sdk-cuda-12.8-cpython-3.15-nogil-x86_64-linux",
+]
+
+
+@pytest.mark.parametrize(
+    "python_version,free_threaded,expected",
+    [
+        # GIL: exact matches first, then abi3.
+        ("3.12", False, ["cpython-3.12-gil", "cpython-3.12-abi3"]),
+        ("3.13", False, ["cpython-3.13-gil", "cpython-3.12-abi3"]),
+        ("3.14", False, ["cpython-3.12-abi3"]),
+        ("3.15", False, ["cpython-3.12-abi3", "cpython-3.15-abi3t"]),
+        # Free-threaded: nogil must match the exact version, abi3t from 3.15.
+        ("3.12", True, []),
+        ("3.13", True, ["cpython-3.13-nogil"]),
+        ("3.14", True, []),
+        ("3.15", True, ["cpython-3.15-nogil", "cpython-3.15-abi3t"]),
+    ],
+)
+def test_resolve_sdk_python_abis(python_version: str, free_threaded: bool, expected: list[str]):
+    result, rejected = _resolve_python_abi(
+        SDK_PYTHON_VARIANTS, python_version=python_version, free_threaded=free_threaded
+    )
+    assert result == [f"sdk-cuda-12.8-{tag}-x86_64-linux" for tag in expected]
+    assert set(result) | set(rejected) == set(SDK_PYTHON_VARIANTS)
+
+
+def test_resolve_sdk_python_abi_rejection_reasons():
+    _, rejected = _resolve_python_abi(SDK_PYTHON_VARIANTS, python_version="3.13", free_threaded=True)
+    assert "gil is not supported on free-threaded Python" in rejected[SDK_PYTHON_VARIANTS[3]]
+    _, rejected = _resolve_python_abi(SDK_PYTHON_VARIANTS, python_version="3.13", free_threaded=False)
+    assert "nogil requires free-threaded Python" in rejected[SDK_PYTHON_VARIANTS[4]]
+    _, rejected = _resolve_python_abi(SDK_PYTHON_VARIANTS, python_version="3.14", free_threaded=False)
+    assert "Python 3.13 is required, system Python version is 3.14" in rejected[SDK_PYTHON_VARIANTS[3]]

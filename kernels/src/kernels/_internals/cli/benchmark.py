@@ -712,8 +712,6 @@ def run_benchmark(
     upload: bool = False,
     output: str | None = None,
     print_json: bool = False,
-    visual: str | None = None,
-    rasterized: bool = False,
     baseline: str | None = None,
     threshold: float = DEFAULT_THRESHOLD,
     fail_on_regression: bool = False,
@@ -841,56 +839,6 @@ def run_benchmark(
 
     if print_json:
         print(json.dumps(result.to_payload(), indent=2))
-
-    if visual:
-        from kernels._internals.cli.benchmark_graphics import (
-            save_speedup_animation,
-            save_speedup_image,
-        )
-
-        media_dir = Path("media")
-        media_dir.mkdir(exist_ok=True)
-
-        for theme in ("light", "dark"):
-            dark = theme == "dark"
-            base_path = media_dir / f"{visual}_{theme}"
-
-            # Always produce SVGs
-            save_speedup_image(
-                timing_results,
-                f"{base_path}.svg",
-                machine_info.backend,
-                repo_id,
-                machine_info.pytorch_version,
-                dark=dark,
-            )
-            save_speedup_animation(
-                timing_results,
-                f"{base_path}_animation.svg",
-                machine_info.backend,
-                repo_id,
-                machine_info.pytorch_version,
-                dark=dark,
-            )
-
-            # Additionally produce PNGs and GIFs when --rasterized is used
-            if rasterized:
-                save_speedup_image(
-                    timing_results,
-                    f"{base_path}.png",
-                    machine_info.backend,
-                    repo_id,
-                    machine_info.pytorch_version,
-                    dark=dark,
-                )
-                save_speedup_animation(
-                    timing_results,
-                    f"{base_path}_animation.gif",
-                    machine_info.backend,
-                    repo_id,
-                    machine_info.pytorch_version,
-                    dark=dark,
-                )
 
     if upload:
         submit_benchmark(repo_id=repo_id, result=result)

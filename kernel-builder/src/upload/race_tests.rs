@@ -4,7 +4,7 @@
 
 use std::{
     cell::Cell,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     fs,
     path::{Path, PathBuf},
     sync::{Condvar, Mutex},
@@ -225,6 +225,7 @@ impl FakeHub {
         access: Access,
         what: impl FnOnce() -> String,
         f: impl FnOnce(&mut RepoState) -> std::result::Result<R, HFError>,
+        outcome: impl FnOnce(&RepoState, &R) -> String,
     ) -> std::result::Result<R, HFError> {
         let alive = self.sched.yield_now(access);
         let mut repo = self.repo.lock().unwrap();
@@ -233,8 +234,14 @@ impl FakeHub {
             repo.log.push(format!("job {job}: crashed"));
             return Err(crashed());
         }
-        repo.log.push(format!("job {job}: {}", what()));
-        f(&mut repo)
+        let what = what();
+        let result = f(&mut repo);
+        let outcome = match &result {
+            Ok(r) => outcome(&repo, r),
+            Err(err) => format!("error: {err}"),
+        };
+        repo.log.push(format!("job {job}: {what:<40} -> {outcome}"));
+        result
     }
 
     fn branch_files(&self, branch: &str) -> BTreeMap<String, String> {
@@ -254,8 +261,9 @@ impl FakeHub {
     ) -> std::result::Result<(), HFError> {
         self.call(
             Access::write(branch),
-            || format!("commit {} op(s) to `{branch}`", operations.len()),
+            || format!("commit {} to `{branch}`", op_counts(&operations)),
             |repo| repo.apply(branch, &operations),
+            |repo, _| format!("committed {}", repo.branches[branch]),
         )
     }
 }
@@ -324,12 +332,27 @@ impl RepoState {
     }
 }
 
+fn op_counts(operations: &[CommitOperation]) -> String {
+    let adds = operations
+        .iter()
+        .filter(|op| matches!(op, CommitOperation::Add { .. }))
+        .count();
+    format!("+{adds} -{}", operations.len() - adds)
+}
+
 impl UploadHub for FakeHub {
     fn branch_heads(&self) -> std::result::Result<BTreeMap<String, String>, HFError> {
         self.call(
             Access::read_all(),
             || "list refs".to_owned(),
             |repo| Ok(repo.branches.clone()),
+            |_, heads| {
+                heads
+                    .iter()
+                    .map(|(branch, head)| format!("{branch} at {head}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
         )
     }
 
@@ -342,7 +365,7 @@ impl UploadHub for FakeHub {
         access.reads = Access::read(revision.unwrap_or(MAIN_BRANCH)).reads;
         self.call(
             access,
-            || format!("create `{branch}` from {revision:?}"),
+            || format!("create `{branch}` from {}", revision.unwrap_or(MAIN_BRANCH)),
             |repo| {
                 if repo.branches.contains_key(branch) {
                     return Ok(CreateBranch::AlreadyExists);
@@ -353,6 +376,10 @@ impl UploadHub for FakeHub {
                     .ok_or_else(|| RepoState::not_found(revision))?;
                 repo.branches.insert(branch.to_owned(), commit);
                 Ok(CreateBranch::Created)
+            },
+            |_, created| match created {
+                CreateBranch::Created => "created".to_owned(),
+                CreateBranch::AlreadyExists => "already exists (409)".to_owned(),
             },
         )
     }
@@ -370,6 +397,20 @@ impl UploadHub for FakeHub {
                 }
                 Ok(history)
             },
+            |repo, history| {
+                repo.branches
+                    .iter()
+                    .filter(|(branch, _)| *branch != MAIN_BRANCH)
+                    .map(|(branch, head)| {
+                        if history.contains(head) {
+                            format!("{branch} at {head} has no commits of its own")
+                        } else {
+                            format!("{branch} at {head} has its own commits")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            },
         )
     }
 
@@ -383,6 +424,7 @@ impl UploadHub for FakeHub {
                     .ok_or_else(|| RepoState::not_found(revision))?;
                 Ok(repo.commits[&id].files.keys().cloned().collect())
             },
+            |_, files: &BTreeSet<String>| format!("{} files", files.len()),
         )
     }
 
@@ -397,8 +439,8 @@ impl UploadHub for FakeHub {
             Access::write(branch),
             || {
                 format!(
-                    "commit {} op(s) to `{branch}` pinned to {parent_commit}",
-                    operations.len()
+                    "commit {} to `{branch}` pinned to {parent_commit}",
+                    op_counts(&operations)
                 )
             },
             |repo| {
@@ -411,6 +453,16 @@ impl UploadHub for FakeHub {
                 }
                 repo.apply(branch, &operations)?;
                 Ok(PinnedCommit::Committed)
+            },
+            |repo, committed| {
+                let head = &repo.branches[branch];
+                match committed {
+                    PinnedCommit::Committed => format!("committed {head}"),
+                    PinnedCommit::Refused if head == parent_commit => {
+                        "refused, although the head matches".to_owned()
+                    }
+                    PinnedCommit::Refused => format!("refused, head moved to {head}"),
+                }
             },
         )
     }
@@ -600,8 +652,18 @@ impl Explorer {
     }
 }
 
+/// A job to run its next Hub call, or to crash at it.
+#[derive(Clone, Copy)]
+enum Step {
+    Run(usize),
+    Crash(usize),
+}
+
 enum Choices {
     All(Explorer),
+    /// Runs the steps in order, skipping those of finished jobs, then the
+    /// remaining jobs by id.
+    Script(VecDeque<Step>),
     /// Crashes a job at a Hub call with odds `1 / crash_odds`.
     Random {
         rng: u64,
@@ -625,6 +687,18 @@ impl Choices {
                 let job = ready[(Self::next_u64(rng) % ready.len() as u64) as usize].0;
                 let crash = *crash_odds > 0 && Self::next_u64(rng) % *crash_odds == 0;
                 Some((job, crash))
+            }
+            Choices::Script(steps) => {
+                while let Some(step) = steps.pop_front() {
+                    let (job, crash) = match step {
+                        Step::Run(job) => (job, false),
+                        Step::Crash(job) => (job, true),
+                    };
+                    if ready.iter().any(|(j, _)| *j == job) {
+                        return Some((job, crash));
+                    }
+                }
+                Some((ready[0].0, false))
             }
         }
     }
@@ -659,6 +733,14 @@ impl Options {
 
 /// Returns `false` if the run was stopped as equivalent to an earlier one.
 fn run_once(jobs: &[Job], options: Options, choices: &mut Choices) -> bool {
+    let (hub, results, stopped) = run(jobs, options, choices);
+    if !stopped {
+        check(&hub, jobs, options, &results);
+    }
+    !stopped
+}
+
+fn run(jobs: &[Job], options: Options, choices: &mut Choices) -> (FakeHub, Vec<Result<()>>, bool) {
     let hub = FakeHub::new(main_files(), options);
     let n_threads = jobs.len() + usize::from(options.move_main);
     {
@@ -696,10 +778,7 @@ fn run_once(jobs: &[Job], options: Options, choices: &mut Choices) -> bool {
         *choices = state.choices.take().unwrap();
         state.stopped
     };
-    if !stopped {
-        check(&hub, jobs, options, &results);
-    }
-    !stopped
+    (hub, results, stopped)
 }
 
 fn check(hub: &FakeHub, jobs: &[Job], options: Options, results: &[Result<()>]) {
@@ -951,4 +1030,102 @@ fn two_uploads_after_spurious_cleanup_refusal_in_every_order() {
         options.spurious_refusals = 1;
         run_all_orders(&jobs, options);
     });
+}
+
+/// Where the files of each directory on `branch` come from.
+fn describe_branch(hub: &FakeHub, branch: &str) -> String {
+    let mut origins: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    for (path, content) in hub.branch_files(branch) {
+        let Some((dir, _)) = path.rsplit_once('/') else {
+            continue;
+        };
+        let origin = match content.as_str() {
+            MAIN_CONTENT => "main <- left behind".to_owned(),
+            EARLIER_CONTENT => "earlier upload".to_owned(),
+            content => content.split(':').next().unwrap_or(content).to_owned(),
+        };
+        *origins
+            .entry(format!("{dir}/"))
+            .or_default()
+            .entry(origin)
+            .or_default() += 1;
+    }
+    origins
+        .iter()
+        .map(|(dir, origins)| {
+            let origins: Vec<_> = origins
+                .iter()
+                .map(|(origin, n)| format!("{n} from {origin}"))
+                .collect();
+            format!("  {dir:<20} {}", origins.join(", "))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Prints how a few races resolve, run with `--nocapture` to see them.
+#[test]
+fn traced_scenarios() {
+    use Step::{Crash, Run};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let jobs = [
+        Job::new(tmp.path(), "job0", &["torch-a"]),
+        Job::new(tmp.path(), "job1", &["torch-b"]),
+    ];
+    let options = Options::all(Start::NewBranch, false)[1];
+    let scenarios: Vec<(&str, &[Job], Options, Vec<Step>)> = vec![
+        (
+            "job 1 gets a 409 and commits before job 0, which created the branch",
+            &jobs,
+            options,
+            [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0]
+                .into_iter()
+                .map(Run)
+                .chain([Run(0); 20])
+                .collect(),
+        ),
+        (
+            "the Hub refuses the cleanup for another reason than a commit",
+            &jobs[..1],
+            Options {
+                spurious_refusals: 1,
+                ..options
+            },
+            vec![],
+        ),
+        (
+            "job 0 creates the branch and crashes before its cleanup",
+            &jobs,
+            options,
+            vec![Run(1), Run(0), Run(0), Crash(0)],
+        ),
+    ];
+
+    let mut failed = vec![];
+    for (name, jobs, options, steps) in scenarios {
+        let mut choices = Choices::Script(steps.into());
+        let (hub, results, _) = run(jobs, options, &mut choices);
+        let outcomes: Vec<_> = results
+            .iter()
+            .enumerate()
+            .map(|(id, result)| match result {
+                Ok(()) => format!("job {id} ok"),
+                Err(_) => format!("job {id} failed"),
+            })
+            .collect();
+        println!(
+            "=== {name}\n{}\n{}\n`{BRANCH}` after the uploads:\n{}\n",
+            hub.log(),
+            outcomes.join(", "),
+            describe_branch(&hub, BRANCH)
+        );
+        let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            check(&hub, jobs, options, &results)
+        }));
+        if checked.is_err() {
+            failed.push(name);
+        }
+    }
+    assert!(failed.is_empty(), "failed: {failed:#?}");
 }

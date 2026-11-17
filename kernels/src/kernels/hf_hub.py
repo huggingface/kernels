@@ -4,6 +4,7 @@ import platform
 from dataclasses import dataclass
 
 from huggingface_hub import HfApi, constants
+from huggingface_hub.errors import HfHubHTTPError
 
 from kernels._rust import Oid
 from kernels._system import glibc_version
@@ -106,6 +107,8 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
     When ``trust_remote_code`` is a list of strings, it is treated as an
     allowlist of repository IDs. Only repositories in the list and repositories
     from trusted publishers are allowed.
+
+    HTTP 401 errors are re-raised with authentication guidance.
     """
     if trust_remote_code is True:
         return
@@ -128,6 +131,13 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
     try:
         info = _get_hf_api().get_organization_overview(publisher)
     except Exception as e:
+        if isinstance(e, HfHubHTTPError) and e.response is not None and e.response.status_code == 401:
+            e.append_to_message(
+                f"\nHugging Face Hub authentication failed while checking the publisher of kernel repository '{repo_id}'. "
+                "Your token may be invalid or expired. Run `hf auth login` to log in again. "
+                "If `HF_TOKEN` is set, update or unset it."
+            )
+            raise
         raise ValueError(
             f"Kernel repository '{repo_id}' could not verify publisher trust status. "
             "Set trust_remote_code=True or add the repository ID to the trust_remote_code allowlist "

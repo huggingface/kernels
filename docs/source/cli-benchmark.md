@@ -7,7 +7,7 @@ The command:
 - Downloads the kernel repo at a specific **branch** or **version**
 - Runs all `benchmarks/benchmark*.py` scripts
 - Times each `benchmark_*` workload and prints a results table
-- Optionally saves results as JSON
+- Optionally saves results as JSON Lines records
 
 ## Installation
 
@@ -104,7 +104,7 @@ kernels benchmark ./my_kernel
 
 - By default, a table is printed (timings in ms).
 - `--output <file>.jsonl` writes one record per workload as JSON Lines.
-- `--output <file>.json` writes the legacy JSON payload.
+- `--json` prints the same records to stdout.
 
 ### Result records
 

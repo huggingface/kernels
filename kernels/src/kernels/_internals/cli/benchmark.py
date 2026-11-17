@@ -13,12 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from huggingface_hub.dataclasses import strict
-from huggingface_hub.utils import (
-    build_hf_headers,
-    disable_progress_bars,
-    get_session,
-    hf_raise_for_status,
-)
+from huggingface_hub.utils import disable_progress_bars
 
 from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
@@ -123,48 +118,6 @@ class BenchmarkResult:
     kernel_commit_sha: str
     benchmark_script_path: str
     benchmark_script_sha: str | None = None
-
-    def to_payload(self) -> dict:
-        # Build results array for multiple workloads
-        results = []
-        for name, timing in sorted(self.timing_results.items()):
-            entry: dict = {
-                "workload": name,
-                "timingResults": {
-                    "mean_ms": timing.mean_ms,
-                    "std_ms": timing.std_ms,
-                    "min_ms": timing.min_ms,
-                    "max_ms": timing.max_ms,
-                    "q1_ms": timing.q1_ms,
-                    "q3_ms": timing.q3_ms,
-                    "iqr_ms": timing.iqr_ms,
-                    "outliers": timing.outliers,
-                    "iterations": timing.iterations,
-                },
-            }
-            if timing.verified is not None:
-                entry["verified"] = timing.verified
-            results.append(entry)
-
-        machine_info: dict[str, str | int] = {
-            "gpu": self.machine_info.gpu,
-            "backend": self.machine_info.backend,
-            "pytorchVersion": self.machine_info.pytorch_version,
-            "os": self.machine_info.os,
-            "cpu": self.machine_info.cpu,
-        }
-        if self.machine_info.gpu_cores is not None:
-            machine_info["gpuCores"] = self.machine_info.gpu_cores
-
-        payload = {
-            "results": results,
-            "machineInfo": machine_info,
-            "kernelCommitSha": self.kernel_commit_sha,
-            "benchmarkScriptPath": self.benchmark_script_path,
-        }
-        if self.benchmark_script_sha:
-            payload["benchmarkScriptSha"] = self.benchmark_script_sha
-        return payload
 
 
 def _print_results_table(results: dict[str, TimingResults]) -> None:
@@ -688,28 +641,12 @@ def run_benchmark_script(
     return all_results, kernel_sha
 
 
-def submit_benchmark(
-    repo_id: str,
-    result: BenchmarkResult,
-) -> None:
-    # TODO: follow up on API design for benchmark submission
-    response = get_session().post(
-        f"https://huggingface.co/api/kernels/{repo_id}/benchmarks",
-        json=result.to_payload(),
-        headers=build_hf_headers(headers={"Content-Type": "application/json"}),
-    )
-    if response.status_code != 200:
-        print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
-    hf_raise_for_status(response)
-
-
 def run_benchmark(
     repo_id: str,
     branch: str | None,
     version: int | None,
     iterations: int = 100,
     warmup: int = 10,
-    upload: bool = False,
     output: str | None = None,
     print_json: bool = False,
     baseline: str | None = None,
@@ -830,19 +767,12 @@ def run_benchmark(
     )
 
     if output:
-        if Path(output).suffix == ".jsonl":
-            write_records(output, records)
-        else:
-            with open(output, "w") as f:
-                json.dump(result.to_payload(), f, indent=2)
+        write_records(output, records)
         print(f"Results saved to: {output}", file=sys.stderr)
 
     if print_json:
-        print(json.dumps(result.to_payload(), indent=2))
-
-    if upload:
-        submit_benchmark(repo_id=repo_id, result=result)
-        print("Benchmark submitted successfully!", file=sys.stderr)
+        for record in records:
+            print(json.dumps(record))
 
     if baseline_records is not None:
         compare_report(

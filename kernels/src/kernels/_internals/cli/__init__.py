@@ -120,7 +120,7 @@ def main():
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
-        help="Run and submit benchmark results for a kernel",
+        help="Benchmark a kernel",
     )
     benchmark_parser.add_argument(
         "repo_id",
@@ -133,13 +133,12 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Save results to file. A .jsonl file gets one record per workload (loadable with `datasets`), "
-        "other extensions get the legacy JSON payload",
+        help="Save results as JSON Lines, one record per workload (loadable with `datasets`)",
     )
     benchmark_parser.add_argument(
         "--json",
         action="store_true",
-        help="Print full JSON results to stdout (in addition to table)",
+        help="Print the result records as JSON Lines to stdout (in addition to the table)",
     )
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)

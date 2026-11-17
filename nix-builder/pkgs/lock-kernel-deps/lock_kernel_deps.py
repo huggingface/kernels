@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!@python@/bin/python
 """Lock a kernel's dependencies and compute the Nix hashes.
 
 Reads the kernel's `build.toml`, resolves its dependencies to commits, and
@@ -87,7 +87,9 @@ def main() -> None:
 
     nix_locks = NixKernelLocks(
         {
-            dep: NixKernelLock(lock.commit, nix_hash(dep.repo_id, lock.commit))
+            dep: NixKernelLock(
+                str(lock.commit), nix_hash(dep.repo_id, str(lock.commit))
+            )
             for dep, lock in _report(locks.items())
         }
     )

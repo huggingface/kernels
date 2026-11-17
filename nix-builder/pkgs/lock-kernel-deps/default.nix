@@ -1,15 +1,23 @@
 {
-  replaceVars,
-  runCommand,
+  python3,
+  replaceVarsWith,
 }:
 
 let
-  lockKernelDeps = replaceVars ./lock_kernel_deps.py {
+  python = python3.withPackages (
+    ps: with ps; [
+      huggingface-hub
+      (kernels.override { withTorch = false; })
+    ]
+  );
+in
+replaceVarsWith {
+  name = "lock-kernel-deps";
+  src = ./lock_kernel_deps.py;
+  replacements = {
+    inherit python;
     download = ../fetch-from-huggingface/download.py;
   };
-in
-runCommand "lock-kernel-deps" { } ''
-  mkdir -p $out/bin
-  install -Dm0755 ${lockKernelDeps} $out/bin/lock-kernel-deps
-  patchShebangs $out/bin/lock-kernel-deps
-''
+  dir = "bin";
+  isExecutable = true;
+}

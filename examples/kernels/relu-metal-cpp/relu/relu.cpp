@@ -5,14 +5,53 @@
 #include <Metal/Metal.hpp>
 #include <Foundation/NSSharedPtr.hpp>
 
+#include <dispatch/dispatch.h>
+#include <torch/mps.h>
 #include <torch/torch.h>
 
 // C interface from metallib_loader.mm
 extern "C" void* loadEmbeddedMetalLibrary(void* device, const char** errorMsg);
 extern "C" void* getMPSDevice();
-extern "C" void* getMPSCommandQueue();
 
 namespace {
+
+struct ReluEncodeArgs {
+  MTL::CommandBuffer* commandBuffer;
+  MTL::ComputePipelineState* pipelineState;
+  MTL::Buffer* inputBuffer;
+  NS::UInteger inputOffset;
+  MTL::Buffer* outputBuffer;
+  NS::UInteger outputOffset;
+  NS::UInteger numel;
+  bool encoded;
+};
+
+// Runs on PyTorch's MPS dispatch queue; reports failure through `encoded`.
+void encodeRelu(void* ctx) {
+  auto* args = static_cast<ReluEncodeArgs*>(ctx);
+
+  MTL::ComputeCommandEncoder* encoder = args->commandBuffer->computeCommandEncoder();
+  if (encoder == nullptr) {
+    return;
+  }
+
+  encoder->setComputePipelineState(args->pipelineState);
+  encoder->setBuffer(args->inputBuffer, args->inputOffset, 0);
+  encoder->setBuffer(args->outputBuffer, args->outputOffset, 1);
+
+  NS::UInteger threadGroupSize = args->pipelineState->maxTotalThreadsPerThreadgroup();
+  if (threadGroupSize > args->numel) {
+    threadGroupSize = args->numel;
+  }
+
+  const MTL::Size gridSize = MTL::Size::Make(args->numel, 1, 1);
+  const MTL::Size threadsPerThreadgroup = MTL::Size::Make(threadGroupSize, 1, 1);
+  encoder->dispatchThreads(gridSize, threadsPerThreadgroup);
+  encoder->endEncoding();
+
+  torch::mps::commit();
+  args->encoded = true;
+}
 
 MTL::Buffer* getMTLBuffer(const torch::Tensor& tensor) {
   return reinterpret_cast<MTL::Buffer*>(const_cast<void*>(tensor.storage().data()));
@@ -39,12 +78,13 @@ MTL::Library* loadLibrary(MTL::Device* device) {
 } // namespace
 
 void dispatchReluKernel(const torch::Tensor& input, torch::Tensor& output) {
-  // Use PyTorch's MPS device and command queue (these are borrowed references, not owned)
+  if (input.numel() == 0) {
+    return;
+  }
+
+  // Use PyTorch's MPS device (a borrowed reference, not owned)
   MTL::Device* device = reinterpret_cast<MTL::Device*>(getMPSDevice());
   TORCH_CHECK(device != nullptr, "Failed to get MPS device");
-
-  MTL::CommandQueue* commandQueue = reinterpret_cast<MTL::CommandQueue*>(getMPSCommandQueue());
-  TORCH_CHECK(commandQueue != nullptr, "Failed to get MPS command queue");
 
   MTL::Library* libraryPtr = reinterpret_cast<MTL::Library*>(loadLibrary(device));
   NS::SharedPtr<MTL::Library> library = NS::TransferPtr(libraryPtr);
@@ -64,36 +104,28 @@ void dispatchReluKernel(const torch::Tensor& input, torch::Tensor& output) {
               "Failed to create compute pipeline state: ",
               pipelineError ? pipelineError->localizedDescription()->utf8String() : "Unknown error");
 
-  // Don't use SharedPtr for command buffer/encoder - they're managed by PyTorch's command queue
-  MTL::CommandBuffer* commandBuffer = commandQueue->commandBuffer();
-  TORCH_CHECK(commandBuffer != nullptr, "Failed to create Metal command buffer");
-
-  MTL::ComputeCommandEncoder* encoder = commandBuffer->computeCommandEncoder();
-  TORCH_CHECK(encoder != nullptr, "Failed to create compute command encoder");
-
-  encoder->setComputePipelineState(pipelineState.get());
-
   auto* inputBuffer = getMTLBuffer(input);
   auto* outputBuffer = getMTLBuffer(output);
   TORCH_CHECK(inputBuffer != nullptr, "Input buffer is null");
   TORCH_CHECK(outputBuffer != nullptr, "Output buffer is null");
 
-  encoder->setBuffer(inputBuffer, input.storage_offset() * input.element_size(), 0);
-  encoder->setBuffer(outputBuffer, output.storage_offset() * output.element_size(), 1);
+  auto* commandBuffer = reinterpret_cast<MTL::CommandBuffer*>(torch::mps::get_command_buffer());
+  TORCH_CHECK(commandBuffer != nullptr, "Failed to retrieve command buffer reference");
 
-  const NS::UInteger totalThreads = input.numel();
-  NS::UInteger threadGroupSize = pipelineState->maxTotalThreadsPerThreadgroup();
-  if (threadGroupSize > totalThreads) {
-    threadGroupSize = totalThreads;
-  }
+  auto serialQueue = static_cast<dispatch_queue_t>(torch::mps::get_dispatch_queue());
 
-  const MTL::Size gridSize = MTL::Size::Make(totalThreads, 1, 1);
-  const MTL::Size threadsPerThreadgroup = MTL::Size::Make(threadGroupSize, 1, 1);
-
-  encoder->dispatchThreads(gridSize, threadsPerThreadgroup);
-  encoder->endEncoding();
-
-  commandBuffer->commit();
+  ReluEncodeArgs args{
+      commandBuffer,
+      pipelineState.get(),
+      inputBuffer,
+      static_cast<NS::UInteger>(input.storage_offset() * input.element_size()),
+      outputBuffer,
+      static_cast<NS::UInteger>(output.storage_offset() * output.element_size()),
+      static_cast<NS::UInteger>(input.numel()),
+      false,
+  };
+  dispatch_sync_f(serialQueue, &args, encodeRelu);
+  TORCH_CHECK(args.encoded, "Failed to create compute command encoder");
 }
 
 void relu(torch::Tensor& out, const torch::Tensor& input) {

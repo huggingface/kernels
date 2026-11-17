@@ -1,6 +1,5 @@
 #import <Metal/Metal.h>
 #include <ATen/mps/MPSDevice.h>
-#include <ATen/mps/MPSStream.h>
 
 #ifdef EMBEDDED_METALLIB_HEADER
 #include EMBEDDED_METALLIB_HEADER
@@ -31,10 +30,5 @@ extern "C" {
   // Get PyTorch's MPS device (returns id<MTLDevice> as void*)
   void* getMPSDevice() {
     return (__bridge void*)at::mps::MPSDevice::getInstance()->device();
-  }
-
-  // Get PyTorch's current MPS command queue (returns id<MTLCommandQueue> as void*)
-  void* getMPSCommandQueue() {
-    return (__bridge void*)at::mps::getCurrentMPSStream()->commandQueue();
   }
 }

@@ -128,3 +128,43 @@ def test_run_benchmark_local(fake_kernel_repo):
     unverified = result.timing_results["ReluBenchmark.unverified"]
     assert unverified.verified is None
     assert unverified.ref_mean_ms is None
+
+
+def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
+    from kernels._internals.cli import benchmark_results
+
+    output = tmp_path / "results.jsonl"
+    benchmark.run_benchmark(
+        str(fake_kernel_repo), branch=None, version=None, iterations=5, warmup=1, output=str(output)
+    )
+
+    records = benchmark_results.read_records(output)
+    assert [(r["benchmark"], r["workload"]) for r in records] == [
+        ("ReluBenchmark", "small"),
+        ("ReluBenchmark", "unverified"),
+    ]
+    assert len({r["run_id"] for r in records}) == 1
+    small, unverified = records
+    assert small["schema_version"] == benchmark_results.SCHEMA_VERSION
+    assert small["revision"] == "local"
+    assert small["kernel_sha"] == "abc1234"
+    assert small["backend"] == "CPU"
+    assert small["iterations"] == 5
+    assert small["warmup"] == 1
+    assert small["verified"] is True
+    assert small["speedup"] is not None
+    assert len(small["samples_ms"]) == 5
+    assert unverified["verified"] is None
+    assert unverified["speedup"] is None
+    assert unverified["ref_samples_ms"] is None
+
+
+def test_read_records_rejects_newer_schema(tmp_path):
+    import json
+
+    from kernels._internals.cli import benchmark_results
+
+    path = tmp_path / "results.jsonl"
+    path.write_text(json.dumps({"schema_version": benchmark_results.SCHEMA_VERSION + 1}) + "\n")
+    with pytest.raises(ValueError, match="unsupported"):
+        benchmark_results.read_records(path)

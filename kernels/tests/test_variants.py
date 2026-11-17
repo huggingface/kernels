@@ -4,7 +4,7 @@ from packaging.version import Version
 
 from kernels.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
 from kernels.variants import (
-    _MIN_MACOS_FOR_METAL_VERSION,
+    _METAL_VERSION_FROM_MACOS,
     ArchVariant,
     Noarch,
     Python,
@@ -652,8 +652,8 @@ def test_resolve_noarch_mlx_metal_version(macos_version, expected):
 
 def test_metal_version_table_is_monotonic():
     # A newer Metal version cannot be supported by an older macOS version.
-    min_macos = [macos for _, macos in sorted(_MIN_MACOS_FOR_METAL_VERSION.items())]
-    assert min_macos == sorted(min_macos)
+    metal_versions = [metal for _, metal in sorted(_METAL_VERSION_FROM_MACOS.items())]
+    assert metal_versions == sorted(metal_versions)
 
 
 def test_resolve_noarch_mlx_requires_mlx():

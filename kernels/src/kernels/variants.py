@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 # load at runtime.
 _METAL_MIN_MACOS_VERSION = Version("26.0")
 
-# Metal language versions by minimum macOS version.
-_MIN_MACOS_FOR_METAL_VERSION: dict[Version, Version] = {
-    Version("3.1"): Version("0"),
-    Version("3.2"): Version("15.0"),
-    Version("4.0"): Version("26.0"),
-    Version("4.1"): Version("27.0"),
+# Map the minimum macOS version to the Metal version that it supports.
+_METAL_VERSION_FROM_MACOS: dict[Version, Version] = {
+    Version("0"): Version("3.1"),
+    Version("15.0"): Version("3.2"),
+    Version("26.0"): Version("4.0"),
+    Version("27.0"): Version("4.1"),
 }
 
 
@@ -49,7 +49,7 @@ def _metal_version(macos_version: Version | None) -> Version | None:
     if macos_version is None:
         return None
     return max(
-        (metal for metal, min_macos in _MIN_MACOS_FOR_METAL_VERSION.items() if macos_version >= min_macos),
+        (metal for min_macos, metal in _METAL_VERSION_FROM_MACOS.items() if macos_version >= min_macos),
         default=None,
     )
 

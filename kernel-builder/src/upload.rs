@@ -46,6 +46,7 @@ const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 const UPLOAD_COMMIT_MESSAGE: &str = "Uploaded using `kernel-builder`";
 const NEW_BRANCH_CLEANUP_COMMIT_MESSAGE: &str =
     "Remove build and benchmark files inherited from `main` using `kernel-builder`.";
+const CLEANUP_ATTEMPTS: usize = 5;
 
 const KERNELS_COMMUNITY_URL: &str =
     "https://huggingface.co/spaces/kernels-community/README/discussions/new";
@@ -630,14 +631,12 @@ fn try_find_open_upload_prs<T: RepoType>(
     Ok(prs)
 }
 
-/// Outcome of creating a branch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CreateBranch {
     Created,
     AlreadyExists,
 }
 
-/// Outcome of a commit pinned to a parent commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PinnedCommit {
     Committed,
@@ -645,28 +644,22 @@ enum PinnedCommit {
     Refused,
 }
 
-/// The Hub calls that prepare a version branch and plan an upload to it.
-///
-/// Implemented for Hub repositories, and by an in-memory Hub in the tests,
-/// which runs concurrent uploads in every order of these calls.
+/// The Hub calls of preparing and planning an upload, so the race tests can
+/// run them against an in-memory Hub.
 trait UploadHub {
-    /// The head commit of every branch.
     fn branch_heads(&self) -> std::result::Result<BTreeMap<String, String>, HFError>;
 
-    /// Create `branch` from `revision` (`main` if `None`).
+    /// Creates from `main` if `revision` is `None`.
     fn create_branch(
         &self,
         branch: &str,
         revision: Option<&str>,
     ) -> std::result::Result<CreateBranch, HFError>;
 
-    /// The ids of all commits in the history of `revision`.
     fn commit_history(&self, revision: &str) -> std::result::Result<HashSet<String>, HFError>;
 
-    /// The paths of all files at `revision`.
     fn files(&self, revision: &str) -> std::result::Result<BTreeSet<String>, HFError>;
 
-    /// Commit `operations` to `branch`, unless its head is not `parent_commit`.
     fn commit_pinned(
         &self,
         branch: &str,
@@ -749,8 +742,6 @@ impl<T: RepoType> UploadHub for HFRepositorySync<T> {
     }
 }
 
-/// Whether a commit was refused because its `parent_commit` is not the
-/// branch head anymore.
 fn is_parent_commit_mismatch(err: &HFError) -> bool {
     match err {
         HFError::Conflict { .. } => true,
@@ -765,8 +756,7 @@ fn list_repo_files(hub: &impl UploadHub, revision: &str) -> BTreeSet<String> {
     hub.files(revision).unwrap_or_default()
 }
 
-/// Make sure that the version branch exists and holds no files inherited
-/// from `main`. Returns whether this upload created the branch.
+/// Returns whether this upload created the branch.
 fn prepare_version_branch(
     hub: &impl UploadHub,
     repo_id: &str,
@@ -777,8 +767,7 @@ fn prepare_version_branch(
     let created = if heads.contains_key(branch) {
         false
     } else {
-        // Another upload (e.g. a sibling CI job) may create the branch after
-        // we listed the refs, use it as an existing branch then.
+        // A sibling job may create it after we listed the refs.
         hub.create_branch(branch, heads.get(MAIN_BRANCH).map(String::as_str))
             .wrap_err_with(|| {
                 if create_pr {
@@ -799,66 +788,72 @@ fn prepare_version_branch(
     Ok(created)
 }
 
-/// Remove the build and benchmark files a version branch inherited from
-/// `main`, if the branch has no commits of its own yet.
+/// Remove the build and benchmark files inherited from `main` while the
+/// branch has no commits of its own (its head is in the history of `main`,
+/// which may have moved since).
 ///
-/// Every upload calls this before it lists the files of the version branch,
-/// not only the upload that created the branch. The cleanup commit is pinned
-/// to the branch head with `parent_commit`, so it can only land as the first
-/// commit on the branch. Since every upload tries it before its own first
-/// commit, the first commit on a new branch is always the cleanup, however
-/// concurrent uploads interleave or crash. Uploads therefore never see
-/// inherited files, and dropped variants never stay on the branch.
-///
-/// The branch head is compared with the history of `main` rather than its
-/// current head, since `main` may have moved since the branch was created.
+/// Every upload runs this before its first commit, and the cleanup is pinned
+/// to the head, so the first commit on a new branch is always the cleanup.
+/// A refusal is rechecked, since the Hub may refuse for other reasons.
 fn clean_inherited_files(hub: &impl UploadHub, branch: &str, create_pr: bool) -> Result<()> {
-    let heads = hub.branch_heads().wrap_err("Cannot list repository refs")?;
-    let head = heads
-        .get(branch)
-        .ok_or_else(|| eyre!("Branch `{branch}` does not exist"))?;
-
-    let main_history = hub
-        .commit_history(MAIN_BRANCH)
-        .wrap_err_with(|| format!("Cannot list the commits of `{MAIN_BRANCH}`"))?;
-    if !main_history.contains(head) {
+    // Its head is always in its own history.
+    if branch == MAIN_BRANCH {
         return Ok(());
     }
 
-    let inherited_files = hub
-        .files(head)
-        .wrap_err_with(|| format!("Cannot list the files of branch `{branch}`"))?;
-    let cleanup_ops = new_branch_cleanup_ops(&inherited_files);
-    if cleanup_ops.is_empty() {
-        return Ok(());
-    }
-    let n_files = cleanup_ops.len();
+    for _ in 0..CLEANUP_ATTEMPTS {
+        let heads = hub.branch_heads().wrap_err("Cannot list repository refs")?;
+        let head = heads
+            .get(branch)
+            .ok_or_else(|| eyre!("Branch `{branch}` does not exist"))?;
 
-    match hub.commit_pinned(branch, cleanup_ops, NEW_BRANCH_CLEANUP_COMMIT_MESSAGE, head) {
-        Ok(PinnedCommit::Committed) => {
-            eprintln!("Removed {n_files} file(s) inherited from `{MAIN_BRANCH}` on `{branch}`");
-            Ok(())
+        let main_history = hub
+            .commit_history(MAIN_BRANCH)
+            .wrap_err_with(|| format!("Cannot list the commits of `{MAIN_BRANCH}`"))?;
+        if !main_history.contains(head) {
+            return Ok(());
         }
-        // Another upload committed first, which means that the cleanup has
-        // already landed.
-        Ok(PinnedCommit::Refused) => Ok(()),
-        // Pull request uploads may lack write access to the branch itself.
-        Err(err @ (HFError::Forbidden { .. } | HFError::AuthRequired { .. })) if create_pr => {
-            eprintln!(
-                "Warning: cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`, \
-                 keeping them: {err}"
-            );
-            Ok(())
+
+        let inherited_files = hub
+            .files(head)
+            .wrap_err_with(|| format!("Cannot list the files of branch `{branch}`"))?;
+        let cleanup_ops = new_branch_cleanup_ops(&inherited_files);
+        if cleanup_ops.is_empty() {
+            return Ok(());
         }
-        Err(err) => Err(err).wrap_err_with(|| {
-            format!("Cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`")
-        }),
+        let n_files = cleanup_ops.len();
+
+        match hub.commit_pinned(branch, cleanup_ops, NEW_BRANCH_CLEANUP_COMMIT_MESSAGE, head) {
+            Ok(PinnedCommit::Committed) => {
+                eprintln!("Removed {n_files} file(s) inherited from `{MAIN_BRANCH}` on `{branch}`");
+                return Ok(());
+            }
+            // Usually another upload committed first, check the head again.
+            Ok(PinnedCommit::Refused) => continue,
+            // Pull request uploads may lack write access to the branch itself.
+            Err(err @ (HFError::Forbidden { .. } | HFError::AuthRequired { .. })) if create_pr => {
+                eprintln!(
+                    "Warning: cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`, \
+                     keeping them: {err}"
+                );
+                return Ok(());
+            }
+            Err(err) => {
+                return Err(err).wrap_err_with(|| {
+                    format!("Cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`")
+                });
+            }
+        }
     }
+
+    bail!(
+        "Cannot remove files inherited from `{MAIN_BRANCH}` on `{branch}`: the cleanup commit \
+         was refused {CLEANUP_ATTEMPTS} times while the branch had no commits of its own"
+    )
 }
 
-/// The operations of an upload, per branch. Diffs against `revision_of` each
-/// branch, which is the pull request ref when updating an open pull request,
-/// since it may already differ from the branch it targets.
+/// Diffs against `revision_of` each branch, the ref of an open pull request
+/// may already differ from its branch.
 fn plan_upload(
     hub: &impl UploadHub,
     kernel_dir: &Path,
@@ -880,8 +875,6 @@ fn plan_upload(
     )
 }
 
-/// Operations that remove the build and benchmark files a new branch
-/// inherits from the branch it was created from.
 fn new_branch_cleanup_ops(inherited_files: &BTreeSet<String>) -> Vec<CommitOperation> {
     inherited_files
         .iter()
@@ -903,13 +896,16 @@ fn collect_commit_ops(
 ) -> Result<BTreeMap<String, Vec<CommitOperation>>> {
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
 
-    collect_readme_commit_ops(
-        build_dir,
-        main_existing_files,
-        operations_by_branch
-            .entry(MAIN_BRANCH.to_owned())
-            .or_default(),
-    );
+    // When the version branch is `main`, its README is updated below.
+    if branch != MAIN_BRANCH {
+        collect_readme_commit_ops(
+            build_dir,
+            main_existing_files,
+            operations_by_branch
+                .entry(MAIN_BRANCH.to_owned())
+                .or_default(),
+        );
+    }
 
     let version_ops = operations_by_branch.entry(branch.to_owned()).or_default();
 
@@ -1298,6 +1294,49 @@ mod tests {
         collect_readme_commit_ops(&build_dir, &BTreeSet::new(), &mut operations);
 
         assert!(operations.is_empty());
+    }
+
+    #[test]
+    fn test_collect_commit_ops_readme_once_on_main() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+        let build_dir = kernel_dir.join("build");
+
+        let variant = build_dir.join("torch-cuda");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), "{}").unwrap();
+        let variants = vec![variant];
+        let existing = BTreeSet::from(["README.md".to_owned()]);
+
+        // Added with a card, deleted without one.
+        for with_card in [true, false] {
+            let card = build_dir.join("CARD.md");
+            if with_card {
+                fs::write(&card, "# Readme").unwrap();
+            } else {
+                fs::remove_file(&card).unwrap();
+            }
+
+            let operations_by_branch = collect_commit_ops(
+                kernel_dir,
+                &build_dir,
+                &variants,
+                MAIN_BRANCH,
+                &existing,
+                &existing,
+            )
+            .unwrap();
+
+            assert_eq!(operations_by_branch.len(), 1);
+            let readme_ops = operations_by_branch[MAIN_BRANCH]
+                .iter()
+                .filter(|op| match op {
+                    CommitOperation::Add { path_in_repo, .. }
+                    | CommitOperation::Delete { path_in_repo } => path_in_repo == "README.md",
+                })
+                .count();
+            assert_eq!(readme_ops, 1, "with_card = {with_card}");
+        }
     }
 
     #[test]

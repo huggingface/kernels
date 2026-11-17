@@ -1,11 +1,6 @@
-//! Concurrent uploads to a new version branch, run against an in-memory Hub.
-//!
-//! Every Hub call is a scheduling point: a deterministic scheduler lets one
-//! upload at a time make its next Hub call, so the tests can run every order
-//! of the calls of concurrent uploads (or many random ones), like CI jobs
-//! that upload the variants of a new version in parallel. After every run,
-//! the branch is checked: all uploads succeed, the files of every upload are
-//! there, and no file inherited from `main` is left.
+//! Concurrent uploads to a version branch against an in-memory Hub. Every Hub
+//! call is a scheduling point, so the tests run every order of the calls (or
+//! random ones) and check the branch after each run.
 
 use std::{
     cell::Cell,
@@ -27,18 +22,14 @@ use super::{
 
 const BRANCH: &str = "v2";
 const MAIN_CONTENT: &str = "main";
-/// Content of the files of an earlier upload to an existing version branch.
 const EARLIER_CONTENT: &str = "earlier";
-
-// ---- scheduler ----
 
 thread_local! {
     static JOB: Cell<usize> = const { Cell::new(usize::MAX) };
 }
 
-/// The branches a Hub call reads and writes. Two calls of different jobs
-/// give the same result in either order unless one writes a branch the
-/// other uses, so only the order of such dependent calls is explored.
+/// Branches a Hub call reads and writes. Only the order of calls that touch
+/// the same branch, with at least one write, is explored.
 #[derive(Clone, Debug, Default)]
 struct Access {
     reads_all: bool,
@@ -54,7 +45,7 @@ impl Access {
         }
     }
 
-    /// Reads `revision`, unless it is a commit id, since commits are immutable.
+    /// Commit ids are immutable, so reading one does not depend on any branch.
     fn read(revision: &str) -> Self {
         let is_commit_id =
             revision.starts_with('c') && revision[1..].chars().all(|c| c.is_ascii_digit());
@@ -93,13 +84,12 @@ struct SchedState {
     running: Option<usize>,
     crash: HashSet<usize>,
     choices: Option<Choices>,
-    /// The rest of the run is equivalent to an earlier run, and the remaining
+    /// The rest of the run is equivalent to an earlier one, so the remaining
     /// jobs are crashed to end it.
     stopped: bool,
 }
 
-/// Runs one job at a time: a job runs until its next Hub call, then waits
-/// until the scheduler picks it again.
+/// Runs one job at a time, switching only at Hub calls.
 #[derive(Default)]
 struct Scheduler {
     state: Mutex<SchedState>,
@@ -107,8 +97,7 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    /// Called by a job before every Hub call. Returns `false` if the job
-    /// should crash at this call.
+    /// Returns `false` if the job should crash at this call.
     fn yield_now(&self, access: Access) -> bool {
         let job = JOB.get();
         let mut state = self.state.lock().unwrap();
@@ -129,8 +118,7 @@ impl Scheduler {
         self.schedule(&mut state);
     }
 
-    /// Once every live job waits for its next Hub call, pick the job to run.
-    /// The job that yields picks, so there is no separate scheduler thread.
+    /// The job that yields picks the next one, so there is no scheduler thread.
     fn schedule(&self, state: &mut SchedState) {
         if state.running.is_some() || state.waiting.len() != state.live.len() {
             return;
@@ -161,12 +149,9 @@ impl Scheduler {
     }
 }
 
-// ---- in-memory Hub ----
-
 #[derive(Clone)]
 struct Commit {
     parent: Option<String>,
-    /// File path to content.
     files: BTreeMap<String, String>,
 }
 
@@ -174,17 +159,14 @@ struct RepoState {
     commits: HashMap<String, Commit>,
     branches: BTreeMap<String, String>,
     next_id: usize,
-    /// Whether deleting a file that does not exist fails the commit. The
-    /// tests run with both, since either may be the behavior of the Hub.
+    /// Whether deleting a missing file fails the commit, the Hub may do either.
     strict_deletes: bool,
-    /// The number of upcoming pinned commits to refuse although their parent
-    /// commit is the branch head, like a conflict for another reason.
+    /// Pinned commits to refuse even though the parent matches, like a 409
+    /// for another reason.
     spurious_refusals: usize,
-    /// Hub calls in the order they ran, for failure reports.
     log: Vec<String>,
 }
 
-/// A Hub repository in memory.
 struct FakeHub {
     sched: Scheduler,
     repo: Mutex<RepoState>,
@@ -238,7 +220,6 @@ impl FakeHub {
         hub
     }
 
-    /// Yield to the scheduler, then run `f` on the repository.
     fn call<R>(
         &self,
         access: Access,
@@ -265,7 +246,7 @@ impl FakeHub {
         self.repo.lock().unwrap().log.join("\n")
     }
 
-    /// Unpinned commit, like the upload commits of `run_upload_typed`.
+    /// Unpinned, like the upload commits.
     fn commit(
         &self,
         branch: &str,
@@ -435,14 +416,10 @@ impl UploadHub for FakeHub {
     }
 }
 
-// ---- uploads ----
-
-/// The build of one upload job: some variants with a few files each.
 struct Job {
     kernel_dir: PathBuf,
     build_dir: PathBuf,
     variants: Vec<PathBuf>,
-    /// Repository path to content, of every file the job uploads.
     files: BTreeMap<String, String>,
 }
 
@@ -472,12 +449,11 @@ impl Job {
     }
 }
 
-/// The steps of a direct upload in `run_upload_typed`.
 fn upload(hub: &FakeHub, job: &Job) -> Result<()> {
     upload_to(hub, job, BRANCH)
 }
 
-/// The steps of a direct upload to `branch` in `run_upload_typed`.
+/// Mirrors a direct upload in `run_upload_typed`.
 fn upload_to(hub: &FakeHub, job: &Job, branch: &str) -> Result<()> {
     prepare_version_branch(hub, "fake", branch, false)?;
     let operations_by_branch = plan_upload(
@@ -496,7 +472,6 @@ fn upload_to(hub: &FakeHub, job: &Job, branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Another commit on `main` while the uploads run.
 fn move_main(hub: &FakeHub) -> Result<()> {
     hub.commit(
         MAIN_BRANCH,
@@ -508,8 +483,7 @@ fn move_main(hub: &FakeHub) -> Result<()> {
     Ok(())
 }
 
-/// `main` with an earlier version: the variants `old-a` and `old-b` are not
-/// built anymore and must not end up on the new version branch.
+/// `old-a` and `old-b` are not built anymore and must not reach the branch.
 fn main_files() -> BTreeMap<String, String> {
     let mut files = BTreeMap::from([
         ("README.md".to_owned(), "readme".to_owned()),
@@ -526,8 +500,8 @@ fn main_files() -> BTreeMap<String, String> {
     files
 }
 
-/// An earlier upload to the version branch: `torch-a` with a file that the
-/// new build does not have, and `torch-c`, which the new uploads do not build.
+/// `torch-a` has a file the new build lacks, and `torch-c` is not rebuilt so
+/// it must be kept.
 fn earlier_upload_files() -> BTreeMap<String, String> {
     let mut files = BTreeMap::from([("README.md".to_owned(), "readme".to_owned())]);
     for variant in ["torch-a", "torch-c"] {
@@ -541,14 +515,9 @@ fn earlier_upload_files() -> BTreeMap<String, String> {
     files
 }
 
-// ---- exploration ----
-
-/// A point in a run where the scheduler picked a job.
 struct Node {
-    /// The jobs waiting for their next Hub call, with its access.
     ready: Vec<(usize, Access)>,
-    /// Jobs that need not run here: every run that does is equivalent to a
-    /// run explored before.
+    /// Jobs whose runs from here are equivalent to ones already explored.
     sleep: BTreeSet<usize>,
     tried: BTreeSet<usize>,
     current: usize,
@@ -567,9 +536,8 @@ impl Node {
     }
 }
 
-/// Depth-first search over the orders of Hub calls, re-running the uploads
-/// from the start for every order. Uses sleep sets (Godefroid) to skip orders
-/// that only swap independent calls, which still reaches every outcome.
+/// Depth-first search over call orders, re-running the uploads for each. Sleep
+/// sets (Godefroid) skip orders that only swap independent calls.
 #[derive(Default)]
 struct Explorer {
     stack: Vec<Node>,
@@ -577,8 +545,7 @@ struct Explorer {
 }
 
 impl Explorer {
-    /// Pick the job to run, or `None` if the rest of this run is equivalent
-    /// to a run explored before.
+    /// `None` if the rest of this run is equivalent to an explored one.
     fn pick(&mut self, ready: Vec<(usize, Access)>) -> Option<usize> {
         let depth = self.depth;
         self.depth += 1;
@@ -618,7 +585,7 @@ impl Explorer {
         Some(current)
     }
 
-    /// Move to the next order to explore. Returns `false` when all are done.
+    /// Returns `false` when every order is done.
     fn backtrack(&mut self) -> bool {
         self.depth = 0;
         while let Some(node) = self.stack.last_mut() {
@@ -633,10 +600,9 @@ impl Explorer {
     }
 }
 
-/// How the scheduler picks the next job.
 enum Choices {
     All(Explorer),
-    /// Pick at random, and crash a job at a Hub call with `crash_odds`.
+    /// Crashes a job at a Hub call with odds `1 / crash_odds`.
     Random {
         rng: u64,
         crash_odds: u64,
@@ -652,7 +618,6 @@ impl Choices {
         rng.wrapping_mul(0x2545_f491_4f6c_dd1d)
     }
 
-    /// The job to run, and whether it crashes; `None` to stop this run.
     fn pick(&mut self, ready: Vec<(usize, Access)>) -> Option<(usize, bool)> {
         match self {
             Choices::All(explorer) => explorer.pick(ready).map(|job| (job, false)),
@@ -668,22 +633,16 @@ impl Choices {
 #[derive(Clone, Copy, Debug)]
 struct Options {
     start: Start,
-    /// Also commit to `main` while the uploads run.
     move_main: bool,
     strict_deletes: bool,
-    /// See `RepoState::spurious_refusals`.
     spurious_refusals: usize,
 }
 
-/// The version branch before the uploads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Start {
-    /// It does not exist yet: the first uploads of a new version.
     NewBranch,
-    /// It exists and points to a commit of `main`, so it has no uploads yet
-    /// and is cleaned like a new branch.
+    /// Points to a `main` commit, so it is cleaned like a new branch.
     AtMainCommit,
-    /// It has an earlier upload (`earlier_upload_files`).
     OwnCommits,
 }
 
@@ -698,10 +657,7 @@ impl Options {
     }
 }
 
-/// Run the jobs (and `main` moving, if `move_main_too`) concurrently under
-/// `choices`, then check the version branch.
-/// Returns whether the run was checked, i.e. not stopped as equivalent to an
-/// earlier one.
+/// Returns `false` if the run was stopped as equivalent to an earlier one.
 fn run_once(jobs: &[Job], options: Options, choices: &mut Choices) -> bool {
     let hub = FakeHub::new(main_files(), options);
     let n_threads = jobs.len() + usize::from(options.move_main);
@@ -779,8 +735,7 @@ fn check(hub: &FakeHub, jobs: &[Job], options: Options, results: &[Result<()>]) 
             ));
         }
     }
-    // The variants that the successful uploads replaced hold only files of
-    // those uploads, and the other variants of an earlier upload are kept.
+    // Rebuilt variants hold only uploaded files, the others are kept.
     let built: BTreeSet<&str> = succeeded
         .iter()
         .flat_map(|id| jobs[*id].files.keys())
@@ -827,8 +782,7 @@ fn check(hub: &FakeHub, jobs: &[Job], options: Options, results: &[Result<()>]) 
     }
 }
 
-/// Run every order of the Hub calls of the jobs, up to equivalence. Returns
-/// the number of runs that were checked.
+/// Returns the number of runs that were checked.
 fn run_all_orders(jobs: &[Job], options: Options) -> usize {
     let mut choices = Choices::All(Explorer::default());
     let mut checked = 0;
@@ -853,7 +807,6 @@ fn run_random_orders(jobs: &[Job], options: Options, runs: u64, crash_odds: u64)
     }
 }
 
-/// Run `f` with every `Options`, in parallel.
 fn for_all_options(start: Start, move_main: bool, f: impl Fn(Options) + Sync) {
     std::thread::scope(|scope| {
         for options in Options::all(start, move_main) {
@@ -926,7 +879,6 @@ fn two_uploads_to_branch_at_main_commit_in_every_order() {
     });
 }
 
-/// Run `f` as the only job, in a run without crashes.
 fn run_alone<R>(hub: &FakeHub, f: impl FnOnce() -> R) -> R {
     {
         let mut state = hub.sched.state.lock().unwrap();
@@ -973,8 +925,7 @@ fn upload_to_main_keeps_other_variants() {
     }
 }
 
-/// A refused cleanup must not be taken as proof that another upload cleaned
-/// the branch: the Hub may refuse a commit for another reason.
+/// The Hub may refuse a cleanup for another reason than a sibling's commit.
 #[test]
 fn upload_after_spurious_cleanup_refusal() {
     let tmp = tempfile::tempdir().unwrap();

@@ -282,3 +282,23 @@ def test_run_benchmark_downloads_benchmarks_from_kernel_repo(fake_kernel_repo, m
             "allow_patterns": ["benchmarks/**"],
         }
     ]
+
+
+@pytest.mark.parametrize("name", __import__("kernels._internals.benchmarks", fromlist=["__all__"]).__all__)
+def test_builtin_benchmarks_use_runner_device(name):
+    """Built-in benchmarks must allocate on the device chosen by the runner (#669)."""
+    import kernels._internals.benchmarks
+
+    cls = getattr(kernels._internals.benchmarks, name)
+    setups = [m for m in dir(cls) if m.startswith("setup_")]
+    assert setups
+    for setup in setups:
+        instance = cls()
+        # The meta device allocates nothing, so even large workloads are cheap.
+        instance.device = "meta"
+        getattr(instance, setup)()
+        tensors = [v for v in vars(instance).values() if isinstance(v, torch.Tensor)]
+        assert tensors, f"{name}.{setup} did not create tensors"
+        for t in tensors:
+            if t.numel() > 1 or t.device.type != "cpu":
+                assert t.device.type == "meta", f"{name}.{setup} allocated on {t.device}"

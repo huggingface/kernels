@@ -81,12 +81,16 @@ class TimingResults:
     min_ms: float
     max_ms: float
     iterations: int
+    median_ms: float = 0.0
     q1_ms: float = 0.0  # 25th percentile
     q3_ms: float = 0.0  # 75th percentile
     iqr_ms: float = 0.0  # Interquartile range (Q3 - Q1)
     outliers: int = 0  # Count of outliers (outside Q1-1.5*IQR to Q3+1.5*IQR)
     verified: bool | None = None  # None = no verify fn, True = passed, False = failed
     ref_mean_ms: float | None = None  # Reference implementation mean time
+    ref_median_ms: float | None = None  # Reference implementation median time
+    samples_ms: list[float] | None = None  # Raw per-iteration timings
+    ref_samples_ms: list[float] | None = None  # Raw per-iteration reference timings
 
     def validate_iterations(self):
         if self.iterations <= 0:
@@ -512,60 +516,77 @@ def run_benchmark_class(
 
         # Run verification and time reference if verify exists
         verified: bool | None = None
-        ref_mean_ms: float | None = None
+        ref_times_ms: list[float] | None = None
         if verify_fn is not None:
             benchmark_fn()  # Populate output
             _synchronize()
-
-            # Warmup the verify/reference computation
-            for _ in range(warmup):
-                verify_fn()
-                _synchronize()
-
-            # Time the verify/reference computation
-            start = time.perf_counter()
             verify_result = verify_fn()
             _synchronize()
-            ref_mean_ms = round((time.perf_counter() - start) * 1000, 4)
 
             verified = torch.allclose(instance.out, verify_result, atol=1e-2)
             if not verified:
                 raise RuntimeError(f"Verification failed for {workload_name}")
 
-        # Warmup
-        for _ in range(warmup):
-            benchmark_fn()
-            _synchronize()
+            # Time the reference with the same loop as the kernel, so that
+            # the speedup compares like with like.
+            ref_times_ms = _time_fn(verify_fn, iterations=iterations, warmup=warmup)
 
-        # Timing
-        times_ms = []
-        for _ in range(iterations):
-            start = time.perf_counter()
-            benchmark_fn()
-            _synchronize()
-            end = time.perf_counter()
-            times_ms.append((end - start) * 1000)
-
-        mean_ms = sum(times_ms) / len(times_ms)
-        variance = sum((t - mean_ms) ** 2 for t in times_ms) / len(times_ms)
-        std_ms = variance**0.5
-        q1, q3, iqr, outlier_count = _calculate_iqr_and_outliers(times_ms)
-
-        results[workload_name] = TimingResults(
-            mean_ms=round(mean_ms, 4),
-            std_ms=round(std_ms, 4),
-            min_ms=round(min(times_ms), 4),
-            max_ms=round(max(times_ms), 4),
-            iterations=iterations,
-            q1_ms=round(q1, 4),
-            q3_ms=round(q3, 4),
-            iqr_ms=round(iqr, 4),
-            outliers=outlier_count,
-            verified=verified,
-            ref_mean_ms=ref_mean_ms,
-        )
+        times_ms = _time_fn(benchmark_fn, iterations=iterations, warmup=warmup)
+        results[workload_name] = _timing_results(times_ms, verified=verified, ref_times_ms=ref_times_ms)
 
     return results, kernel_sha
+
+
+def _time_fn(fn: Any, iterations: int, warmup: int) -> list[float]:
+    """Run `fn` `warmup` times, then return `iterations` wall-clock samples in ms."""
+    for _ in range(warmup):
+        fn()
+        _synchronize()
+
+    times_ms = []
+    for _ in range(iterations):
+        start = time.perf_counter()
+        fn()
+        _synchronize()
+        end = time.perf_counter()
+        times_ms.append((end - start) * 1000)
+    return times_ms
+
+
+def _timing_results(
+    times_ms: list[float],
+    verified: bool | None = None,
+    ref_times_ms: list[float] | None = None,
+) -> TimingResults:
+    mean_ms = sum(times_ms) / len(times_ms)
+    variance = sum((t - mean_ms) ** 2 for t in times_ms) / len(times_ms)
+    std_ms = variance**0.5
+    sorted_times = sorted(times_ms)
+    q1, q3, iqr, outlier_count = _calculate_iqr_and_outliers(times_ms)
+
+    ref_mean_ms = None
+    ref_median_ms = None
+    if ref_times_ms:
+        ref_mean_ms = round(sum(ref_times_ms) / len(ref_times_ms), 4)
+        ref_median_ms = round(_percentile(sorted(ref_times_ms), 50), 4)
+
+    return TimingResults(
+        mean_ms=round(mean_ms, 4),
+        std_ms=round(std_ms, 4),
+        min_ms=round(sorted_times[0], 4),
+        max_ms=round(sorted_times[-1], 4),
+        iterations=len(times_ms),
+        median_ms=round(_percentile(sorted_times, 50), 4),
+        q1_ms=round(q1, 4),
+        q3_ms=round(q3, 4),
+        iqr_ms=round(iqr, 4),
+        outliers=outlier_count,
+        verified=verified,
+        ref_mean_ms=ref_mean_ms,
+        ref_median_ms=ref_median_ms,
+        samples_ms=[round(t, 6) for t in times_ms],
+        ref_samples_ms=[round(t, 6) for t in ref_times_ms] if ref_times_ms else None,
+    )
 
 
 def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchmark]]:

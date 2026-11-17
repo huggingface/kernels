@@ -78,11 +78,7 @@ MTL::Library* loadLibrary(MTL::Device* device) {
 } // namespace
 
 void dispatchReluKernel(const torch::Tensor& input, torch::Tensor& output) {
-  if (input.numel() == 0) {
-    return;
-  }
-
-  // Use PyTorch's MPS device (a borrowed reference, not owned)
+  // Use PyTorch's MPS device (borrowed reference, not owned)
   MTL::Device* device = reinterpret_cast<MTL::Device*>(getMPSDevice());
   TORCH_CHECK(device != nullptr, "Failed to get MPS device");
 

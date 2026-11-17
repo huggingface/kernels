@@ -108,10 +108,10 @@ class Torch:
         return f"{base}-{'cxx11' if self.cxx11_abi else 'cxx98'}"
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "Torch":
-        m = (Torch._LEGACY_VARIANT_REGEX if legacy else Torch._VARIANT_REGEX).fullmatch(s)
+    def parse(variant_str: str, *, legacy: bool = True) -> "Torch":
+        m = (Torch._LEGACY_VARIANT_REGEX if legacy else Torch._VARIANT_REGEX).fullmatch(variant_str)
         if not m:
-            raise ValueError(f"Invalid Torch variant string: {s!r}")
+            raise ValueError(f"Invalid Torch variant string: {variant_str!r}")
         version = Version(f"{m.group(1)}.{m.group(2)}")
         abi_str = m.group(3)
         if abi_str is None:
@@ -146,15 +146,15 @@ class TorchStableAbi:
         return _format_version("torch-stable-abi", "torch-stable-abi-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "TorchStableAbi":
+    def parse(variant_str: str, *, legacy: bool = True) -> "TorchStableAbi":
         version = _parse_version(
             TorchStableAbi._LEGACY_VARIANT_REGEX,
             TorchStableAbi._VARIANT_REGEX,
-            s,
+            variant_str,
             legacy,
         )
         if version is None:
-            raise ValueError(f"Invalid Torch stable ABI variant string: {s!r}")
+            raise ValueError(f"Invalid Torch stable ABI variant string: {variant_str!r}")
         return TorchStableAbi(version=version, legacy=legacy)
 
 
@@ -176,10 +176,10 @@ class TvmFfi:
         return _format_version("tvm-ffi", "tvm-ffi-", self.version, self.legacy)
 
     @staticmethod
-    def parse(s: str, *, legacy: bool = True) -> "TvmFfi":
-        version = _parse_version(TvmFfi._LEGACY_VARIANT_REGEX, TvmFfi._VARIANT_REGEX, s, legacy)
+    def parse(variant_str: str, *, legacy: bool = True) -> "TvmFfi":
+        version = _parse_version(TvmFfi._LEGACY_VARIANT_REGEX, TvmFfi._VARIANT_REGEX, variant_str, legacy)
         if version is None:
-            raise ValueError(f"Invalid TvmFfi variant string: {s!r}")
+            raise ValueError(f"Invalid TvmFfi variant string: {variant_str!r}")
         return TvmFfi(version=version, legacy=legacy)
 
 
@@ -304,12 +304,14 @@ class Noarch:
         return f"{self.backend_name}-{self.version.major}.{self.version.minor}"
 
     @staticmethod
-    def parse(s: str, *, versioned: bool = False) -> "Noarch":
+    def parse(variant_str: str, *, versioned: bool = False) -> "Noarch":
         if not versioned:
-            return Noarch(backend_name=s)
-        m = Noarch._VERSIONED_REGEX.fullmatch(s)
+            return Noarch(backend_name=variant_str)
+        m = Noarch._VERSIONED_REGEX.fullmatch(variant_str)
         if m is None:
-            raise ValueError(f"Invalid versioned noarch backend, expected `[name]-[major].[minor]`, got: {s!r}")
+            raise ValueError(
+                f"Invalid versioned noarch backend, expected `[name]-[major].[minor]`, got: {variant_str!r}"
+            )
         return Noarch(
             backend_name=m.group("name"),
             version=Version(f"{m.group('major')}.{m.group('minor')}"),

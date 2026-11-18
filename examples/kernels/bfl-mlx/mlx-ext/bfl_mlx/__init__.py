@@ -2,7 +2,33 @@ from functools import lru_cache
 
 import mlx.core as mx
 
-from ._shader import HEAD_DIM, HEADER, SOURCE, THREADS_PER_THREADGROUP, launch_shape
+from ._shader import (
+    HEAD_DIM,
+    HEADER,
+    PROBE_HEADER,
+    PROBE_SOURCE,
+    SOURCE,
+    THREADS_PER_THREADGROUP,
+    detect_layout,
+    launch_shape,
+)
+
+
+def _layout() -> int:
+    probe = mx.fast.metal_kernel(
+        name="probe",
+        input_names=["x"],
+        output_names=["o"],
+        header=HEADER + PROBE_HEADER,
+        source=PROBE_SOURCE,
+    )(
+        inputs=[mx.zeros((1,), dtype=mx.int32)],
+        grid=(32, 1, 1),
+        threadgroup=(32, 1, 1),
+        output_shapes=[(32, 192)],
+        output_dtypes=[mx.int32],
+    )[0]
+    return detect_layout(probe.tolist())
 
 
 @lru_cache(maxsize=1)
@@ -11,7 +37,7 @@ def _kernel():
         name="dense_attention_bf16_d128",
         input_names=["q", "k", "v"],
         output_names=["o"],
-        header=HEADER,
+        header=f"#define LAYOUT {_layout()}\n" + HEADER,
         source=SOURCE,
     )
 

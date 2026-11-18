@@ -41,7 +41,7 @@ def test_torch_compile():
     assert torch.equal(compiled(q, k, v), bfl.dense_attention(q, k, v) * 2.0)
 
 
-# Not a kernels_ci test: the output does not match SDPA on an M3 Max.
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("shape", [(1, 64, 1, 128), (2, 128, 3, 128)])
 def test_matches_sdpa(shape):
     q, k, v = _inputs(shape)

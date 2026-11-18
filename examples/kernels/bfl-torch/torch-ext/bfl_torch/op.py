@@ -3,7 +3,15 @@ from functools import lru_cache
 import torch
 
 from ._ops import add_op_namespace_prefix
-from ._shader import HEADER, SOURCE, THREADS_PER_THREADGROUP, launch_shape
+from ._shader import (
+    HEADER,
+    PROBE_HEADER,
+    PROBE_SOURCE,
+    SOURCE,
+    THREADS_PER_THREADGROUP,
+    detect_layout,
+    launch_shape,
+)
 
 # `torch.mps.compile_shader` targets Metal 4.0 since this Torch version.
 _MIN_TORCH_VERSION = (2, 11)
@@ -21,6 +29,20 @@ kernel void dense_attention_bf16_d128(
 }
 """
 
+_PROBE_SIGNATURE = """
+kernel void probe(device int* o [[buffer(0)]], uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
+%s
+}
+"""
+
+
+@lru_cache(maxsize=None)
+def _layout() -> int:
+    lib = torch.mps.compile_shader(HEADER + PROBE_HEADER + _PROBE_SIGNATURE % PROBE_SOURCE)
+    probe = torch.empty((32, 192), dtype=torch.int32, device="mps")
+    lib.probe(probe, threads=[32], group_size=[32])
+    return detect_layout(probe.tolist())
+
 
 @lru_cache(maxsize=None)
 def _library(seq: int, heads: int, scale2_bits: int):
@@ -30,7 +52,8 @@ def _library(seq: int, heads: int, scale2_bits: int):
             f"dense_attention requires torch >= {'.'.join(map(str, _MIN_TORCH_VERSION))}, got {torch.__version__}"
         )
     defines = f"#define SEQ {seq}\n#define HEADS {heads}\n#define SCALE2_BITS {scale2_bits}\n"
-    return torch.mps.compile_shader(HEADER + defines + _SIGNATURE % SOURCE)
+    defines += f"#define LAYOUT {_layout()}\n"
+    return torch.mps.compile_shader(defines + HEADER + _SIGNATURE % SOURCE)
 
 
 @torch.library.custom_op(add_op_namespace_prefix("dense_attention"), mutates_args=(), device_types="mps")

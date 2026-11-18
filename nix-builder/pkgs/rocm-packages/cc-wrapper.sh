@@ -250,6 +250,25 @@ if (( "${NIX_DEBUG:-0}" >= 1 )); then
 fi
 
 export PATH="$path_backup"
+
+# Compile multi-architecture HIP code with the per-architecture device jobs
+# running in parallel. This is enabled by setting HIP_OFFLOAD_JOBS to the
+# maximum number of concurrent jobs. See hip-parallel-driver.
+hipParallel=0
+if [[ "${HIP_OFFLOAD_JOBS:-1}" =~ ^[0-9]+$ ]] && (( ${HIP_OFFLOAD_JOBS:-1} > 1 )) && [[ -x @hipParallelDriver@ ]]; then
+    hipOffloadArchs=0
+    hipCompileOnly=0
+    for p in ${params+"${params[@]}"}; do
+        case "$p" in
+            --offload-arch=*) hipOffloadArchs=$((hipOffloadArchs + 1)) ;;
+            -c) hipCompileOnly=1 ;;
+        esac
+    done
+    if (( hipOffloadArchs > 1 && hipCompileOnly )); then
+        hipParallel=1
+    fi
+fi
+
 # Old bash workaround, see above.
 
 if (( "${NIX_CC_USE_RESPONSE_FILE:-@use_response_file_by_default@}" >= 1 )); then
@@ -259,8 +278,18 @@ if (( "${NIX_CC_USE_RESPONSE_FILE:-@use_response_file_by_default@}" >= 1 )); the
        ${extraBefore+"${extraBefore[@]}"} \
        ${params+"${params[@]}"} \
        ${extraAfter+"${extraAfter[@]}"} > "$responseFile"
-    @prog@ "@$responseFile"
+    if (( hipParallel )); then
+        @hipParallelDriver@ "$HIP_OFFLOAD_JOBS" @prog@ "@$responseFile"
+    else
+        @prog@ "@$responseFile"
+    fi
 else
+    if (( hipParallel )); then
+        exec @hipParallelDriver@ "$HIP_OFFLOAD_JOBS" @prog@ \
+           ${extraBefore+"${extraBefore[@]}"} \
+           ${params+"${params[@]}"} \
+           ${extraAfter+"${extraAfter[@]}"}
+    fi
     exec @prog@ \
        ${extraBefore+"${extraBefore[@]}"} \
        ${params+"${params[@]}"} \

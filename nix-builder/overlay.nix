@@ -249,6 +249,13 @@ final: prev:
 
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
+        # nixpkgs builds MLX without Metal support, use the upstream binaries.
+        mlx =
+          if final.stdenv.hostPlatform.isDarwin then
+            python-self.callPackage ./pkgs/python-modules/mlx-bin { }
+          else
+            python-super.mlx;
+
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
 
         opentelemetry-instrumentation-requests =

@@ -45,6 +45,7 @@ jobs:
           path: |
             relu-kernel
             relu-metal-cpp-kernel
+            relu-mlx-kernel
           retention-days: 1
           if-no-files-found: error
 
@@ -77,23 +78,28 @@ jobs:
         uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Install test dependencies and kernels from source
-        # Keep Torch aligned with torchVersion in examples/kernels/flake.nix.
+        # Keep Torch aligned with torchVersion in examples/kernels/flake.nix
+        # and MLX with nix-builder/pkgs/python-modules/mlx-bin.
         run: |
           uv venv
-          uv pip install "torch==2.13.0" numpy pytest ./kernels
+          uv pip install "torch==2.13.0" "mlx==0.32.4" numpy pytest ./kernels
 
       - name: Run Metal tests
         env:
-          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel
+          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel:kernels-test/relu-mlx=relu-mlx-kernel
           PYTORCH_ENABLE_MPS_FALLBACK: "0"
         run: |
           .venv/bin/python - <<'PY'
+          import mlx.core as mx
           import torch
 
           if not torch.backends.mps.is_available():
               raise SystemExit("Metal tests require an available MPS device.")
+          if not mx.metal.is_available():
+              raise SystemExit("Metal tests require MLX with Metal support.")
           PY
 
-          # Run separately because both suites contain a test_relu.py module.
+          # Run separately because the suites contain a test_relu.py module.
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-metal-cpp/tests
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-mlx/tests

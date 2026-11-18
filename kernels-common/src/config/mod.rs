@@ -256,6 +256,7 @@ pub struct CudaGeneral {
 }
 
 pub struct XpuGeneral {
+    pub cri_grf_size: Option<u32>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }

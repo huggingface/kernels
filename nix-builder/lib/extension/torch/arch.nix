@@ -12,6 +12,7 @@
   kernel-builder,
   cmake,
   cmakeNvccThreadsHook,
+  hipOffloadJobsHook,
   cuda_nvcc,
   generate-symbols-hook,
   get-kernel-check,
@@ -55,6 +56,7 @@
   # Extra dependencies (such as CUTLASS).
   extraDeps ? [ ],
 
+  hipOffloadJobs,
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -134,6 +136,7 @@ stdenv.mkDerivation (prevAttrs: {
   inherit
     doAbiCheck
     doKernelBuildCheck
+    hipOffloadJobs
     kernelDeps
     moduleName
     nvccThreads
@@ -202,6 +205,7 @@ stdenv.mkDerivation (prevAttrs: {
     cuda_nvcc
   ]
   ++ lib.optionals rocmSupport [
+    hipOffloadJobsHook
     clr
   ]
   ++ lib.optionals xpuSupport ([

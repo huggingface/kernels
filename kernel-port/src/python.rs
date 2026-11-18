@@ -1098,10 +1098,27 @@ fn binding_insert_point(
     }
 }
 
+// How the kernelized package is obtained.
+pub enum KernelSource<'a> {
+    // `kernels.get_kernel(kernel, version=N)`: another kernel, loaded by itself.
+    Get {
+        kernel: &'a str,
+        version: usize,
+        check_arch: bool,
+    },
+    // `kernels.get_kernel_dep(kernel)`: a dependency declared in `build.toml`
+    // (its version or revision is pinned there), available while loading.
+    Dependency {
+        kernel: &'a str,
+    },
+}
+
 // Rewrite imports of `package` into attribute access on one module-level
 // `binding = kernels.get_kernel(...)`, the form hand-written kernel tests use.
 // The binding is introduced just before the first import it replaces, so that
 // code above it, and therefore its behaviour, is unchanged.
+
+#[cfg(test)]
 pub fn kernelize_imports_source(
     path: &str,
     src: &str,
@@ -1111,6 +1128,27 @@ pub fn kernelize_imports_source(
     version: usize,
     check_arch: bool,
 ) -> Result<Option<(String, usize)>> {
+    kernelize_imports_from(
+        path,
+        src,
+        package,
+        binding,
+        &KernelSource::Get {
+            kernel,
+            version,
+            check_arch,
+        },
+    )
+}
+
+pub fn kernelize_imports_from(
+    path: &str,
+    src: &str,
+    package: &str,
+    binding: &str,
+    source: &KernelSource<'_>,
+) -> Result<Option<(String, usize)>> {
+    let (KernelSource::Get { kernel, .. } | KernelSource::Dependency { kernel }) = source;
     for (what, name) in [("package", package), ("binding", binding)] {
         let parsed: DottedPath = name.parse()?;
         if parsed.parts().len() != 1 {
@@ -1177,10 +1215,22 @@ pub fn kernelize_imports_source(
 
     let insert_at = binding_insert_point(path, module, src, &rewrites)?;
     let kernel = serde_json::to_string(kernel).unwrap();
-    let check_arch = if check_arch { "" } else { ", check_arch=False" };
-    let preamble = format!(
-        "import kernels{newline}{binding} = kernels.get_kernel({kernel}, version={version}{check_arch}){newline}"
-    );
+    let call = match source {
+        KernelSource::Get {
+            version,
+            check_arch,
+            ..
+        } => {
+            let check_arch = if *check_arch {
+                ""
+            } else {
+                ", check_arch=False"
+            };
+            format!("kernels.get_kernel({kernel}, version={version}{check_arch})")
+        }
+        KernelSource::Dependency { .. } => format!("kernels.get_kernel_dep({kernel})"),
+    };
+    let preamble = format!("import kernels{newline}{binding} = {call}{newline}");
 
     let count = rewrites.iter().map(|r| r.nodes).sum();
     // Every rewritten import lies after the insertion point.

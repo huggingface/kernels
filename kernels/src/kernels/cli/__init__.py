@@ -66,6 +66,11 @@ def main():
         action="store_true",
         help="Print the kernel information as JSON",
     )
+    info_parser.add_argument(
+        "--dep-tree",
+        action="store_true",
+        help="Show kernel dependencies as an ASCII tree (a nested object with --json)",
+    )
     info_parser.set_defaults(func=kernel_info)
 
     describe_api_parser = subparsers.add_parser("describe-api", help="List a kernel's public functions and layers")
@@ -188,6 +193,7 @@ def kernel_info(args):
         revision=args.revision,
         version=args.version,
         json_output=args.json,
+        dep_tree=args.dep_tree,
     )
 
 

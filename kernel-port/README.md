@@ -485,6 +485,24 @@ def test_a():
     ops = pkg.ops
 ```
 
+Using `dependency=true` replaces the import by a kernel-kernel dependency.
+
+```kdl
+kernelize_imports in="<glob>" package="<top-level-name>" \
+    kernel="<org/name>" dependency=#true [binding="<name>"] [changes=N]
+```
+
+```python
+import pytest
+import kernels
+pkg = kernels.get_kernel_dep("org/pkg")
+L = pkg.layers.Layer
+Block = pkg.layers.Block
+
+def test_a():
+    ops = pkg.ops
+```
+
 - The binding is introduced right before the first rewritten import when that
   import runs at module scope, and after the module docstring and `__future__`
   imports otherwise.

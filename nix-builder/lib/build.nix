@@ -28,6 +28,9 @@ let
   supportedCudaCapabilities = builtins.fromJSON (
     builtins.readFile ../../kernel-builder/src/cuda_supported_archs.json
   );
+  supportedRocmArchs = builtins.fromJSON (
+    builtins.readFile ../../kernel-builder/src/rocm_supported_archs.json
+  );
 in
 rec {
   # Source set function to create a fileset for a path
@@ -216,6 +219,12 @@ rec {
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
         ) kernelConfig.toml.kernel
       );
+      # Same for the number of parallel HIP offload jobs and ROCm architectures.
+      hipOffloadJobs = listMax (
+        lib.mapAttrsToList (
+          _: kernel: builtins.length (kernel.rocm-archs or supportedRocmArchs)
+        ) kernelConfig.toml.kernel
+      );
       kernelDeps = pkgs.fetchKernelDeps src;
       pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
       backendPythonDeps =
@@ -260,6 +269,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
+          hipOffloadJobs
           nvccThreads
           src
           stripRPath
@@ -294,6 +304,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
+          hipOffloadJobs
           nvccThreads
           src
           stripRPath

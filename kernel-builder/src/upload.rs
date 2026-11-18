@@ -301,16 +301,26 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     )?;
     let mut pull_requests: Vec<PullRequest> = Vec::new();
 
-    for (branch, operations) in &operations_by_branch {
-        if operations.is_empty() {
+    let batches_by_branch = operations_by_branch
+        .into_iter()
+        .map(|(branch, operations)| {
+            let batches = plan_batches(operations, BUILD_COMMIT_BATCH_SIZE)
+                .wrap_err_with(|| format!("Cannot plan the upload to branch `{branch}`"))?;
+            Ok((branch, batches))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+
+    for (branch, batches) in &batches_by_branch {
+        if batches.is_empty() {
             continue;
         }
 
-        let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
+        let batch_count = batches.len();
         let progress = if args.quiet {
             ProgressBar::hidden()
         } else {
-            let pb = ProgressBar::new(operations.len() as u64);
+            let op_count: usize = batches.iter().map(Vec::len).sum();
+            let pb = ProgressBar::new(op_count as u64);
             pb.set_style(
                 ProgressStyle::with_template(
                     "Uploading to `{msg}` [{bar:40.cyan/blue}] {pos}/{len} files",
@@ -343,7 +353,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             });
         }
 
-        for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
+        for (batch_index, batch) in batches.iter().enumerate() {
             let commit_message = if batch_count > 1 {
                 format!(
                     "{UPLOAD_COMMIT_MESSAGE} (batch {}/{batch_count}).",
@@ -358,7 +368,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
             let commit_info = repo
                 .create_commit()
-                .operations(chunk.to_vec())
+                .operations(batch.clone())
                 .commit_message(&commit_message)
                 .revision(revision)
                 .create_pr(open_pr)
@@ -389,8 +399,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         });
     }
 
-    let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
-    let outcome = if total_ops == 0 {
+    let outcome = if batches_by_branch.values().all(Vec::is_empty) {
         UploadOutcome {
             status: UploadStatus::NoChanges,
             repo_id,
@@ -917,6 +926,82 @@ fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<String> {
         .next()
         .map(|v| format!("v{v}"))
         .ok_or_else(|| eyre!("Cannot determine branch: no build variants found"))
+}
+
+fn operation_path(operation: &CommitOperation) -> &str {
+    match operation {
+        CommitOperation::Add { path_in_repo, .. } | CommitOperation::Delete { path_in_repo } => {
+            path_in_repo
+        }
+    }
+}
+
+fn operation_variant(operation: &CommitOperation) -> Option<&str> {
+    let path = operation_path(operation);
+    let rest = path.strip_prefix("build/")?;
+    let (variant, _) = rest.split_once('/')?;
+    Some(&path[.."build/".len() + variant.len()])
+}
+
+/// Never splits a variant that fits in one batch.
+fn plan_batches(
+    operations: Vec<CommitOperation>,
+    batch_size: usize,
+) -> Result<Vec<Vec<CommitOperation>>> {
+    let mut units: BTreeMap<Option<String>, Vec<CommitOperation>> = BTreeMap::new();
+    for operation in operations {
+        let variant = operation_variant(&operation).map(ToOwned::to_owned);
+        units.entry(variant).or_default().push(operation);
+    }
+
+    let mut batches: Vec<Vec<CommitOperation>> = Vec::new();
+    for (variant, unit) in units {
+        if unit.len() <= batch_size {
+            push_unit(&mut batches, unit, batch_size);
+            continue;
+        }
+        let Some(variant) = variant else {
+            bail!(
+                "The files outside of the build variants need {} file additions and \
+                 deletions, but at most {batch_size} fit in one commit",
+                unit.len()
+            );
+        };
+        batches.extend(split_variant(&variant, unit, batch_size));
+    }
+
+    Ok(batches)
+}
+
+fn push_unit(
+    batches: &mut Vec<Vec<CommitOperation>>,
+    unit: Vec<CommitOperation>,
+    batch_size: usize,
+) {
+    match batches.last_mut() {
+        Some(batch) if batch.len() + unit.len() <= batch_size => batch.extend(unit),
+        _ => batches.push(unit),
+    }
+}
+
+fn is_variant_metadata(variant: &str, path: &str) -> bool {
+    path.strip_prefix(variant)
+        .and_then(|rest| rest.strip_prefix("/metadata.json"))
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+}
+
+/// The metadata goes last, its digest fails verification until all files are uploaded.
+fn split_variant(
+    variant: &str,
+    unit: Vec<CommitOperation>,
+    batch_size: usize,
+) -> Vec<Vec<CommitOperation>> {
+    let (metadata, files): (Vec<_>, Vec<_>) = unit
+        .into_iter()
+        .partition(|op| is_variant_metadata(variant, operation_path(op)));
+    let mut batches: Vec<_> = files.chunks(batch_size).map(<[_]>::to_vec).collect();
+    push_unit(&mut batches, metadata, batch_size);
+    batches
 }
 
 /// Recursively walk a directory and return all file paths.
@@ -1517,4 +1602,6 @@ branch = "build-toml-branch"
         assert_eq!(repo_id, "args/kernel");
         assert_eq!(branch, "args-branch");
     }
+
+    mod batching;
 }

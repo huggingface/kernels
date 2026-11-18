@@ -1781,6 +1781,8 @@ fn manifest_rocm_archs_only_applies_to_noarch() {
         "manifest name=\"k\" backends=\"rocm\" torch_src=\"*.cpp\" rocm_archs=\"gfx1201\"\n",
     );
     assert!(err.contains("rocm_archs applies to noarch=true"), "{err}");
+}
+
 fn kernelize_dependency(src: &str) -> String {
     python::kernelize_imports_from(
         "torch-ext/pkg/mod.py",

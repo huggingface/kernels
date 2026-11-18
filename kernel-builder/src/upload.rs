@@ -1124,10 +1124,9 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
 }
 
 #[cfg(test)]
-mod race_tests;
-
-#[cfg(test)]
 mod tests {
+    mod races;
+
     use super::*;
 
     #[test]

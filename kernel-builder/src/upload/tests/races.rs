@@ -16,7 +16,7 @@ use hf_hub::{
     HFError,
 };
 
-use super::{
+use crate::upload::{
     plan_upload, prepare_version_branch, CreateBranch, PinnedCommit, UploadHub, MAIN_BRANCH,
 };
 

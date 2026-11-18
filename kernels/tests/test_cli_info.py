@@ -211,8 +211,7 @@ def test_info_recursive_dependencies(monkeypatch, hub, dependency_graph, capsys,
     hub.api.get_organization_overview.assert_not_called()
     for download in hub.api.hf_hub_download.call_args_list:
         assert download.kwargs["filename"] == "build/torch-cuda/metadata.json"
-        if download.args[0] != REPO_ID:
-            assert download.kwargs["revision"] == COMMIT
+        assert download.kwargs["revision"] == COMMIT
     hub.api.repo_info.assert_any_call(repo_id="test/d", repo_type="kernel", revision="main")
 
 
@@ -306,8 +305,10 @@ def test_info_skips_metadata_validation(hub, capsys):
     assert info["kernels_minver"] == "999.0.0"
 
 
-def test_info_offline_dependencies(monkeypatch, hub, dependency_graph, capsys):
-    print_kernel_info(str(dependency_graph), json_output=True)
+@pytest.mark.parametrize("source", ["hub", "local"])
+def test_info_offline_dependencies(monkeypatch, hub, dependency_graph, capsys, source):
+    kernel = REPO_ID if source == "hub" else str(dependency_graph)
+    print_kernel_info(kernel, json_output=True)
     online = json.loads(capsys.readouterr().out)
     hub.api.reset_mock()
     hub.variants.reset_mock()
@@ -318,7 +319,7 @@ def test_info_offline_dependencies(monkeypatch, hub, dependency_graph, capsys):
         return str(dependency_graph.parent.parent / repo_id)
 
     hub.api.snapshot_download.side_effect = cached_snapshot
-    print_kernel_info(str(dependency_graph), json_output=True)
+    print_kernel_info(kernel, json_output=True)
     assert json.loads(capsys.readouterr().out) == online
     hub.api.hf_hub_download.assert_not_called()
     hub.api.repo_info.assert_not_called()
@@ -332,4 +333,5 @@ def test_info_unversioned_hub(hub, capsys, revision):
     print_kernel_info(REPO_ID, revision=revision, json_output=True)
     info = json.loads(capsys.readouterr().out)
     assert info["revision"] == (revision or "main")
-    assert hub.api.hf_hub_download.call_args.kwargs["revision"] == (revision or "main")
+    hub.api.repo_info.assert_called_once_with(repo_id=REPO_ID, repo_type="kernel", revision=revision or "main")
+    assert hub.api.hf_hub_download.call_args.kwargs["revision"] == COMMIT

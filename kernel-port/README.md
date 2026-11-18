@@ -675,17 +675,25 @@ kernel name="fa_sm90" backend="cuda" src="hopper/instantiations/*_sm90.cu" \
 ```kdl
 manifest name="<id>" backends="<b>[,<b>...]" torch_src="<glob>[,<glob>...]"
     [version=N] [edition=N] [license="..."] [upstream="..."]
-    [repo_id="org/name"] [hub_branch="..."] [python_depends="..."]
+    [source="<url>"] [repo_id="org/name"] [hub_branch="..."] [python_depends="..."]
+    [kernel_depends="org/name=N,org/name@revision,..."]
     [cuda_minver="..."] [cuda_maxver="..."] [cuda_python_depends="..."]
     [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."] [torch_follow_includes=#true]
     [stable_abi="cuda=2.11,..."] [stable_abi_version="2.11"]
 
-manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
+manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."] [rocm_archs="gfx1201,..."]
 ```
 
 Generate `build.toml` from the `kernel` sections recorded before it, plus the `[general]` and `[torch]` settings given here. The manifest is always generated, never overlaid: if it needs a field this op cannot emit, extend the op.
 
 `torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `torch_follow_includes=#true` adds the files they `#include`, as `follow_includes` does for a `kernel`. `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
+
+`kernel_depends` lists the kernel and SDK dependencies. Entries are comma-separated.
+`org/name=N` pins a version and `org/name@revision` a Git revision (branch, tag or commit).
+It adds `kernel-depends` in `[general]`. Imports can be kernelized to use a dependency
+with `kernelize_imports dependency=#true`.
+
+`rocm_archs` sets `rocm_archs` in `[torch-noarch]`.
 
 ```sh
 kernel-port --file 'hello-kernel/k.cu=// kernel' --file 'torch-ext/binding.cpp=// binding' \

@@ -1700,6 +1700,89 @@ fn expect_blob_pins_an_upstream_file() {
     assert!(err.contains("match exactly one file, found 2"), "{err}");
 }
 
+#[test]
+fn manifest_source_field() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        "manifest name=\"k\" version=1 edition=6 license=\"MIT\" upstream=\"https://github.com/o/k.git\" source=\"https://github.com/h/c/tree/main/k\" backends=\"rocm\" noarch=#true\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains(concat!(
+        "upstream = \"https://github.com/o/k.git\"\n",
+        "source = \"https://github.com/h/c/tree/main/k\"\n",
+        "backends = [\"rocm\"]\n",
+    )));
+}
+
+#[test]
+fn manifest_kernel_depends_pins_revisions_and_versions() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        "manifest name=\"k\" backends=\"rocm\" kernel_depends=\"kernels-staging/flydsl@pr-1323,kernels-community/einops=1\" noarch=#true\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains(concat!(
+        "kernel-depends = [\n",
+        "    { repo-id = \"kernels-staging/flydsl\", revision = \"pr-1323\" },\n",
+        "    { repo-id = \"kernels-community/einops\", version = 1 },\n",
+        "]\n",
+    )));
+}
+
+#[test]
+fn manifest_kernel_depends_precedes_general_subtables() {
+    // `kernel-depends` is a key of `[general]`, so TOML requires it to come before
+    // the `[general.*]` tables.
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        "manifest name=\"k\" backends=\"rocm\" kernel_depends=\"a/b=1\" repo_id=\"x/k\" noarch=#true\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.find("kernel-depends").unwrap() < toml.find("[general.hub]").unwrap());
+}
+
+#[test]
+fn manifest_noarch_rocm_archs() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        "manifest name=\"k\" backends=\"rocm\" noarch=#true rocm_archs=\"gfx942,gfx1201\"\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains("[torch-noarch]\nrocm_archs = [\"gfx942\", \"gfx1201\"]\n"));
+}
+
+#[test]
+fn manifest_kernel_depends_rejects_malformed_entries() {
+    for (entry, message) in [
+        ("flydsl@pr-1", "must be org/name"),
+        ("a/b", "must be org/name=VERSION or org/name@REVISION"),
+        ("a/b=x", "version must be an integer"),
+        ("a/b@", "empty revision"),
+        ("a/b/c=1", "must be org/name"),
+    ] {
+        let recipe = format!(
+            "manifest name=\"k\" backends=\"rocm\" kernel_depends=\"{entry}\" noarch=#true\n"
+        );
+        let mut ws = Workspace::from_files(BTreeMap::new());
+        let err = run_recipe_err(&mut ws, &recipe);
+        assert!(err.contains(message), "{entry}: {err}");
+    }
+}
+
+#[test]
+fn manifest_rocm_archs_only_applies_to_noarch() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    let err = run_recipe_err(
+        &mut ws,
+        "manifest name=\"k\" backends=\"rocm\" torch_src=\"*.cpp\" rocm_archs=\"gfx1201\"\n",
+    );
+    assert!(err.contains("rocm_archs applies to noarch=true"), "{err}");
+}
+
 fn kernelize_dependency(src: &str) -> String {
     python::kernelize_imports_from(
         "torch-ext/pkg/mod.py",

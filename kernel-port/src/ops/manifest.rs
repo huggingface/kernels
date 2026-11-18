@@ -12,10 +12,12 @@ pub struct Manifest {
     license: Option<String>,
     edition: Option<String>,
     upstream: Option<String>,
+    source: Option<String>,
     backends: Vec<String>,
     repo_id: Option<String>,
     hub_branch: Option<String>,
     python_depends: Vec<String>,
+    kernel_depends: Vec<KernelDepend>,
     cuda_minver: Option<String>,
     cuda_maxver: Option<String>,
     cuda_python_depends: Vec<String>,
@@ -26,6 +28,7 @@ pub struct Manifest {
 enum ManifestKind {
     Noarch {
         pyext: Vec<String>,
+        rocm_archs: Vec<String>,
     },
     Torch {
         torch_src: Vec<Pattern>,
@@ -76,10 +79,16 @@ impl Manifest {
             }
             ManifestKind::Noarch {
                 pyext: comma_list(&args.take_opt("noarch_pyext").unwrap_or_default()),
+                rocm_archs: comma_list(&args.take_opt("rocm_archs").unwrap_or_default()),
             }
         } else {
             if args.take_opt("noarch_pyext").is_some() {
                 bail!("noarch_pyext requires noarch=true");
+            }
+            if args.take_opt("rocm_archs").is_some() {
+                bail!(
+                    "rocm_archs applies to noarch=true; for a torch extension, set rocm_archs on its `kernel` statements"
+                );
             }
             let stable_abi_version = args.take_opt("stable_abi_version");
             let pyext = comma_list(&args.take_opt("torch_pyext").unwrap_or_default());
@@ -111,10 +120,15 @@ impl Manifest {
             license: args.take_opt("license"),
             edition,
             upstream: args.take_opt("upstream"),
+            source: args.take_opt("source"),
             backends,
             repo_id: args.take_opt("repo_id"),
             hub_branch: args.take_opt("hub_branch"),
             python_depends: comma_list(&args.take_opt("python_depends").unwrap_or_default()),
+            kernel_depends: comma_list(&args.take_opt("kernel_depends").unwrap_or_default())
+                .iter()
+                .map(|entry| KernelDepend::parse(entry))
+                .collect::<Result<Vec<_>>>()?,
             cuda_minver: args.take_opt("cuda_minver"),
             cuda_maxver: args.take_opt("cuda_maxver"),
             cuda_python_depends: comma_list(
@@ -162,9 +176,19 @@ impl Manifest {
         if let Some(upstream) = &self.upstream {
             toml.push_str(&format!("upstream = {upstream:?}\n"));
         }
+        if let Some(source) = &self.source {
+            toml.push_str(&format!("source = {source:?}\n"));
+        }
         toml.push_str(&Self::toml_list("backends", &self.backends));
         if !self.python_depends.is_empty() {
             toml.push_str(&Self::toml_list("python-depends", &self.python_depends));
+        }
+        if !self.kernel_depends.is_empty() {
+            toml.push_str("kernel-depends = [\n");
+            for dep in &self.kernel_depends {
+                toml.push_str(&format!("    {},\n", dep.toml()));
+            }
+            toml.push_str("]\n");
         }
         if self.cuda_minver.is_some()
             || self.cuda_maxver.is_some()
@@ -200,13 +224,16 @@ impl Manifest {
         let mut toml = self.general_section();
 
         let summary = match &self.kind {
-            ManifestKind::Noarch { pyext } => {
+            ManifestKind::Noarch { pyext, rocm_archs } => {
                 if !facts.kernels.is_empty() {
                     bail!("noarch=true but kernel sections were declared");
                 }
                 toml.push_str("\n[torch-noarch]\n");
                 if !pyext.is_empty() {
                     toml.push_str(&format!("pyext = [{}]\n", toml_str_list(pyext)));
+                }
+                if !rocm_archs.is_empty() {
+                    toml.push_str(&format!("rocm_archs = [{}]\n", toml_str_list(rocm_archs)));
                 }
                 toml.push_str("\n[kernel]\n");
                 "wrote build.toml (noarch)".to_string()
@@ -297,5 +324,60 @@ impl Manifest {
 
         ws.set_text("build.toml", toml);
         Ok(summary)
+    }
+}
+
+/// A kernel dependency.
+#[derive(Debug)]
+struct KernelDepend {
+    repo_id: String,
+    pin: KernelPin,
+}
+
+#[derive(Debug)]
+enum KernelPin {
+    Version(usize),
+    Revision(String),
+}
+
+impl KernelDepend {
+    fn parse(entry: &str) -> Result<Self> {
+        // Parse a kernel dependency entry.
+        //
+        // The possible formats are: `repo_id=version` and `repo_id@revision`.
+        let (repo_id, pin) = if let Some((repo_id, revision)) = entry.split_once('@') {
+            if revision.is_empty() {
+                bail!("kernel_depends entry {entry:?} has an empty revision");
+            }
+            (repo_id, KernelPin::Revision(revision.to_string()))
+        } else if let Some((repo_id, version)) = entry.split_once('=') {
+            let version = version.parse().with_context(|| {
+                format!("kernel_depends entry {entry:?}: version must be an integer")
+            })?;
+            (repo_id, KernelPin::Version(version))
+        } else {
+            bail!("kernel_depends entry {entry:?} must be org/name=VERSION or org/name@REVISION");
+        };
+        if repo_id.split('/').count() != 2 || repo_id.split('/').any(str::is_empty) {
+            bail!("kernel_depends entry {entry:?}: repository must be org/name");
+        }
+        Ok(Self {
+            repo_id: repo_id.to_string(),
+            pin,
+        })
+    }
+
+    fn toml(&self) -> String {
+        match &self.pin {
+            KernelPin::Version(version) => {
+                format!("{{ repo-id = {:?}, version = {version} }}", self.repo_id)
+            }
+            KernelPin::Revision(revision) => {
+                format!(
+                    "{{ repo-id = {:?}, revision = {revision:?} }}",
+                    self.repo_id
+                )
+            }
+        }
     }
 }

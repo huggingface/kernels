@@ -547,7 +547,7 @@ If the kernel uses `kernel-layout = "zip"`, data files are stored in the
 kernel ZIP archive. Consequently, `__file__` cannot be used to find the
 path of the files and the files cannot be opened directly. Use
 [`importlib.resources`](https://docs.python.org/3/library/importlib.resources.html)
-instead, which works with every build layout:
+instead, which works with every build layout supported by the project:
 
 ```python
 import importlib.resources

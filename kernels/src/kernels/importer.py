@@ -14,9 +14,9 @@ from types import ModuleType
 from kernels._rust import BuildLayout, DigestValidationError, Metadata
 from kernels.hf_hub import RepoInfo
 
-try:
+if sys.version_info >= (3, 11):
     from importlib.resources.abc import TraversableResources
-except ImportError:  # Python < 3.11
+else:
     from importlib.abc import TraversableResources
 
 logger = logging.getLogger(__name__)
@@ -215,8 +215,10 @@ def _import_from_path_uncached(
     """
     module_name = metadata.name.python_name
 
+    spec: importlib.machinery.ModuleSpec | None
     if metadata.build_layout == BuildLayout.ZIP:
         spec = _zip_spec(variant_path, metadata)
+        origin = spec.origin
     else:
         file_path = variant_path / "__init__.py"
         if not file_path.exists():
@@ -225,8 +227,9 @@ def _import_from_path_uncached(
             raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
         spec = importlib.util.spec_from_file_location(metadata.id, file_path)
-        if spec is None:
-            raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
+        origin = str(file_path)
+    if spec is None:
+        raise ImportError(f"Cannot load spec for {module_name} from {origin}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")

@@ -2,10 +2,11 @@ import json
 import sys
 import threading
 import types
+import zipfile
 
 import pytest
 
-from kernels._rust import Digest, DigestAlgorithm
+from kernels._rust import BuildLayout, Digest, DigestAlgorithm
 from kernels.importer import _import_from_path, _loaded_kernel_metadata, _loaded_kernels
 
 _EXEC_LOG_MODULE = "_kernels_test_exec_log"
@@ -267,3 +268,78 @@ def test_already_imported_kernel_is_reregistered(tmp_path, exec_log):
         _loaded_kernels.pop(variant_dir, None)
         _loaded_kernel_metadata.pop(_COUNTING_ID, None)
         sys.modules.pop(_COUNTING_ID, None)
+
+
+_ZIP_ID = "zipped_1_cuda"
+
+
+def _write_zip_variant(base_path, *, with_archive: bool = True):
+    """Write a kernel variant with the ZIP build layout.
+
+    The archive holds the Python files, the native module (here a stand-in
+    for a `.so`) stays on disk next to the archive.
+    """
+    variant_dir = base_path / "build" / "torch28-cxx11-cu128-x86_64-linux"
+    variant_dir.mkdir(parents=True, exist_ok=True)
+    metadata = {
+        "id": _ZIP_ID,
+        "name": "zipped",
+        "version": 1,
+        "build-layout": "zip",
+        "license": "Apache-2.0",
+        "python-depends": ["torch"],
+        "backend": {"type": "cuda"},
+    }
+    (variant_dir / "metadata.json").write_text(json.dumps(metadata))
+    (variant_dir / "_native.py").write_text("VALUE = 'native'\n")
+    if with_archive:
+        with zipfile.ZipFile(variant_dir / f"{_ZIP_ID}.zip", "w") as archive:
+            archive.writestr(
+                "__init__.py", "from . import _native\nfrom ._ops import OPS\nfrom .layers import LAYER\n"
+            )
+            archive.writestr("_ops.py", "OPS = 'ops'\n")
+            archive.writestr("layers/__init__.py", "LAYER = 'layer'\n")
+    return variant_dir
+
+
+@pytest.fixture
+def zip_cleanup():
+    yield
+    for path in [path for path, loaded in _loaded_kernels.items() if loaded.metadata.id == _ZIP_ID]:
+        _loaded_kernels.pop(path)
+    _loaded_kernel_metadata.pop(_ZIP_ID, None)
+    for name in [name for name in sys.modules if name == _ZIP_ID or name.startswith(f"{_ZIP_ID}.")]:
+        sys.modules.pop(name)
+
+
+def test_zip_layout_imports_from_archive_and_disk(tmp_path, zip_cleanup):
+    variant_dir = _write_zip_variant(tmp_path)
+
+    module = _import_from_path(variant_dir, deps={})
+
+    # `_native` is found on disk, `_ops` and `layers` in the archive.
+    assert module.OPS == "ops"
+    assert module.LAYER == "layer"
+    assert module._native.VALUE == "native"
+    assert module.__file__ == f"{variant_dir / f'{_ZIP_ID}.zip'}/__init__.py"
+    assert sys.modules[_ZIP_ID] is module
+    assert _loaded_kernels[variant_dir].metadata.build_layout == BuildLayout.ZIP
+
+
+def test_zip_layout_missing_archive(tmp_path, zip_cleanup):
+    variant_dir = _write_zip_variant(tmp_path, with_archive=False)
+
+    with pytest.raises(FileNotFoundError, match="No kernel archive found"):
+        _import_from_path(variant_dir, deps={})
+    assert _ZIP_ID not in sys.modules
+    assert variant_dir not in _loaded_kernels
+
+
+def test_zip_layout_failed_import_cleans_up(tmp_path, zip_cleanup):
+    variant_dir = _write_zip_variant(tmp_path)
+    (variant_dir / "_native.py").unlink()
+
+    with pytest.raises(ImportError):
+        _import_from_path(variant_dir, deps={})
+    assert _ZIP_ID not in sys.modules
+    assert variant_dir not in _loaded_kernels

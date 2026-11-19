@@ -3,7 +3,7 @@ use std::str::FromStr;
 use eyre::Result;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
+use crate::config::{Backend, Build, BuildLayout, GitUrl, KernelDependency, KernelName};
 use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
 use crate::version::Version;
@@ -94,6 +94,8 @@ pub struct Metadata {
     pub name: KernelName,
     pub id: String,
     pub version: usize,
+    #[serde(default)]
+    pub build_layout: BuildLayout,
     /// Minimum version of the `kernels` Python library required to load this
     /// build variant. Absent in metadata written before this key existed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -130,6 +132,7 @@ impl Metadata {
             id,
             name: build.general.name.clone(),
             version: build.general.version,
+            build_layout: build.general.build_layout,
             kernels_minver: Some(build.required_kernels_version(backend)),
             license: build.general.license.clone(),
             upstream: build.general.upstream.clone(),
@@ -170,8 +173,8 @@ mod tests {
     use std::str::FromStr;
 
     use crate::config::{
-        Backend, Build, Framework, General, KernelDependency, KernelName, KernelVersion,
-        TorchNoarch, TvmFfi,
+        Backend, Build, BuildLayout, Framework, General, KernelDependency, KernelName,
+        KernelVersion, TorchNoarch, TvmFfi,
     };
     use crate::git::{GitStatus, Oid};
     use crate::version::Version;
@@ -214,6 +217,7 @@ mod tests {
                 upstream: None,
                 source: None,
                 backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
+                build_layout: BuildLayout::Files,
                 hub: None,
                 kernel_depends: None,
                 python_depends: None,
@@ -271,6 +275,7 @@ mod tests {
                 upstream: None,
                 source: None,
                 backends: vec![Backend::Cuda],
+                build_layout: BuildLayout::Files,
                 hub: None,
                 kernel_depends: None,
                 python_depends: None,
@@ -320,6 +325,7 @@ mod tests {
 
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains(r#""kernels-minver":"0.14.0""#));
+        assert!(json.contains(r#""build-layout":"files""#));
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
         assert_eq!(
@@ -348,6 +354,22 @@ mod tests {
         let json = r#"{"name":"test-kernel","id":"test-id","version":1,"license":"apache-2.0","python-depends":[],"backend":{"type":"cuda"}}"#;
         let parsed: Metadata = serde_json::from_str(json).unwrap();
         assert!(parsed.kernels_minver.is_none());
+        assert_eq!(parsed.build_layout, BuildLayout::Files);
+    }
+
+    #[test]
+    fn metadata_preserves_zip_layout() {
+        let mut build = torch_noarch_build();
+        build.general.build_layout = BuildLayout::Zip;
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains(r#""build-layout":"zip""#));
+        assert!(json.contains(r#""kernels-minver":"0.19.0""#));
+        assert_eq!(
+            Metadata::from_str(&json).unwrap().build_layout,
+            BuildLayout::Zip
+        );
     }
 
     #[test]

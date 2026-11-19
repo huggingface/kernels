@@ -14,6 +14,7 @@
   kernel-layout-check,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
   torch-ops-check,
   writeText,
 
@@ -108,6 +109,7 @@ stdenv.mkDerivation (prevAttrs: {
   buildInputs = [ torch ];
 
   nativeBuildInputs = [
+    zip-build-hook
     hash-kernel-hook
     kernel-builder
     kernel-layout-check

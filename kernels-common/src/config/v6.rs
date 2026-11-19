@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{ConfigError, Dependency, GitUrl, KernelDependency, KernelName};
+use super::{BuildLayout, ConfigError, Dependency, GitUrl, KernelDependency, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -54,6 +54,9 @@ pub struct General {
     pub source: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
+
+    #[serde(default)]
+    pub build_layout: BuildLayout,
 
     pub cuda: Option<CudaGeneral>,
 
@@ -300,6 +303,7 @@ impl From<General> for super::General {
             upstream: general.upstream,
             source: general.source,
             backends: general.backends.into_iter().map(Into::into).collect(),
+            build_layout: general.build_layout,
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
             kernel_depends: general.kernel_depends,
@@ -556,6 +560,7 @@ impl From<super::General> for General {
             upstream: general.upstream,
             source: general.source,
             backends: general.backends.into_iter().map(Into::into).collect(),
+            build_layout: general.build_layout,
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
             kernel_depends: general.kernel_depends,

@@ -109,6 +109,12 @@
           drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-zip-kernel";
+          path = ./relu-zip;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = reluSymbols;
+        }
+        {
           # Exercise the shim with Torch 2.11 headers, which lack index_select.
           name = "index-select-torch-stable-abi-kernel";
           path = ./index-select-torch-stable-abi;
@@ -476,6 +482,42 @@
               ''
                 ${ciTest}/bin/ci-test
                 ln -s ${extension} $out
+              '';
+        }
+        {
+          name = "relu-zip-kernel-cpu";
+          path = ./relu-zip;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+          checkSymbols = reluSymbols;
+        }
+        {
+          # Run the tests of the ZIP build layout kernel directly during the
+          # build. This checks that `kernels` can load kernels from ZIP archives.
+          name = "relu-zip-pytest";
+          path = ./relu-zip;
+          drv =
+            sys: out:
+            let
+              variant = "torch${torchVersion}-cpu-${sys}";
+              reluZip = out.packages.${sys}.redistributable.${variant};
+              kernelPkgs = out.packages.${sys}.pkgs.${variant};
+              testPython = kernelPkgs.python3.withPackages (
+                ps: with ps; [
+                  torch
+                  pytest
+                  kernels
+                ]
+              );
+            in
+            kernelPkgs.runCommand "relu-zip-pytest"
+              {
+                nativeBuildInputs = [ testPython ];
+              }
+              ''
+                export HOME=$TMPDIR
+                export LOCAL_KERNELS="kernels-test/relu-zip=${reluZip}"
+                python -m pytest ${reluZip.src}/tests -m kernels_ci -p no:cacheprovider
+                touch $out
               '';
         }
         {

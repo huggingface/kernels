@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use kernels_common::config::{Backend, KernelDependency, KernelName, KernelVersion};
+use kernels_common::config::{Backend, BuildLayout, KernelDependency, KernelName, KernelVersion};
 use kernels_common::digest::{Digest, DigestAlgorithm, DigestViolation};
 use kernels_common::git::{GitStatus, Oid};
 use kernels_common::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
@@ -393,6 +393,51 @@ impl PyKernelDependency {
     }
 }
 
+/// Layout of the files in a build variant.
+#[pyclass(name = "BuildLayout", frozen, eq, hash, from_py_object)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum PyBuildLayout {
+    #[pyo3(name = "FILES")]
+    Files,
+    #[pyo3(name = "ZIP")]
+    Zip,
+}
+
+impl From<BuildLayout> for PyBuildLayout {
+    fn from(l: BuildLayout) -> Self {
+        match l {
+            BuildLayout::Files => Self::Files,
+            BuildLayout::Zip => Self::Zip,
+        }
+    }
+}
+
+impl From<PyBuildLayout> for BuildLayout {
+    fn from(l: PyBuildLayout) -> Self {
+        match l {
+            PyBuildLayout::Files => BuildLayout::Files,
+            PyBuildLayout::Zip => BuildLayout::Zip,
+        }
+    }
+}
+
+#[pymethods]
+impl PyBuildLayout {
+    fn __str__(&self) -> &'static str {
+        match self {
+            Self::Files => "files",
+            Self::Zip => "zip",
+        }
+    }
+
+    fn __repr__(&self) -> &'static str {
+        match self {
+            Self::Files => "BuildLayout.FILES",
+            Self::Zip => "BuildLayout.ZIP",
+        }
+    }
+}
+
 /// Parsed `metadata.json` for a kernel build variant.
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
@@ -400,6 +445,7 @@ struct PyMetadata {
     id: String,
     name: PyKernelName,
     version: usize,
+    build_layout: PyBuildLayout,
     kernels_minver: Option<PyVersion>,
     license: String,
     upstream: Option<String>,
@@ -417,6 +463,7 @@ impl From<Metadata> for PyMetadata {
             id: m.id,
             name: PyKernelName { inner: m.name },
             version: m.version,
+            build_layout: m.build_layout.into(),
             kernels_minver: m.kernels_minver.map(Into::into),
             license: m.license,
             upstream: m.upstream.map(|u| u.as_url().to_string()),
@@ -475,6 +522,11 @@ impl PyMetadata {
     }
 
     #[getter]
+    fn build_layout(&self) -> PyBuildLayout {
+        self.build_layout
+    }
+
+    #[getter]
     fn kernels_minver(&self) -> Option<PyVersion> {
         self.kernels_minver.clone()
     }
@@ -521,10 +573,11 @@ impl PyMetadata {
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, kernels_minver={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
+            "Metadata(id={}, name={:?}, version={:?}, build_layout={}, kernels_minver={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
             self.id,
             self.name,
             self.version,
+            self.build_layout.__repr__(),
             self.kernels_minver,
             self.license,
             self.upstream,
@@ -775,6 +828,7 @@ fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelPaths>()?;
     m.add_class::<PyGeneral>()?;
     m.add_class::<PyBuild>()?;
+    m.add_class::<PyBuildLayout>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
     m.add_class::<PyDigestAlgorithm>()?;

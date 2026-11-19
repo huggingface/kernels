@@ -1,12 +1,16 @@
 import importlib
+import importlib.abc
+import importlib.machinery
+import importlib.util
 import logging
 import sys
 import threading
+import zipimport
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from kernels._rust import DigestValidationError, Metadata
+from kernels._rust import BuildLayout, DigestValidationError, Metadata
 from kernels.hf_hub import RepoInfo
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,8 @@ class LoadedKernel:
     - `id` (`str`): kernel identifier that is unique to the kernel version + backend.
     - `name` (`str`): the name of the kernel.
     - `version` (`int`): the version of the kernel.
+    - `build_layout` (`BuildLayout`): the layout of the files in the build
+      variant (`FILES` or `ZIP`).
     - `kernels_minver` (`Version | None`): the minimum `kernels` library
       version required to load the kernel.
     - `license` (`str`): the license of the kernel.
@@ -139,6 +145,38 @@ def _import_from_path(
         return module
 
 
+class _ZipPackageLoader(importlib.abc.Loader):
+    """Loader for the `__init__.py` of a package that is stored in a ZIP archive."""
+
+    def __init__(self, zip_path: Path):
+        self._importer = zipimport.zipimporter(str(zip_path))
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module: ModuleType) -> None:
+        code = self._importer.get_code("__init__")
+        exec(code, module.__dict__)
+
+
+def _zip_spec(variant_path: Path, metadata: Metadata) -> importlib.machinery.ModuleSpec:
+    """Create the module spec for a kernel in the "zip" build layout."""
+    zip_path = variant_path / f"{metadata.id}.zip"
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"No kernel archive found at: `{zip_path}`")
+
+    spec = importlib.machinery.ModuleSpec(
+        metadata.id,
+        _ZipPackageLoader(zip_path),
+        origin=f"{zip_path}/__init__.py",
+        is_package=True,
+    )
+    spec.submodule_search_locations = [str(variant_path), str(zip_path)]
+    # Set `__file__` to the path of `__init__.py` in the archive.
+    spec.has_location = True
+    return spec
+
+
 def _import_from_path_uncached(
     variant_path: Path,
     metadata: Metadata,
@@ -151,15 +189,18 @@ def _import_from_path_uncached(
     """
     module_name = metadata.name.python_name
 
-    file_path = variant_path / "__init__.py"
-    if not file_path.exists():
-        file_path = variant_path / module_name / "__init__.py"
-    if not file_path.exists():
-        raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
+    if metadata.build_layout == BuildLayout.ZIP:
+        spec = _zip_spec(variant_path, metadata)
+    else:
+        file_path = variant_path / "__init__.py"
+        if not file_path.exists():
+            file_path = variant_path / module_name / "__init__.py"
+        if not file_path.exists():
+            raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
-    spec = importlib.util.spec_from_file_location(metadata.id, file_path)
-    if spec is None:
-        raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
+        spec = importlib.util.spec_from_file_location(metadata.id, file_path)
+        if spec is None:
+            raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")

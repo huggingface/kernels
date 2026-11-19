@@ -22,6 +22,7 @@
   ninja,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
   rewrite-nix-paths-macho,
   writeScriptBin,
 
@@ -183,6 +184,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   nativeBuildInputs = [
     cmake
+    zip-build-hook
     hash-kernel-hook
     ninja
     kernel-builder

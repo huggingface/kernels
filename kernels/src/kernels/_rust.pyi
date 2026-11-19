@@ -196,6 +196,16 @@ class DigestAlgorithm(Enum):
     def __repr__(self) -> str: ...
 
 @final
+class BuildLayout(Enum):
+    """Layout of the files in a build variant."""
+
+    FILES = "FILES"
+    ZIP = "ZIP"
+
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+
+@final
 class Digest:
     """Source digest for a kernel build variant."""
 
@@ -799,6 +809,13 @@ class Metadata:
     def name(self) -> KernelName: ...
     @property
     def version(self) -> Optional[int]: ...
+    @property
+    def build_layout(self) -> BuildLayout:
+        """Layout of the files in the build variant.
+
+        `BuildLayout.FILES` for metadata written before this key existed.
+        """
+        ...
     @property
     def kernels_minver(self) -> Optional[Version]:
         """Minimum `kernels` library version required to load this variant.

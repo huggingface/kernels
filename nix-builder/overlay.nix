@@ -57,6 +57,8 @@ final: prev:
 
   remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
 
+  zip-build-hook = final.callPackage ./pkgs/zip-build-hook { };
+
   torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
 
   torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };

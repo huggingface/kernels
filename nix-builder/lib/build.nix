@@ -219,8 +219,8 @@ rec {
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
         ) kernelConfig.toml.kernel
       );
-      # Same for the number of parallel HIP offload jobs and ROCm architectures.
-      hipOffloadJobs = listMax (
+      # Same for the number of HIP compiler threads and ROCm architectures.
+      hipccThreads = listMax (
         lib.mapAttrsToList (
           _: kernel: builtins.length (kernel.rocm-archs or supportedRocmArchs)
         ) kernelConfig.toml.kernel
@@ -269,7 +269,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
-          hipOffloadJobs
+          hipccThreads
           nvccThreads
           src
           stripRPath
@@ -304,7 +304,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
-          hipOffloadJobs
+          hipccThreads
           nvccThreads
           src
           stripRPath

@@ -13,7 +13,7 @@
   cargo,
   cmake,
   cmakeNvccThreadsHook,
-  hipOffloadJobsHook,
+  hipccThreadsHook,
   cuda-oxide,
   cuda_nvcc,
   generate-symbols-hook,
@@ -70,7 +70,7 @@
   # Whether the Rust kernels are built with the cuda-oxide codegen backend.
   cudaOxide ? false,
 
-  hipOffloadJobs,
+  hipccThreads,
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -192,7 +192,7 @@ stdenv.mkDerivation (
     inherit
       doAbiCheck
       doKernelBuildCheck
-      hipOffloadJobs
+      hipccThreads
       kernelDeps
       moduleName
       nvccThreads
@@ -263,7 +263,7 @@ stdenv.mkDerivation (
       cuda_nvcc
     ]
     ++ lib.optionals rocmSupport [
-      hipOffloadJobsHook
+      hipccThreadsHook
       clr
     ]
     ++ lib.optionals xpuSupport ([

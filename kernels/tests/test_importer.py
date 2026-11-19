@@ -343,3 +343,17 @@ def test_zip_layout_failed_import_cleans_up(tmp_path, zip_cleanup):
         _import_from_path(variant_dir, deps={})
     assert _ZIP_ID not in sys.modules
     assert variant_dir not in _loaded_kernels
+
+
+def test_zip_layout_source_of_init_is_available(tmp_path, zip_cleanup):
+    """`inspect.getsource` must work for functions in `__init__.py` (needed by e.g. Triton's `@jit`)."""
+    variant_dir = _write_zip_variant(tmp_path)
+    with zipfile.ZipFile(variant_dir / f"{_ZIP_ID}.zip", "w") as archive:
+        archive.writestr(
+            "__init__.py",
+            "import inspect\n\n\ndef answer():\n    return 42\n\n\nSOURCE = inspect.getsource(answer)\n",
+        )
+
+    module = _import_from_path(variant_dir, deps={})
+
+    assert module.SOURCE == "def answer():\n    return 42\n"

@@ -27,6 +27,13 @@
         layers = [ "ReLU" ];
       };
 
+      reluZipSymbols = reluSymbols // {
+        functions = [
+          "relu"
+          "relu_triton"
+        ];
+      };
+
       # All example kernels to build in CI.
       #
       # - name: name in the output path
@@ -112,7 +119,7 @@
           name = "relu-zip-kernel";
           path = ./relu-zip;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
-          checkSymbols = reluSymbols;
+          checkSymbols = reluZipSymbols;
         }
         {
           # Exercise the shim with Torch 2.11 headers, which lack index_select.
@@ -488,7 +495,7 @@
           name = "relu-zip-kernel-cpu";
           path = ./relu-zip;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
-          checkSymbols = reluSymbols;
+          checkSymbols = reluZipSymbols;
         }
         {
           # Run the tests of the ZIP build layout kernel directly during the

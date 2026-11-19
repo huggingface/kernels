@@ -37,3 +37,13 @@ def test_relu_layer(device):
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
     layer = relu.layers.ReLU()
     torch.testing.assert_close(F.relu(x), layer(x))
+
+
+@pytest.mark.kernels_ci
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_relu_triton(device, dtype):
+    if device.type not in ("cuda", "xpu"):
+        pytest.skip("Triton implementation requires a CUDA, ROCm, or XPU device")
+
+    x = torch.randn(1024, 1024, dtype=dtype, device=device)
+    torch.testing.assert_close(F.relu(x), relu.relu_triton(x))

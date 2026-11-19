@@ -158,6 +158,9 @@ class _ZipPackageLoader(importlib.abc.Loader):
         code = self._importer.get_code("__init__")
         exec(code, module.__dict__)
 
+    def get_source(self, fullname: str) -> str | None:
+        return self._importer.get_source("__init__")
+
 
 def _zip_spec(variant_path: Path, metadata: Metadata) -> importlib.machinery.ModuleSpec:
     """Create the module spec for a kernel in the "zip" build layout."""

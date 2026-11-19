@@ -9,5 +9,3 @@ backends = ["metal"]
 repo-id = "kernels-test/bfl-torch"
 
 [torch-noarch]
-
-[kernel]

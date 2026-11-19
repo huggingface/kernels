@@ -382,7 +382,9 @@ backends = ["cuda"]
         );
     }
 
-    #[cfg(unix)]
+    // macOS file systems reject file names that are not valid UTF-8, so such
+    // a file cannot be created there.
+    #[cfg(target_os = "linux")]
     #[test]
     fn non_utf8_path_is_an_error() {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};

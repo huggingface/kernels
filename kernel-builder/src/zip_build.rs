@@ -6,7 +6,7 @@ use std::{
 
 use eyre::{bail, ensure, Context, Result};
 use itertools::Itertools;
-use kernels_common::config::BuildLayout;
+use kernels_common::config::{Build, BuildLayout};
 use kernels_common::metadata::Metadata;
 use walkdir::WalkDir;
 use zip::{write::SimpleFileOptions, CompressionMethod, DateTime, ZipWriter};
@@ -23,9 +23,17 @@ const FILE_PERMISSIONS: u32 = 0o644;
 const NATIVE_EXTENSIONS: [&str; 5] = ["so", "dylib", "dll", "pyd", "metallib"];
 
 /// Zip build variants that have "zip" as the build variant.
-pub fn zip_build(kernel_dir: Option<PathBuf>) -> Result<()> {
-    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let (_, variants) = discover_variants(&kernel_dir)?;
+pub fn zip_build(source_dir: PathBuf, variants_dir: Option<PathBuf>) -> Result<()> {
+    let source_dir = check_or_infer_kernel_dir(Some(source_dir))?;
+    let variants_dir =
+        check_or_infer_kernel_dir(Some(variants_dir.unwrap_or_else(|| source_dir.clone())))?;
+
+    let build = Build::open(&source_dir)?;
+    if build.general.build_layout != BuildLayout::Zip {
+        return Ok(());
+    }
+
+    let (_, variants) = discover_variants(&variants_dir)?;
 
     for variant in variants {
         let variant_name = variant.file_name().unwrap().to_string_lossy();
@@ -35,14 +43,16 @@ pub fn zip_build(kernel_dir: Option<PathBuf>) -> Result<()> {
             "Cannot open `{}` for reading",
             metadata_path.to_string_lossy()
         ))?;
-        let metadata: Metadata = serde_json::from_reader(BufReader::new(f))?;
+        let mut metadata: Metadata = serde_json::from_reader(BufReader::new(f))?;
 
-        if metadata.build_layout != BuildLayout::Zip {
+        // The metadata reflects the state of the build, so there is nothing
+        // to do if the variant was already zipped.
+        if metadata.build_layout == BuildLayout::Zip {
             continue;
         }
 
         eprintln!("Zipping variant `{variant_name}`...");
-        zip_variant(&variant, &metadata.id)?;
+        zip_variant(&variant, &metadata_path, &mut metadata)?;
     }
 
     Ok(())
@@ -80,8 +90,8 @@ fn is_excluded(variant: &Path, path: &Path) -> bool {
     })
 }
 
-fn zip_variant(variant: &Path, id: &str) -> Result<()> {
-    let archive_path = variant.join(format!("{id}.zip"));
+fn zip_variant(variant: &Path, metadata_path: &Path, metadata: &mut Metadata) -> Result<()> {
+    let archive_path = variant.join(format!("{}.zip", metadata.id));
     ensure!(
         !archive_path.exists(),
         "`{}` already exists",
@@ -141,6 +151,17 @@ fn zip_variant(variant: &Path, id: &str) -> Result<()> {
     }
     writer.finish()?;
 
+    // Update the metadata to indicate the ZIP layout is used.
+    metadata.set_kernel_layout_to_zip();
+    let f = File::create(metadata_path).context(format!(
+        "Cannot open `{}` for writing",
+        metadata_path.to_string_lossy()
+    ))?;
+    serde_json::to_writer_pretty(BufWriter::new(f), metadata).context(format!(
+        "Cannot write updated metadata to `{}`",
+        metadata_path.to_string_lossy()
+    ))?;
+
     // Remove zipped files only after the archive was written successfully.
     for path in &files {
         fs::remove_file(path).wrap_err_with(|| format!("Cannot remove `{}`", path.display()))?;
@@ -181,19 +202,37 @@ fn remove_empty_dirs(root: &Path) -> Result<()> {
 mod tests {
     use std::io::Read;
 
+    use kernels_common::config::BuildLayout;
     use tempfile::TempDir;
     use zip::ZipArchive;
 
     use super::*;
 
-    fn write_variant(dir: &Path, layout: &str) {
+    fn write_kernel(kernel: &Path, layout: &str) -> PathBuf {
+        fs::write(
+            kernel.join("build.toml"),
+            format!(
+                r#"
+[general]
+name = "test-kernel"
+version = 1
+edition = 6
+license = "Apache-2.0"
+build-layout = "{layout}"
+backends = ["cuda"]
+
+[torch-noarch]
+"#
+            ),
+        )
+        .unwrap();
+
+        let dir = kernel.join("build/torch-cuda");
         fs::create_dir_all(dir.join("pkg/layers")).unwrap();
         fs::create_dir_all(dir.join("pkg/__pycache__")).unwrap();
         fs::write(
             dir.join("metadata.json"),
-            format!(
-                r#"{{"name":"test-kernel","id":"test-id","version":1,"build-layout":"{layout}","license":"apache-2.0","python-depends":[],"backend":{{"type":"cuda"}}}}"#
-            ),
+            r#"{"name":"test-kernel","id":"test-id","version":1,"kernels-minver":"0.14.0","license":"apache-2.0","python-depends":[],"backend":{"type":"cuda"}}"#,
         )
         .unwrap();
         fs::write(dir.join("pkg/__init__.py"), b"import _ops").unwrap();
@@ -204,6 +243,11 @@ mod tests {
         fs::write(dir.join("pkg/libfoo.so.1"), b"elf").unwrap();
         fs::write(dir.join("pkg/kernels.metallib"), b"metal").unwrap();
         fs::write(dir.join("pkg/__pycache__/_ops.cpython-312.pyc"), b"pyc").unwrap();
+        dir
+    }
+
+    fn read_metadata(variant: &Path) -> Metadata {
+        serde_json::from_reader(File::open(variant.join("metadata.json")).unwrap()).unwrap()
     }
 
     fn archive_names(path: &Path) -> Vec<String> {
@@ -216,22 +260,21 @@ mod tests {
     #[test]
     fn files_layout_is_untouched() {
         let kernel = TempDir::new().unwrap();
-        let variant = kernel.path().join("build/torch-cuda");
-        write_variant(&variant, "files");
+        let variant = write_kernel(kernel.path(), "files");
 
-        zip_build(Some(kernel.path().to_path_buf())).unwrap();
+        zip_build(kernel.path().to_path_buf(), None).unwrap();
 
         assert!(!variant.join("test-id.zip").exists());
         assert!(variant.join("pkg/_ops.py").exists());
+        assert_eq!(read_metadata(&variant).build_layout, BuildLayout::Files);
     }
 
     #[test]
     fn zip_layout_zips_everything_but_native_files() {
         let kernel = TempDir::new().unwrap();
-        let variant = kernel.path().join("build/torch-cuda");
-        write_variant(&variant, "zip");
+        let variant = write_kernel(kernel.path(), "zip");
 
-        zip_build(Some(kernel.path().to_path_buf())).unwrap();
+        zip_build(kernel.path().to_path_buf(), None).unwrap();
 
         assert_eq!(
             archive_names(&variant.join("test-id.zip")),
@@ -264,18 +307,74 @@ mod tests {
     }
 
     #[test]
+    fn zip_updates_metadata() {
+        let kernel = TempDir::new().unwrap();
+        let variant = write_kernel(kernel.path(), "zip");
+        assert_eq!(read_metadata(&variant).build_layout, BuildLayout::Files);
+
+        zip_build(kernel.path().to_path_buf(), None).unwrap();
+
+        let metadata = read_metadata(&variant);
+        assert_eq!(metadata.build_layout, BuildLayout::Zip);
+        assert_eq!(metadata.kernels_minver.unwrap().to_string(), "0.19.0");
+    }
+
+    #[test]
+    fn variants_can_be_in_a_different_directory() {
+        let source = TempDir::new().unwrap();
+        let output = TempDir::new().unwrap();
+        write_kernel(source.path(), "zip");
+        // Move the variant to the output directory, which has no `build.toml`.
+        let variant = output.path().join("torch-cuda");
+        fs::rename(source.path().join("build/torch-cuda"), &variant).unwrap();
+
+        zip_build(
+            source.path().to_path_buf(),
+            Some(output.path().to_path_buf()),
+        )
+        .unwrap();
+
+        assert!(variant.join("test-id.zip").exists());
+        assert_eq!(read_metadata(&variant).build_layout, BuildLayout::Zip);
+    }
+
+    #[test]
+    fn zip_build_is_idempotent() {
+        let kernel = TempDir::new().unwrap();
+        let variant = write_kernel(kernel.path(), "zip");
+
+        zip_build(kernel.path().to_path_buf(), None).unwrap();
+        let archive = fs::read(variant.join("test-id.zip")).unwrap();
+        let metadata = fs::read(variant.join("metadata.json")).unwrap();
+
+        // Variants that were already zipped are skipped.
+        zip_build(kernel.path().to_path_buf(), None).unwrap();
+        assert_eq!(fs::read(variant.join("test-id.zip")).unwrap(), archive);
+        assert_eq!(fs::read(variant.join("metadata.json")).unwrap(), metadata);
+    }
+
+    #[test]
+    fn existing_archive_for_unzipped_variant_is_an_error() {
+        let kernel = TempDir::new().unwrap();
+        let variant = write_kernel(kernel.path(), "zip");
+        fs::write(variant.join("test-id.zip"), b"not an archive").unwrap();
+
+        assert!(zip_build(kernel.path().to_path_buf(), None).is_err());
+        assert_eq!(read_metadata(&variant).build_layout, BuildLayout::Files);
+        assert!(variant.join("pkg/_ops.py").exists());
+    }
+
+    #[test]
     fn zip_is_reproducible() {
         let kernel1 = TempDir::new().unwrap();
         let kernel2 = TempDir::new().unwrap();
-        let variant1 = kernel1.path().join("build/torch-cuda");
-        let variant2 = kernel2.path().join("build/torch-cuda");
-        write_variant(&variant1, "zip");
-        write_variant(&variant2, "zip");
+        let variant1 = write_kernel(kernel1.path(), "zip");
+        let variant2 = write_kernel(kernel2.path(), "zip");
 
-        zip_build(Some(kernel1.path().to_path_buf())).unwrap();
+        zip_build(kernel1.path().to_path_buf(), None).unwrap();
         // Different modification time must not change the archive.
         std::thread::sleep(std::time::Duration::from_millis(1100));
-        zip_build(Some(kernel2.path().to_path_buf())).unwrap();
+        zip_build(kernel2.path().to_path_buf(), None).unwrap();
 
         assert_eq!(
             fs::read(variant1.join("test-id.zip")).unwrap(),
@@ -289,26 +388,16 @@ mod tests {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
         let kernel = TempDir::new().unwrap();
-        let variant = kernel.path().join("build/torch-cuda");
-        write_variant(&variant, "zip");
+        let variant = write_kernel(kernel.path(), "zip");
         fs::write(
             variant.join("pkg").join(OsStr::from_bytes(b"lib\xff.so")),
             b"elf",
         )
         .unwrap();
 
-        assert!(zip_build(Some(kernel.path().to_path_buf())).is_err());
+        assert!(zip_build(kernel.path().to_path_buf(), None).is_err());
         assert!(!variant.join("test-id.zip").exists());
         assert!(variant.join("pkg/_ops.py").exists());
-    }
-
-    #[test]
-    fn existing_archive_is_an_error() {
-        let kernel = TempDir::new().unwrap();
-        let variant = kernel.path().join("build/torch-cuda");
-        write_variant(&variant, "zip");
-
-        zip_build(Some(kernel.path().to_path_buf())).unwrap();
-        assert!(zip_build(Some(kernel.path().to_path_buf())).is_err());
+        assert_eq!(read_metadata(&variant).build_layout, BuildLayout::Files);
     }
 }

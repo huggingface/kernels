@@ -3,7 +3,9 @@ use std::str::FromStr;
 use eyre::Result;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::config::{Backend, Build, BuildLayout, GitUrl, KernelDependency, KernelName};
+use crate::config::{
+    Backend, Build, BuildLayout, GitUrl, KERNELS_VERSION_ZIP_LAYOUT, KernelDependency, KernelName,
+};
 use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
 use crate::version::Version;
@@ -116,6 +118,17 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    /// Update the metadata after ZIP conversion of the build layout.
+    ///
+    /// Also raises the minimum `kernels` version to 0.19.0.
+    pub fn set_kernel_layout_to_zip(&mut self) {
+        self.build_layout = BuildLayout::Zip;
+        self.kernels_minver = Some(match self.kernels_minver.take() {
+            Some(minver) => minver.max(KERNELS_VERSION_ZIP_LAYOUT),
+            None => KERNELS_VERSION_ZIP_LAYOUT,
+        });
+    }
+
     /// Construct metadata for a specific backend.
     ///
     /// This constructor creates metadata for a specific backend from the
@@ -132,7 +145,11 @@ impl Metadata {
             id,
             name: build.general.name.clone(),
             version: build.general.version,
-            build_layout: build.general.build_layout,
+            // Initially, every kernel starts out with the files layout. The
+            // hook that converts the build to the ZIP layout will also update
+            // the metadata. We cannot do this before the hook runs, otherwise
+            // the kernel would not load in development shells.
+            build_layout: BuildLayout::Files,
             kernels_minver: Some(build.required_kernels_version(backend)),
             license: build.general.license.clone(),
             upstream: build.general.upstream.clone(),
@@ -358,10 +375,25 @@ mod tests {
     }
 
     #[test]
-    fn metadata_preserves_zip_layout() {
+    fn metadata_for_zip_config_starts_with_files_layout() {
         let mut build = torch_noarch_build();
         build.general.build_layout = BuildLayout::Zip;
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        // The layout is only changed once the build was actually zipped.
+        assert_eq!(metadata.build_layout, BuildLayout::Files);
+        assert_eq!(
+            metadata.kernels_minver,
+            Some(Version::from_str("0.14.0").unwrap())
+        );
+    }
+
+    #[test]
+    fn metadata_set_kernel_layout_to_zip() {
+        let build = torch_noarch_build();
+        let mut metadata =
+            Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        metadata.set_kernel_layout_to_zip();
 
         let json = serde_json::to_string(&metadata).unwrap();
         assert!(json.contains(r#""build-layout":"zip""#));
@@ -369,6 +401,20 @@ mod tests {
         assert_eq!(
             Metadata::from_str(&json).unwrap().build_layout,
             BuildLayout::Zip
+        );
+    }
+
+    #[test]
+    fn metadata_set_kernel_layout_to_zip_keeps_higher_minver() {
+        let build = torch_noarch_build();
+        let mut metadata =
+            Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        metadata.kernels_minver = Some(Version::from_str("0.20.0").unwrap());
+        metadata.set_kernel_layout_to_zip();
+
+        assert_eq!(
+            metadata.kernels_minver,
+            Some(Version::from_str("0.20.0").unwrap())
         );
     }
 

@@ -343,6 +343,15 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             });
         }
 
+        // For non-PR uploads, record the branch's original HEAD before committing
+        // so we can roll back to it if a batch fails partway through.
+        // `None` indicates the branch was newly created by this upload.
+        let original_head: Option<String> = refs
+            .branches
+            .iter()
+            .find(|r| r.name == *branch)
+            .map(|r| r.target_commit.clone());
+
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
                 format!(
@@ -356,7 +365,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             let open_pr = args.create_pr && pr_revision.is_none();
             let revision = pr_revision.clone().unwrap_or_else(|| branch.clone());
 
-            let commit_info = repo
+            let commit_result = repo
                 .create_commit()
                 .operations(chunk.to_vec())
                 .commit_message(&commit_message)
@@ -364,7 +373,19 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                 .create_pr(open_pr)
                 .maybe_progress(progress_handler.clone())
                 .send()
-                .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
+                .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"));
+
+            let commit_info = match commit_result {
+                Ok(info) => info,
+                Err(err) => {
+                    // Roll back if a batch upload fails on a branch (PR uploads
+                    // target PR refs and do not touch the branch).
+                    if !args.create_pr && (batch_index > 0 || original_head.is_none()) {
+                        rollback_branch(&repo, branch, original_head.as_deref());
+                    }
+                    return Err(err);
+                }
+            };
 
             if open_pr {
                 let (pr_ref, pr_url) =
@@ -490,6 +511,37 @@ fn resolve_pr<T: RepoType>(
         .ok_or_else(|| eyre!("Malformed pull-request ref `{}`", pr.git_ref))?;
 
     Ok((pr.git_ref.clone(), pr_url_for(num)))
+}
+
+/// Roll back a branch to its state before a failed multi-batch upload.
+///
+/// - New branch (`original_head = None`): deletes the branch.
+/// - Existing branch (`original_head = Some(oid)`): deletes it and recreates
+///   it at the original OID so the branch pointer is restored exactly.
+///
+/// Rollback failure is non-fatal: the original upload error is returned to the
+/// caller regardless; this function only logs any rollback problems.
+fn rollback_branch<T: RepoType>(
+    repo: &HFRepositorySync<T>,
+    branch: &str,
+    original_head: Option<&str>,
+) {
+    match repo.delete_branch().branch(branch).send() {
+        Err(err) => eprintln!(
+            "warning: rollback failed — could not delete branch `{branch}`: {err:#}. \
+             The branch may be partially updated."
+        ),
+        Ok(_) => match original_head {
+            None => eprintln!("Rolled back: deleted newly created branch `{branch}`."),
+            Some(oid) => match repo.create_branch().branch(branch).revision(oid).send() {
+                Ok(_) => eprintln!("Rolled back branch `{branch}` to `{oid}`."),
+                Err(err) => eprintln!(
+                    "warning: rollback: branch `{branch}` was deleted but could not be \
+                     recreated at `{oid}`: {err:#}."
+                ),
+            },
+        },
+    }
 }
 
 /// An open pull request of an earlier upload.

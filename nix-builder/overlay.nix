@@ -7,7 +7,7 @@ final: prev:
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
-  hipOffloadJobsHook = final.callPackage ./pkgs/hip-offload-jobs-hook { };
+  hipccThreadsHook = final.callPackage ./pkgs/hipcc-threads-hook { };
 
   hip-parallel-driver = final.callPackage ./pkgs/hip-parallel-driver { };
 

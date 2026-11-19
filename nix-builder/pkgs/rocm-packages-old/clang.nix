@@ -91,7 +91,7 @@
     echo "" > $out/nix-support/libcxx-cxxflags
 
     # Run the per-architecture device jobs of multi-architecture HIP
-    # compilations in parallel when HIP_OFFLOAD_JOBS is set.
+    # compilations in parallel when HIPCC_THREADS is set.
     for f in $out/bin/*; do
       if [ -f "$f" ] && [ ! -L "$f" ] && grep -q "@hipParallelDriver@" "$f"; then
         substituteInPlace "$f" \

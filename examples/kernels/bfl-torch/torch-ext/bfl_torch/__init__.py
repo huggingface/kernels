@@ -14,6 +14,9 @@ def dense_attention(
     shape, `length` a multiple of 64. The output has the query's shape.
     `scale` defaults to `128**-0.5`. Each new (length, heads, scale)
     combination compiles the kernel once.
+
+    The kernel requires an M5 or later GPU and torch >= 2.11; otherwise this
+    falls back to Torch SDPA.
     """
     return ops.dense_attention(query, key, value, HEAD_DIM**-0.5 if scale is None else float(scale))
 

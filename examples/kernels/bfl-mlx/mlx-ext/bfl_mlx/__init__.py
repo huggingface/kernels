@@ -4,6 +4,9 @@ import mlx.core as mx
 
 from ._shader import HEAD_DIM, HEADER, SOURCE, THREADS_PER_THREADGROUP, launch_shape
 
+# The shader assumes the cooperative tensor layout of GPU generation 17 (M5) and later.
+_MIN_GPU_GENERATION = 17
+
 
 @lru_cache(maxsize=1)
 def _kernel():
@@ -16,6 +19,12 @@ def _kernel():
     )
 
 
+@lru_cache(maxsize=1)
+def _shader_supported() -> bool:
+    # The architecture is e.g. "applegpu_g17s".
+    return int(mx.device_info()["architecture"][-3:-1]) >= _MIN_GPU_GENERATION
+
+
 def dense_attention(query: mx.array, key: mx.array, value: mx.array, scale: float | None = None) -> mx.array:
     """Non-causal `softmax(scale * Q K^T) V` per (batch, head).
 
@@ -23,6 +32,9 @@ def dense_attention(query: mx.array, key: mx.array, value: mx.array, scale: floa
     `length` a multiple of 64. The output has the query's shape. `scale`
     defaults to `128**-0.5`. Each new (length, heads, scale) combination
     compiles the kernel once.
+
+    The kernel requires an M5 or later GPU; otherwise this falls back to
+    MLX SDPA.
     """
     scale = HEAD_DIM**-0.5 if scale is None else float(scale)
     for name, a in (("query", query), ("key", key), ("value", value)):
@@ -33,6 +45,10 @@ def dense_attention(query: mx.array, key: mx.array, value: mx.array, scale: floa
     threadgroups, scale2_bits = launch_shape(tuple(query.shape), scale)
     if threadgroups == 0:
         return mx.zeros(query.shape, dtype=mx.bfloat16)
+    if not _shader_supported():
+        # MLX SDPA wants [B, H, L, D].
+        q, k, v = (a.transpose(0, 2, 1, 3) for a in (query, key, value))
+        return mx.fast.scaled_dot_product_attention(q, k, v, scale=scale).transpose(0, 2, 1, 3)
     _, seq, heads, _ = query.shape
     return _kernel()(
         inputs=[query, key, value],

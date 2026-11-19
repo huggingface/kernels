@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 from huggingface_hub.file_download import repo_folder_name
 
-import kernels._versions as versions
-import kernels.hf_hub as hf_hub
+import kernels._internals._versions as versions
+import kernels._internals.hf_hub as hf_hub
 from kernels import install_kernel
+from kernels._internals._versions import _resolve_ref
 from kernels._rust import KernelVersion, Oid
-from kernels._versions import _resolve_ref
 
 REPO_ID = "kernels-test/signatures"
 COMMIT = "d649efb56fb249ac8f7a57fa1866728ad0c60e52"
@@ -135,7 +135,7 @@ def test_recording_a_ref_tolerates_an_unwritable_cache(tmp_path, monkeypatch, ca
     monkeypatch.setenv("KERNELS_CACHE", str(tmp_path / "not-a-directory"))
     (tmp_path / "not-a-directory").write_text("")
 
-    with caplog.at_level("WARNING", logger="kernels._versions"):
+    with caplog.at_level("WARNING", logger="kernels._internals._versions"):
         versions._record_ref_in_cache(REPO_ID, "v1", COMMIT)
 
     assert "Could not record revision" in caplog.text

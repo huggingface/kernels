@@ -2,8 +2,8 @@ import pytest
 from huggingface_hub import HfApi
 from packaging.version import Version
 
-from kernels.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
-from kernels.variants import (
+from kernels._internals.backends import CANN, CPU, CUDA, XPU, Metal, ROCm, parse_backend
+from kernels._internals.variants import (
     ArchVariant,
     Noarch,
     Python,

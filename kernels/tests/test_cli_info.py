@@ -8,11 +8,11 @@ import pytest
 from huggingface_hub.hf_api import GitRefInfo
 from packaging.version import Version
 
-from kernels.backends import CUDA
-from kernels.cli import info as info_module
-from kernels.cli import main
-from kernels.cli.info import print_kernel_info
-from kernels.variants import _resolve_variant_for_system, get_variants_local
+from kernels._internals.backends import CUDA
+from kernels._internals.cli import info as info_module
+from kernels._internals.cli import main
+from kernels._internals.cli.info import print_kernel_info
+from kernels._internals.variants import _resolve_variant_for_system, get_variants_local
 
 REPO_ID = "kernels-community/activation"
 COMMIT = "a" * 40
@@ -30,7 +30,9 @@ def cuda_system(monkeypatch):
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    monkeypatch.setattr("kernels.variants.resolve_variants", lambda variants, backend: resolve(variants=variants))
+    monkeypatch.setattr(
+        "kernels._internals.variants.resolve_variants", lambda variants, backend: resolve(variants=variants)
+    )
 
 
 def write_variant(path, *, variant="torch-cuda", deps=(), python_deps=(), **metadata):
@@ -74,9 +76,9 @@ def hub(monkeypatch, tmp_path):
     api.snapshot_download.side_effect = AssertionError("Kernel artifacts must not be downloaded")
     variants = Mock(side_effect=lambda api, *, repo_id, revision: get_variants_local(tmp_path / repo_id / "build"))
     monkeypatch.setattr(info_module, "_get_hf_api", lambda: api)
-    monkeypatch.setattr("kernels.hf_hub._get_hf_api", lambda: api)
+    monkeypatch.setattr("kernels._internals.hf_hub._get_hf_api", lambda: api)
     monkeypatch.setattr(info_module, "get_variants", variants)
-    monkeypatch.setattr("kernels.resolver.get_variants", variants)
+    monkeypatch.setattr("kernels._internals.resolver.get_variants", variants)
     monkeypatch.setattr(info_module.constants, "HF_HUB_OFFLINE", False)
     monkeypatch.setenv("KERNELS_CACHE", str(tmp_path / "cache"))
     add_kernel(REPO_ID)

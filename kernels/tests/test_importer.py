@@ -6,8 +6,8 @@ import zipfile
 
 import pytest
 
+from kernels._internals.importer import _import_from_path, _loaded_kernel_metadata, _loaded_kernels
 from kernels._rust import BuildLayout, Digest, DigestAlgorithm
-from kernels.importer import _import_from_path, _loaded_kernel_metadata, _loaded_kernels
 
 _EXEC_LOG_MODULE = "_kernels_test_exec_log"
 _COUNTING_ID = "counting_1_cuda"

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 import torch
 
-import kernels.load as load_module
+import kernels._internals.load as load_module
 from kernels import (
     FuncRepository,
     LayerRepository,
@@ -20,10 +20,10 @@ from kernels import (
     install_kernel,
     load_kernel,
 )
+from kernels._internals.archs import _supports_cuda_capability
+from kernels._internals.deps import DepTreeNode
+from kernels._internals.resolver import LocalKernel
 from kernels._rust import Metadata
-from kernels.archs import _supports_cuda_capability
-from kernels.deps import DepTreeNode
-from kernels.resolver import LocalKernel
 
 
 @pytest.mark.parametrize(
@@ -92,7 +92,7 @@ def test_get_kernel_rejects_unsupported_capability(monkeypatch):
 @pytest.fixture(params=[False, True], ids=["online", "offline"])
 def kernel_tree(request, monkeypatch, make_metadata, tmp_path):
     monkeypatch.setattr(load_module.constants, "HF_HUB_OFFLINE", request.param)
-    for module_name in ("kernels.load", "kernels.layer.layer", "kernels.layer.func"):
+    for module_name in ("kernels._internals.load", "kernels._internals.layer.layer", "kernels._internals.layer.func"):
         monkeypatch.setattr(f"{module_name}._get_hf_api", lambda **kwargs: None)
     tree = DepTreeNode(
         location=LocalKernel(variant_path=tmp_path, metadata=make_metadata("cuda", ["9.0a"])),

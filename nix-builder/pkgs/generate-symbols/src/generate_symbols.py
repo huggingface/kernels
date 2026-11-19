@@ -121,14 +121,14 @@ def load_kernel_with_paths(
     download dependencies.
     """
     from kernels._rust import KernelDependency, KernelPaths, KernelVersion
-    from kernels.hf_hub import _get_hf_api
-    from kernels.load import get_kernel_with_resolver
-    from kernels.resolver import (
+    from kernels._internals.hf_hub import _get_hf_api
+    from kernels._internals.load import get_kernel_with_resolver
+    from kernels._internals.resolver import (
         KernelPathsResolver,
         RepoPathsResolver,
         SequentialResolver,
     )
-    from kernels.validate import (
+    from kernels._internals.validate import (
         AllKernelValidator,
         AllMetadataValidator,
         default_metadata_validators,

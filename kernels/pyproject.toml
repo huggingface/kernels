@@ -60,10 +60,10 @@ docs = [
 ]
 
 [project.scripts]
-kernels = "kernels.cli:main"
+kernels = "kernels._internals.cli:main"
 
 [project.entry-points."egg_info.writers"]
-"kernels.lock" = "kernels.locking:write_egg_lockfile"
+"kernels.lock" = "kernels._internals.locking:write_egg_lockfile"
 
 [tool.maturin]
 module-name = "kernels._rust"

@@ -7,14 +7,13 @@ import pytest
 import torch
 
 import kernels
-import kernels.digest as digest_module
-import kernels.validate as validate_module
-import kernels.verify as verify_module
-from kernels._rust import DigestViolation, KernelLocation, Metadata, Oid, Version
-from kernels.deps import DepTreeNode
-from kernels.digest import DigestVerificationResult
-from kernels.resolver import LocalKernel, RemoteKernel
-from kernels.validate import (
+import kernels._internals.digest as digest_module
+import kernels._internals.validate as validate_module
+import kernels._internals.verify as verify_module
+from kernels._internals.deps import DepTreeNode
+from kernels._internals.digest import DigestVerificationResult
+from kernels._internals.resolver import LocalKernel, RemoteKernel
+from kernels._internals.validate import (
     ArchValidator,
     DigestValidator,
     DirtyValidator,
@@ -24,8 +23,9 @@ from kernels.validate import (
     default_kernel_validators,
     default_metadata_validators,
 )
-from kernels.variants import parse_variant
-from kernels.verify import SignatureVerificationResult
+from kernels._internals.variants import parse_variant
+from kernels._internals.verify import SignatureVerificationResult
+from kernels._rust import DigestViolation, KernelLocation, Metadata, Oid, Version
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -57,19 +57,19 @@ def _metadata_with_provenance(provenance):
 
 @pytest.mark.parametrize("provenance", [None, CLEAN_PROVENANCE])
 def test_dirty_validator_does_not_warn_when_clean(caplog, provenance):
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(provenance), variant="test-variant")
     assert not caplog.records
 
 
 def test_dirty_validator_warns_on_dirty_kernel_source(caplog):
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_KERNEL), variant="test-variant")
     assert "dirty git tree" in caplog.text
 
 
 def test_dirty_validator_names_dirty_sources(caplog):
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_BUILDER), variant="test-variant")
     assert "kernel-builder" in caplog.text
 
@@ -285,7 +285,7 @@ def test_signature_validator_passes_policy(tmp_path, make_metadata, recorded_ver
 def test_signature_validator_is_quiet_on_success(tmp_path, make_metadata, recorded_verifications, caplog):
     kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
 
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         SignatureValidator().validate_kernel(kernel=kernel)
 
     assert caplog.text == ""
@@ -306,7 +306,7 @@ def test_signature_validator_warns_but_does_not_raise(tmp_path, make_metadata, r
     results.append(result)
     kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
 
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         SignatureValidator().validate_kernel(kernel=kernel)
 
     # The message belongs to the result. The validator only says which kernel
@@ -370,7 +370,7 @@ def test_digest_validator_does_not_need_sigstore(tmp_path, make_metadata, record
 def test_digest_validator_is_quiet_on_success(tmp_path, make_metadata, recorded_digest_verifications, caplog):
     kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
 
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         DigestValidator().validate_kernel(kernel=kernel)
 
     assert caplog.text == ""
@@ -382,7 +382,7 @@ def test_digest_validator_warns_on_missing_digest(tmp_path, make_metadata, recor
     results.append(result)
     kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
 
-    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.validate"):
         DigestValidator().validate_kernel(kernel=kernel)
 
     assert str(result) in caplog.text

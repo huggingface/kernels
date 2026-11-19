@@ -1,0 +1,88 @@
+import argparse
+import sys
+
+from huggingface_hub import constants
+
+if sys.version_info >= (3, 11):
+    from typing import assert_never
+else:
+    from typing_extensions import assert_never
+
+from kernels._internals._versions import resolve_revision_or_version
+from kernels._internals.compat import has_sigstore
+from kernels._internals.digest import DigestVerificationResult, verify_digest
+from kernels._internals.install import install_kernel, install_kernel_all_variants
+from kernels._internals.variants import get_variants_local
+from kernels._rust import KernelLocation, Metadata
+
+
+def verify_signature(args: argparse.Namespace) -> None:
+    if not has_sigstore:
+        print(
+            "❌ Verifying signatures requires the `sigstore` package, "
+            'install it with: pip install "kernels[sigstore]"',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Lazily import optional dependency.
+    from kernels._internals.verify import SignatureVerificationResult
+    from kernels._internals.verify import verify_signature as verify_variant_signature
+
+    revision = resolve_revision_or_version(
+        args.repo_id,
+        revision=None,
+        version=args.version,
+        local_files_only=constants.HF_HUB_OFFLINE,
+    )
+
+    if args.all_variants:
+        repo_path = install_kernel_all_variants(args.repo_id, revision=str(revision))
+        variants = get_variants_local(repo_path)
+        kernel_paths = [repo_path / variant.variant_str for variant in variants]
+    else:
+        kernel_paths = [install_kernel(args.repo_id, revision=str(revision))]
+
+    failed = False
+
+    for kernel_path in kernel_paths:
+        variant_str = kernel_path.name
+        location = KernelLocation.remote(args.repo_id, revision, variant_str)
+
+        signature_result = verify_variant_signature(
+            kernel_path,
+            location=location,
+            # Always fully verify the kernel in this subcommand.
+            cache=False,
+        )
+
+        match signature_result:
+            case SignatureVerificationResult.SignatureBundleMissing() if args.filter_unsigned:
+                continue
+            case SignatureVerificationResult.MetadataMissing() if args.filter_no_digest:
+                continue
+            case SignatureVerificationResult.Success():
+                pass
+            case SignatureVerificationResult.Failure():
+                print(f"❌ {variant_str}: {signature_result}")
+                failed = True
+                continue
+            case _ as unreachable_signature:
+                assert_never(unreachable_signature)
+
+        metadata = Metadata.read_from_file(kernel_path / "metadata.json")
+        digest_result = verify_digest(kernel_path, metadata=metadata, location=location, cache=False)
+
+        match digest_result:
+            case DigestVerificationResult.DigestMissing() if args.filter_no_digest:
+                pass
+            case DigestVerificationResult.Success():
+                print(f"✅ {variant_str}: {signature_result} and {digest_result}")
+            case DigestVerificationResult.Failure():
+                print(f"❌ {variant_str}: {digest_result}")
+                failed = True
+            case _ as unreachable_digest:
+                assert_never(unreachable_digest)
+
+    if failed:
+        sys.exit(1)

@@ -14,8 +14,8 @@ from kernels import (
     use_kernel_func_from_hub,
     use_kernel_mapping,
 )
-from kernels.cli import download_kernels
-from kernels.load import get_locked_kernel
+from kernels._internals.cli import download_kernels
+from kernels._internals.load import get_locked_kernel
 
 
 # Mock download arguments class.

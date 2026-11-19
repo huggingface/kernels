@@ -10,9 +10,9 @@ from huggingface_hub.errors import RemoteEntryNotFoundError
 from huggingface_hub.hf_api import GitRefInfo
 from packaging.version import Version
 
-from kernels.backends import CUDA
-from kernels.cli import describe_api, main
-from kernels.variants import _resolve_variant_for_system, parse_variant
+from kernels._internals.backends import CUDA
+from kernels._internals.cli import describe_api, main
+from kernels._internals.variants import _resolve_variant_for_system, parse_variant
 
 REPO_ID = "kernels-community/example"
 PREFERRED = "torch210-cu128-x86_64-linux"
@@ -30,7 +30,9 @@ def cuda_system(monkeypatch):
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    monkeypatch.setattr("kernels.variants.resolve_variants", lambda variants, backend: resolve(variants=variants))
+    monkeypatch.setattr(
+        "kernels._internals.variants.resolve_variants", lambda variants, backend: resolve(variants=variants)
+    )
 
 
 @pytest.fixture
@@ -109,10 +111,10 @@ def hub(monkeypatch, local_kernel):
     api.repo_info.return_value = SimpleNamespace(sha=COMMIT)
     api.hf_hub_download.side_effect = lambda repo_id, filename, **kwargs: str(local_kernel / filename)
     api.snapshot_download.return_value = str(local_kernel)
-    monkeypatch.setattr("kernels.hf_hub._get_hf_api", lambda: api)
+    monkeypatch.setattr("kernels._internals.hf_hub._get_hf_api", lambda: api)
     monkeypatch.setattr(describe_api, "_get_hf_api", lambda: api)
     variants = Mock(return_value=[parse_variant("torch-cuda")])
-    monkeypatch.setattr("kernels.resolver.get_variants", variants)
+    monkeypatch.setattr("kernels._internals.resolver.get_variants", variants)
     monkeypatch.setattr(describe_api.constants, "HF_HUB_OFFLINE", False)
     monkeypatch.setenv("KERNELS_CACHE", str(local_kernel / "cache"))
     return api, variants

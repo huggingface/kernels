@@ -8,7 +8,7 @@ from huggingface_hub import constants
 from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
-from kernels._versions import resolve_version_spec_as_ref
+from kernels._internals._versions import resolve_version_spec_as_ref
 
 
 @pytest.fixture
@@ -121,13 +121,13 @@ def test_version():
 
 
 def test_version_outdated_warning(caplog):
-    with caplog.at_level(logging.WARNING, logger="kernels._versions"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == 1
     assert "You are using version 1 of 'kernels-test/versions', but version 10 is available." in caplog.text
 
     caplog.clear()
-    with caplog.at_level(logging.WARNING, logger="kernels._versions"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals._versions"):
         kernel = get_kernel("kernels-test/versions", version=10)
     assert kernel.version() == 10
     assert "but version" not in caplog.text

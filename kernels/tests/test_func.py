@@ -21,7 +21,7 @@ from kernels import (
     use_kernel_mapping,
     use_kernelized_func,
 )
-from kernels.layer.func import LockedFuncRepository
+from kernels._internals.layer.func import LockedFuncRepository
 
 
 # Base modules used as a replacement forward in tests
@@ -184,7 +184,7 @@ def test_deprecated_local_kernel_func(device):
 
 
 def test_deprecated_kernel_func(caplog):
-    with caplog.at_level(logging.WARNING, logger="kernels.layer.func"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.layer.func"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul", version=1)
 
         project_dir = Path(__file__).parent / "layer_locking"

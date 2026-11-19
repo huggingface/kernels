@@ -16,6 +16,8 @@ backends = [
 repo-id = "kernels-test/relu-zip"
 
 [torch]
+# Also include the tuned Triton configurations.
+pyext = ["py", "pyi", "json"]
 src = [
     "torch-ext/torch_binding.cpp",
     "torch-ext/torch_binding.h",

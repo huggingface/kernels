@@ -5,6 +5,7 @@ import importlib.util
 import logging
 import sys
 import threading
+import zipfile
 import zipimport
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,11 @@ from types import ModuleType
 
 from kernels._rust import BuildLayout, DigestValidationError, Metadata
 from kernels.hf_hub import RepoInfo
+
+try:
+    from importlib.resources.abc import TraversableResources
+except ImportError:  # Python < 3.11
+    from importlib.abc import TraversableResources
 
 logger = logging.getLogger(__name__)
 
@@ -145,10 +151,21 @@ def _import_from_path(
         return module
 
 
+class _ZipResourceReader(TraversableResources):
+    """Resource reader for a package that is stored in a ZIP archive."""
+
+    def __init__(self, zip_path: Path):
+        self._zip_path = zip_path
+
+    def files(self):
+        return zipfile.Path(self._zip_path)
+
+
 class _ZipPackageLoader(importlib.abc.Loader):
     """Loader for the `__init__.py` of a package that is stored in a ZIP archive."""
 
     def __init__(self, zip_path: Path):
+        self._zip_path = zip_path
         self._importer = zipimport.zipimporter(str(zip_path))
 
     def create_module(self, spec):
@@ -160,6 +177,12 @@ class _ZipPackageLoader(importlib.abc.Loader):
 
     def get_source(self, fullname: str) -> str | None:
         return self._importer.get_source("__init__")
+
+    def get_data(self, path: str) -> bytes:
+        return self._importer.get_data(path)
+
+    def get_resource_reader(self, fullname: str) -> _ZipResourceReader:
+        return _ZipResourceReader(self._zip_path)
 
 
 def _zip_spec(variant_path: Path, metadata: Metadata) -> importlib.machinery.ModuleSpec:

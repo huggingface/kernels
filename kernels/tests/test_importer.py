@@ -357,3 +357,37 @@ def test_zip_layout_source_of_init_is_available(tmp_path, zip_cleanup):
     module = _import_from_path(variant_dir, deps={})
 
     assert module.SOURCE == "def answer():\n    return 42\n"
+
+
+def _write_zip_variant_with_data(tmp_path):
+    variant_dir = _write_zip_variant(tmp_path)
+    with zipfile.ZipFile(variant_dir / f"{_ZIP_ID}.zip", "a") as archive:
+        archive.writestr("configs/device.json", '{"block_size": 1024}')
+    return variant_dir
+
+
+def test_zip_layout_resources(tmp_path, zip_cleanup):
+    import importlib.resources
+    import json as json_module
+    import pkgutil
+
+    variant_dir = _write_zip_variant_with_data(tmp_path)
+    module = _import_from_path(variant_dir, deps={})
+
+    configs = importlib.resources.files(module.__name__) / "configs"
+    assert [p.name for p in configs.iterdir()] == ["device.json"]
+    assert json_module.loads((configs / "device.json").read_text()) == {"block_size": 1024}
+    assert (configs / "device.json").is_file()
+    assert not (configs / "missing.json").is_file()
+
+    assert pkgutil.get_data(module.__name__, "configs/device.json") == b'{"block_size": 1024}'
+
+
+def test_zip_layout_resources_as_file(tmp_path, zip_cleanup):
+    import importlib.resources
+
+    variant_dir = _write_zip_variant_with_data(tmp_path)
+    module = _import_from_path(variant_dir, deps={})
+
+    with importlib.resources.as_file(importlib.resources.files(module.__name__) / "configs" / "device.json") as path:
+        assert path.read_text() == '{"block_size": 1024}'

@@ -23,6 +23,7 @@
   ninja,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
   rewrite-nix-paths-macho,
   rustc,
   rustPlatform,
@@ -239,6 +240,7 @@ stdenv.mkDerivation (
 
     nativeBuildInputs = [
       cmake
+      zip-build-hook
       hash-kernel-hook
       ninja
       kernel-builder

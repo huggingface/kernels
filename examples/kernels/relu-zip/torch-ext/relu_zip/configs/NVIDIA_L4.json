@@ -1,0 +1,205 @@
+{
+  "device": "NVIDIA L4",
+  "triton_version": "3.6.0",
+  "torch_version": "2.10.0+cu126",
+  "configs": {
+    "float32": {
+      "4096": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "8192": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "16384": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 2
+      },
+      "32768": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 2
+      },
+      "65536": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 8
+      },
+      "131072": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "262144": {
+        "BLOCK_SIZE": 512,
+        "num_warps": 8
+      },
+      "524288": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "1048576": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 1
+      },
+      "2097152": {
+        "BLOCK_SIZE": 2048,
+        "num_warps": 4
+      },
+      "4194304": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "8388608": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "16777216": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "33554432": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "67108864": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "134217728": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      }
+    },
+    "float16": {
+      "4096": {
+        "BLOCK_SIZE": 512,
+        "num_warps": 2
+      },
+      "8192": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "16384": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "32768": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "65536": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "131072": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "262144": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "524288": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "1048576": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 2
+      },
+      "2097152": {
+        "BLOCK_SIZE": 4096,
+        "num_warps": 4
+      },
+      "4194304": {
+        "BLOCK_SIZE": 8192,
+        "num_warps": 4
+      },
+      "8388608": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "16777216": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "33554432": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "67108864": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "134217728": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      }
+    },
+    "bfloat16": {
+      "4096": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "8192": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "16384": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "32768": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "65536": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "131072": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "262144": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 1
+      },
+      "524288": {
+        "BLOCK_SIZE": 4096,
+        "num_warps": 4
+      },
+      "1048576": {
+        "BLOCK_SIZE": 4096,
+        "num_warps": 8
+      },
+      "2097152": {
+        "BLOCK_SIZE": 2048,
+        "num_warps": 2
+      },
+      "4194304": {
+        "BLOCK_SIZE": 8192,
+        "num_warps": 4
+      },
+      "8388608": {
+        "BLOCK_SIZE": 256,
+        "num_warps": 8
+      },
+      "16777216": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "33554432": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "67108864": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      },
+      "134217728": {
+        "BLOCK_SIZE": 1024,
+        "num_warps": 4
+      }
+    }
+  }
+}

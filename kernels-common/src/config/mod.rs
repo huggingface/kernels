@@ -45,6 +45,9 @@ const KERNELS_VERSION_BASELINE: Version<3> = Version::new([0, 14, 0]);
 /// First `kernels` version that can resolve kernel dependencies.
 const KERNELS_VERSION_KERNEL_DEPENDS: Version<3> = Version::new([0, 17, 0]);
 
+/// First `kernels` version that can import ZIP builds.
+pub(crate) const KERNELS_VERSION_ZIP_LAYOUT: Version<3> = Version::new([0, 19, 0]);
+
 /// First CUDA version that ships `tileiras`, the cuTile compiler.
 const MIN_TILEIRAS_VERSION: Version<2> = Version::new([13, 2]);
 
@@ -142,6 +145,14 @@ impl Framework {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildLayout {
+    #[default]
+    Files,
+    Zip,
+}
+
 pub struct General {
     pub name: KernelName,
 
@@ -158,6 +169,7 @@ pub struct General {
     pub source: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
+    pub build_layout: BuildLayout,
     pub hub: Option<Hub>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
@@ -617,6 +629,7 @@ mod tests {
             upstream: None,
             source: None,
             backends: vec![Backend::Tpu],
+            build_layout: BuildLayout::Files,
             hub: None,
             kernel_depends: None,
             python_depends: None,

@@ -1,12 +1,11 @@
 # Ship Triton autotune configurations
 
-Triton kernels typically have parameters, such as tile sizes, number of warps and 
+Triton kernels typically have parameters, such as tile sizes, number of warps and
 number of pipeline stages, whose optimal values depend on the GPU and the
 problem shape. Autotuning finds good values for these parameters, but doing
 it at runtime (e.g. with the
 [`@triton.autotune`](https://triton-lang.org/main/python-api/generated/triton.autotune.html)
 decorator) re-benchmarks every candidate configuration in each new process.
-
 
 However, one can run the tuner for the GPU models they like and store the
 best found configurations as files for using them later. This effectively
@@ -100,11 +99,10 @@ per process:
 ```python
 @functools.cache
 def _load_tuned_configs(N: int, K: int) -> Optional[Dict[int, Dict[str, int]]]:
-    path = _CONFIGS_DIR / config_file_name(N, K)
-    if path.exists():
+    path = importlib.resources.files(__package__) / "configs" / config_file_name(N, K)
+    if path.is_file():
         logger.info("Using tuned GEMM configurations from %s.", path)
-        with open(path) as f:
-            return {int(m): config for m, config in json.load(f).items()}
+        return {int(m): config for m, config in json.loads(path.read_text()).items()}
     logger.warning(
         "No tuned GEMM configuration found for this device and shape (%s). "
         "Falling back to heuristic defaults, performance may be suboptimal. "
@@ -124,6 +122,9 @@ def get_config(M: int, N: int, K: int) -> Dict[str, int]:
         return tuned[nearest_m]
     return default_config(M, N, K)
 ```
+
+Files are read with `importlib.resources` for compatibility with both
+supported kernel layouts (`files` and `zip`).
 
 The configuration is then passed to the Triton kernel as its `constexpr`
 and launch parameters (see

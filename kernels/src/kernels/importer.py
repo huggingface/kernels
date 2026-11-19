@@ -1,13 +1,23 @@
 import importlib
+import importlib.abc
+import importlib.machinery
+import importlib.util
 import logging
 import sys
 import threading
+import zipfile
+import zipimport
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from kernels._rust import DigestValidationError, Metadata
+from kernels._rust import BuildLayout, DigestValidationError, Metadata
 from kernels.hf_hub import RepoInfo
+
+if sys.version_info >= (3, 11):
+    from importlib.resources.abc import TraversableResources
+else:
+    from importlib.abc import TraversableResources
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +37,8 @@ class LoadedKernel:
     - `id` (`str`): kernel identifier that is unique to the kernel version + backend.
     - `name` (`str`): the name of the kernel.
     - `version` (`int`): the version of the kernel.
+    - `build_layout` (`BuildLayout`): the layout of the files in the build
+      variant (`FILES` or `ZIP`).
     - `kernels_minver` (`Version | None`): the minimum `kernels` library
       version required to load the kernel.
     - `license` (`str`): the license of the kernel.
@@ -139,6 +151,58 @@ def _import_from_path(
         return module
 
 
+class _ZipResourceReader(TraversableResources):
+    """Resource reader for a package that is stored in a ZIP archive."""
+
+    def __init__(self, zip_path: Path):
+        self._zip_path = zip_path
+
+    def files(self):
+        return zipfile.Path(self._zip_path)
+
+
+class _ZipPackageLoader(importlib.abc.Loader):
+    """Loader for the `__init__.py` of a package that is stored in a ZIP archive."""
+
+    def __init__(self, zip_path: Path):
+        self._zip_path = zip_path
+        self._importer = zipimport.zipimporter(str(zip_path))
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module: ModuleType) -> None:
+        code = self._importer.get_code("__init__")
+        exec(code, module.__dict__)
+
+    def get_source(self, fullname: str) -> str | None:
+        return self._importer.get_source("__init__")
+
+    def get_data(self, path: str) -> bytes:
+        return self._importer.get_data(path)
+
+    def get_resource_reader(self, fullname: str) -> _ZipResourceReader:
+        return _ZipResourceReader(self._zip_path)
+
+
+def _zip_spec(variant_path: Path, metadata: Metadata) -> importlib.machinery.ModuleSpec:
+    """Create the module spec for a kernel in the "zip" build layout."""
+    zip_path = variant_path / f"{metadata.id}.zip"
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"No kernel archive found at: `{zip_path}`")
+
+    spec = importlib.machinery.ModuleSpec(
+        metadata.id,
+        _ZipPackageLoader(zip_path),
+        origin=f"{zip_path}/__init__.py",
+        is_package=True,
+    )
+    spec.submodule_search_locations = [str(variant_path), str(zip_path)]
+    # Set `__file__` to the path of `__init__.py` in the archive.
+    spec.has_location = True
+    return spec
+
+
 def _import_from_path_uncached(
     variant_path: Path,
     metadata: Metadata,
@@ -151,15 +215,21 @@ def _import_from_path_uncached(
     """
     module_name = metadata.name.python_name
 
-    file_path = variant_path / "__init__.py"
-    if not file_path.exists():
-        file_path = variant_path / module_name / "__init__.py"
-    if not file_path.exists():
-        raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
+    spec: importlib.machinery.ModuleSpec | None
+    if metadata.build_layout == BuildLayout.ZIP:
+        spec = _zip_spec(variant_path, metadata)
+        origin = spec.origin
+    else:
+        file_path = variant_path / "__init__.py"
+        if not file_path.exists():
+            file_path = variant_path / module_name / "__init__.py"
+        if not file_path.exists():
+            raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
-    spec = importlib.util.spec_from_file_location(metadata.id, file_path)
+        spec = importlib.util.spec_from_file_location(metadata.id, file_path)
+        origin = str(file_path)
     if spec is None:
-        raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
+        raise ImportError(f"Cannot load spec for {module_name} from {origin}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")

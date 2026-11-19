@@ -10,6 +10,7 @@
   kernel-layout-check,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
 
   overrideTorch,
 }:
@@ -99,6 +100,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   nativeBuildInputs = [
     buildPython
+    zip-build-hook
     hash-kernel-hook
     kernel-builder
     kernel-layout-check

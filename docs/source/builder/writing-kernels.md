@@ -203,6 +203,12 @@ The following sections enumerate all supported options for `build.toml`.
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
+- `build-layout`: configure how Python and extra files of a build variant
+  are stored. Must be `files` (default) or `zip`. Using `zip` stores
+  the kernel's Python and extra files inside a ZIP archive. This is
+  useful to avoid rate limiting for kernels with many files, but is
+  not recommended for other kernels. A kernel build with `zip` requires
+  kernels 0.19 or later.
 - `upstream`: Git-compatible URL (passable to `git clone`) of the original
   upstream repository where the kernel source code comes from.
 - `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
@@ -529,6 +535,41 @@ except ImportError:
 def add_op_namespace_prefix(name: str) -> str:
     return _generated_add_op_namespace_prefix(name)
 ```
+
+## Reading data files
+
+Kernels can ship additional data files, such as
+[Triton autotune configurations](triton-autotune.md). To package such files
+with a kernel, add the extension of the data files to the `pyext`
+option of the framework section in `build.toml`.
+
+If the kernel uses `kernel-layout = "zip"`, data files are stored in the
+kernel ZIP archive. Consequently, `__file__` cannot be used to find the
+path of the files and the files cannot be opened directly. Use
+[`importlib.resources`](https://docs.python.org/3/library/importlib.resources.html)
+instead, which works with every build layout supported by the project:
+
+```python
+import importlib.resources
+import json
+
+config = importlib.resources.files(__package__) / "configs" / "device.json"
+data = json.loads(config.read_text())
+```
+
+Since using `importlib.resources` works with both `files` and `zip`
+layouts, it is the preferred way of reading files.
+
+If you have to call code that must be passed a real path, use
+`importlib.resources.as_file`:
+
+```python
+with importlib.resources.as_file(config) as path:
+    ...  # `path` is a real file.
+```
+
+`as_file` may create a temporary copy of the file that is only available
+through the duration of the `with` block.
 
 ## Kernel tests
 

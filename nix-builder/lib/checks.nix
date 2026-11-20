@@ -16,7 +16,7 @@
 let
   kernelBuildSets = build.applicableBuildSets {
     inherit buildSets;
-    path = ../../examples/kernels/relu-torch-bounds;
+    path = ../tests/kernels/relu-torch-bounds;
   };
 
   # The Torch version that `relu-torch-bounds` is bounded to (minver/maxver).
@@ -27,7 +27,7 @@ let
     drv =
       (genKernelFlakeOutputs {
         inherit self;
-        path = ../../examples/kernels/silu-and-mul-bad-registration;
+        path = ../tests/kernels/silu-and-mul-bad-registration;
       }).packages.${stdenv.hostPlatform.system}.redistributable.torch-cuda;
     expectedBuilderExitCode = 1;
     expectedBuilderLogEntries = [

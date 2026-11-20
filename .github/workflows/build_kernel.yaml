@@ -49,8 +49,10 @@ jobs:
 
       - name: Build all example kernels
         run: nix build -L ./examples/kernels#ci-build-cuda
+      - name: Build all kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-cuda -o result-tests
       - name: Copy kernel artifacts
-        run: cp -rL result/* .
+        run: cp -rL result/* result-tests/* .
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -96,7 +98,7 @@ jobs:
           docker build \
             -t kernel-builder:ubi${{ matrix.ubi_version }} \
             --build-arg UBI_VERSION=${{ matrix.ubi_version }} \
-            -f nix-builder/tests/Dockerfile.test-kernel .
+            -f nix-builder/tests/docker/Dockerfile.test-kernel .
 
       - name: Run Tests
         run: |
@@ -126,7 +128,7 @@ jobs:
           docker build \
             -t kernel-builder-cuda13:ubi${{ matrix.ubi_version }} \
             --build-arg UBI_VERSION=${{ matrix.ubi_version }} \
-            -f nix-builder/tests/Dockerfile.test-kernel-cuda13 .
+            -f nix-builder/tests/docker/Dockerfile.test-kernel-cuda13 .
 
       - name: Run Tests
         run: |

@@ -43,3 +43,5 @@ jobs:
       # kernels. Also run tests once we have a ROCm runner.
       - name: Build all ROCm example kernels
         run: nix build -L ./examples/kernels#ci-build-rocm
+      - name: Build all ROCm kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-rocm

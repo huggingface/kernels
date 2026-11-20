@@ -43,3 +43,5 @@ jobs:
       # their CI tests (e.g. the symbol-conflicts pytest suite) in one step.
       - name: Build and test all CPU example kernels
         run: nix build -L ./examples/kernels#ci-build-cpu
+      - name: Build and test all CPU kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-cpu

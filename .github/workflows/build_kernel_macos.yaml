@@ -35,8 +35,10 @@ jobs:
           #authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Build all Metal example kernels
         run: nix build -L ./examples/kernels#ci-build-metal
+      - name: Build all Metal kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-metal -o result-tests
       - name: Copy kernel artifacts
-        run: cp -rL result/* .
+        run: cp -rL result/* result-tests/* .
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -80,7 +82,7 @@ jobs:
         uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Install test dependencies and kernels from source
-        # Keep Torch aligned with torchVersion in examples/kernels/flake.nix
+        # Keep Torch aligned with torchVersion in nix-builder/tests/ci-kernels.nix
         # and MLX with nix-builder/pkgs/python-modules/mlx-bin.
         run: |
           uv venv
@@ -105,5 +107,5 @@ jobs:
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-metal-cpp/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-mlx/tests
-          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/bfl-mlx/tests
-          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/bfl-torch/tests
+          .venv/bin/python -m pytest -v -m kernels_ci nix-builder/tests/kernels/bfl-mlx/tests
+          .venv/bin/python -m pytest -v -m kernels_ci nix-builder/tests/kernels/bfl-torch/tests

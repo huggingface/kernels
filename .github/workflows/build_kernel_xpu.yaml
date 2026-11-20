@@ -43,3 +43,5 @@ jobs:
       # kernels. Also run tests once we have a XPU runner.
       - name: Build all XPU example kernels
         run: nix build -L ./examples/kernels#ci-build-xpu
+      - name: Build all XPU kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-xpu

@@ -326,7 +326,7 @@ name with underscores. For example, `relu-mlx` would use
 `mlx-ext/relu_mlx/`.
 
 - `pyext` (optional) lists the file extensions to include
-from the package directory.
+  from the package directory.
 
 ### `kernel.<name>`
 
@@ -339,7 +339,7 @@ The following options can be set for a kernel:
 
 - `language` (required): the language and compute backend of the kernel,
   as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
-  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda`.
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda-oxide`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
@@ -381,7 +381,7 @@ are available:
 #### rust-cpu
 
 Rust kernels are built with Cargo and require the `tvm-ffi` framework.
-`include` and `cxx-flags` do not apply to them.
+`include`, `cxx-flags` and `depends` do not apply to them.
 
 - `cargo-manifest` (required): path of the crate's `Cargo.toml`.
 
@@ -398,7 +398,7 @@ in Git so Nix can include them in the build. Rerun the command whenever Git
 dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
 `Cargo.lock` and do not require this file.
 
-#### rust-cuda (experimental, and subject to change)
+#### rust-cuda-oxide (experimental, and subject to change)
 
 Rust CUDA kernels are built with
 [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and take the same options as
@@ -416,12 +416,34 @@ bindings are generated with bindgen during the build, so building outside of
 Nix requires a CUDA 13 toolkit (found via `CUDA_TOOLKIT_PATH` or `CUDA_HOME`)
 and libclang.
 
-An extension can have only one `rust-cuda` component. Use the cuda-rust
+An extension can have only one `rust-cuda-oxide` component. Use the cuda-rust
 revision pinned in
 [`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)
 and see
-[`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
+[`relu-rust-cuda-oxide`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda-oxide)
 for an example.
+
+#### rust-cutile (experimental, and subject to change)
+
+Rust cuTile kernels are built with
+[cutile-rs](https://github.com/NVIDIA/cuda-rust) and take the same options as
+`rust-cpu`, plus:
+
+- `tileiras-minver` (required): minimum version (`x.y`) of the `tileiras` CUDA Tile IR
+  compiler. The minimum required version depends on the features used by
+  the kernel. See [CUDA and Tile IR compatibility](https://nvlabs.github.io/cutile-rs/main/reference/compatibility.html)
+  for more information.
+
+The variants that are built depend on the setting of `tileiras-minver`. For
+instance, setting `tileiras-minver = "13.3"` will build using the first
+CUDA version that satisfies `>= 13.3`. So if only CUDA 13.2 and 13.4 build
+sets are available, the kernel will be built for CUDA 13.4.
+
+`rust-cutile` kernels require the `tileiras` version that the kernel was
+compiled for to be available at runtime.
+
+See [`relu-rust-cutile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cutile)
+for an example kernel.
 
 ## Torch bindings
 

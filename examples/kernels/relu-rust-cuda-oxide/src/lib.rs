@@ -1,6 +1,6 @@
 use cuda_core::simt::LaunchConfig;
 use cuda_device::cuda_module;
-use kernels_cuda::cuda_error;
+use kernels_cuda_oxide::cuda_error;
 use tvm_ffi::{Error, Result, Tensor, VALUE_ERROR};
 
 #[cuda_module]
@@ -34,7 +34,7 @@ fn relu_rust_cuda(x: Tensor, out: Tensor) -> Result<()> {
         return Ok(());
     }
 
-    let gpu = kernels_cuda::load(x.device(), kernels::from_module)?;
+    let gpu = kernels_cuda_oxide::load(x.device(), kernels::from_module)?;
     let x = gpu.view::<f32>(&x)?;
     let mut out = gpu.view::<f32>(&out)?;
     let config = LaunchConfig::for_num_elems(x.len() as u32);

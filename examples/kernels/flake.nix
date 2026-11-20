@@ -101,8 +101,8 @@
           };
         }
         {
-          name = "relu-rust-cuda-kernel";
-          path = ./relu-rust-cuda;
+          name = "relu-rust-cuda-oxide-kernel";
+          path = ./relu-rust-cuda-oxide;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
         }

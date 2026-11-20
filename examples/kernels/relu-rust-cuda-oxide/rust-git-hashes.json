@@ -7,7 +7,7 @@
   "cuda-host-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "cuda-macros-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "cuda-target-spec-0.1.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
-  "kernels-cuda-0.1.0": "sha256-DQA+7fZEc7jCz8XMm4pldbHgT3bncTWHqgroiKE8XBQ=",
+  "kernels-cuda-oxide-0.1.0": "sha256-dJgco0Ud7eLFqeUsXraHn7B1TvdpZt6ozrZe/Mh6yck=",
   "libnvvm-sys-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "nvjitlink-sys-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "oxide-tile-export-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",

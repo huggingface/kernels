@@ -1,4 +1,4 @@
-//! Runtime support for kernel-builder's `rust-cuda` kernels.
+//! Runtime support for kernel-builder's `rust-cuda-oxide` kernels.
 //!
 //! kernel-builder compiles a kernel crate's PTX for every CUDA capability in
 //! `build.toml` and links the fatbin into the extension. [`load`] loads that
@@ -9,11 +9,11 @@
 //!
 //! ```ignore
 //! fn relu(x: Tensor, out: Tensor) -> tvm_ffi::Result<()> {
-//!     let gpu = kernels_cuda::load(x.device(), kernels::from_module)?;
+//!     let gpu = kernels_cuda_oxide::load(x.device(), kernels::from_module)?;
 //!     let (x, mut out) = (gpu.view::<f32>(&x)?, gpu.view::<f32>(&out)?);
 //!     let config = LaunchConfig::for_num_elems(x.len() as u32);
 //!     unsafe { gpu.module.relu(&gpu.stream, config, &x, &mut out) }
-//!         .map_err(kernels_cuda::cuda_error)
+//!         .map_err(kernels_cuda_oxide::cuda_error)
 //! }
 //! ```
 

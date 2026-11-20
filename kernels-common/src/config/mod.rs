@@ -389,15 +389,13 @@ pub enum Kernel {
     RustCpu {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
-    RustCuda {
+    RustCudaOxide {
         /// Path of the host crate's `Cargo.toml`, relative to the kernel directory.
         /// cuda-oxide device crates are read from its `[package.metadata.cuda-oxide]`.
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     RustCutile {
@@ -448,7 +446,9 @@ impl Kernel {
             | Kernel::CppMetal { cxx_flags, .. }
             | Kernel::CppRocm { cxx_flags, .. }
             | Kernel::CppXpu { cxx_flags, .. } => cxx_flags.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                None
+            }
         }
     }
 
@@ -459,7 +459,9 @@ impl Kernel {
             | Kernel::CppMetal { include, .. }
             | Kernel::CppRocm { include, .. }
             | Kernel::CppXpu { include, .. } => include.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                None
+            }
         }
     }
 
@@ -473,7 +475,7 @@ impl Kernel {
     pub fn backend(&self) -> Backend {
         match self {
             Kernel::CppCpu { .. } | Kernel::RustCpu { .. } => Backend::Cpu,
-            Kernel::CppCuda { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+            Kernel::CppCuda { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
                 Backend::Cuda
             }
             Kernel::CppMetal { .. } => Backend::Metal,
@@ -489,7 +491,7 @@ impl Kernel {
             | Kernel::CppMetal { .. }
             | Kernel::CppRocm { .. }
             | Kernel::CppXpu { .. } => Language::Cpp,
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
                 Language::Rust
             }
         }
@@ -498,14 +500,14 @@ impl Kernel {
     pub fn depends(&self) -> &[Dependency] {
         match self {
             Kernel::CppCpu { depends, .. }
-            | Kernel::RustCpu { depends, .. }
-            | Kernel::RustCuda { depends, .. }
             | Kernel::CppCuda { depends, .. }
             | Kernel::CppMetal { depends, .. }
             | Kernel::CppRocm { depends, .. }
             | Kernel::CppXpu { depends, .. } => depends,
-            // All dependencies are C++ dependencies, which cuTile kernels cannot use.
-            Kernel::RustCutile { .. } => &[],
+            // All dependencies are C++ dependencies, which Rust kernels cannot use.
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                &[]
+            }
         }
     }
 
@@ -513,7 +515,7 @@ impl Kernel {
         match self {
             Kernel::CppCpu { src, .. }
             | Kernel::RustCpu { src, .. }
-            | Kernel::RustCuda { src, .. }
+            | Kernel::RustCudaOxide { src, .. }
             | Kernel::RustCutile { src, .. }
             | Kernel::CppCuda { src, .. }
             | Kernel::CppMetal { src, .. }
@@ -854,7 +856,6 @@ mod tests {
             [kernel.cpu_kernel]
             language = "rust-cpu"
             cargo-manifest = "cpu/Cargo.toml"
-            depends = []
             src = ["cpu/src/lib.rs"]
         "#;
 
@@ -983,7 +984,7 @@ mod tests {
         let cases = [
             (
                 "[torch]\nsrc = []",
-                "rust-cuda",
+                "rust-cuda-oxide",
                 "",
                 "require a `[tvm-ffi]` framework",
             ),
@@ -998,6 +999,18 @@ mod tests {
                 "rust-cpu",
                 r#"include = ["."]"#,
                 "unknown field `include`",
+            ),
+            (
+                "[tvm-ffi]",
+                "rust-cpu",
+                "depends = []",
+                "unknown field `depends`",
+            ),
+            (
+                "[tvm-ffi]",
+                "rust-cuda-oxide",
+                "depends = []",
+                "unknown field `depends`",
             ),
             (
                 "[torch]\nsrc = []",
@@ -1022,7 +1035,6 @@ mod tests {
                 [kernel.cpu_kernel]
                 language = "{language}"
                 cargo-manifest = "Cargo.toml"
-                depends = []
                 src = []
                 {extra}
             "#

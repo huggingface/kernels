@@ -69,7 +69,7 @@ jobs:
             relu-kernel-cpu
             relu-zip-kernel
             relu-backprop-compile-kernel
-            relu-rust-cuda-kernel
+            relu-rust-cuda-oxide-kernel
             relu-rust-cutile-kernel
             relu-triton-kernel
             silu-and-mul-kernel

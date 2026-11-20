@@ -1,9 +1,9 @@
 [package]
-name = "kernels-cuda"
+name = "kernels-cuda-oxide"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-description = "Runtime support for kernel-builder's rust-cuda kernels"
+description = "Runtime support for kernel-builder's rust-cuda-oxide kernels"
 publish = false
 
 [dependencies]

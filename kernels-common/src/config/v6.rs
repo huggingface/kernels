@@ -173,14 +173,12 @@ pub enum Kernel {
     RustCpu {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
-    RustCuda {
+    RustCudaOxide {
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -262,7 +260,7 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. }
+                Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. }
                     if !tvm_ffi =>
                 {
                     Err(ConfigError::InvalidKernel {
@@ -445,15 +443,13 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
-            Kernel::RustCuda {
+            Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
-            } => super::Kernel::RustCuda {
+            } => super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
             },
             Kernel::RustCutile {
@@ -467,11 +463,9 @@ impl From<Kernel> for super::Kernel {
             },
             Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             } => super::Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             },
             Kernel::CppCuda {
@@ -703,22 +697,18 @@ impl From<super::Kernel> for Kernel {
             },
             super::Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             } => Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             },
-            super::Kernel::RustCuda {
+            super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
-            } => Kernel::RustCuda {
+            } => Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
             },
             super::Kernel::RustCutile {

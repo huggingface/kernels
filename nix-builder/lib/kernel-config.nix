@@ -19,6 +19,7 @@ let
     in
     {
       cutile = "cuda";
+      oxide = "cuda";
     }
     .${backendPart} or backendPart;
 

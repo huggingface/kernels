@@ -326,7 +326,7 @@ name with underscores. For example, `relu-mlx` would use
 `mlx-ext/relu_mlx/`.
 
 - `pyext` (optional) lists the file extensions to include
-from the package directory.
+  from the package directory.
 
 ### `kernel.<name>`
 
@@ -422,6 +422,28 @@ revision pinned in
 and see
 [`relu-rust-cuda-oxide`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda-oxide)
 for an example.
+
+#### rust-cutile (experimental, and subject to change)
+
+Rust cuTile kernels are built with
+[cutile-rs](https://github.com/NVIDIA/cuda-rust) and take the same options as
+`rust-cpu`, plus:
+
+- `tileiras-minver` (required): minimum version (`x.y`) of the `tileiras` CUDA Tile IR
+  compiler. The minimum required version depends on the features used by
+  the kernel. See [CUDA and Tile IR compatibility](https://nvlabs.github.io/cutile-rs/main/reference/compatibility.html)
+  for more information.
+
+The variants that are built depend on the setting of `tileiras-minver`. For
+instance, setting `tileiras-minver = "13.3"` will build using the first
+CUDA version that satisfies `>= 13.3`. So if only CUDA 13.2 and 13.4 build
+sets are available, the kernel will be built for CUDA 13.4.
+
+`rust-cutile` kernels require the `tileiras` version that the kernel was
+compiled for to be available at runtime.
+
+See [`relu-rust-cutile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cutile)
+for an example kernel.
 
 ## Torch bindings
 

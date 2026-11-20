@@ -467,6 +467,16 @@
           path = ./relu-mlx;
           drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
         }
+        {
+          name = "bfl-mlx-kernel";
+          path = ./bfl-mlx;
+          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
+        }
+        {
+          name = "bfl-torch-kernel";
+          path = ./bfl-torch;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-metal;
+        }
       ];
 
       # CPU kernels to build in CI.

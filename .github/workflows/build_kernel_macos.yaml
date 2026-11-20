@@ -43,6 +43,8 @@ jobs:
         with:
           name: built-kernels-metal
           path: |
+            bfl-mlx-kernel
+            bfl-torch-kernel
             relu-kernel
             relu-metal-cpp-kernel
             relu-mlx-kernel
@@ -86,7 +88,7 @@ jobs:
 
       - name: Run Metal tests
         env:
-          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel:kernels-test/relu-mlx=relu-mlx-kernel
+          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel:kernels-test/relu-mlx=relu-mlx-kernel:kernels-test/bfl-mlx=bfl-mlx-kernel:kernels-test/bfl-torch=bfl-torch-kernel
           PYTORCH_ENABLE_MPS_FALLBACK: "0"
         run: |
           .venv/bin/python - <<'PY'
@@ -99,7 +101,9 @@ jobs:
               raise SystemExit("Metal tests require MLX with Metal support.")
           PY
 
-          # Run separately because the suites contain a test_relu.py module.
+          # Run separately because the suites contain test modules with the same name.
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-metal-cpp/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-mlx/tests
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/bfl-mlx/tests
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/bfl-torch/tests

@@ -389,7 +389,6 @@ pub enum Kernel {
     RustCpu {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     RustCuda {
@@ -397,7 +396,6 @@ pub enum Kernel {
         /// cuda-oxide device crates are read from its `[package.metadata.cuda-oxide]`.
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     RustCutile {
@@ -498,14 +496,12 @@ impl Kernel {
     pub fn depends(&self) -> &[Dependency] {
         match self {
             Kernel::CppCpu { depends, .. }
-            | Kernel::RustCpu { depends, .. }
-            | Kernel::RustCuda { depends, .. }
             | Kernel::CppCuda { depends, .. }
             | Kernel::CppMetal { depends, .. }
             | Kernel::CppRocm { depends, .. }
             | Kernel::CppXpu { depends, .. } => depends,
-            // All dependencies are C++ dependencies, which cuTile kernels cannot use.
-            Kernel::RustCutile { .. } => &[],
+            // All dependencies are C++ dependencies, which Rust kernels cannot use.
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => &[],
         }
     }
 
@@ -854,7 +850,6 @@ mod tests {
             [kernel.cpu_kernel]
             language = "rust-cpu"
             cargo-manifest = "cpu/Cargo.toml"
-            depends = []
             src = ["cpu/src/lib.rs"]
         "#;
 
@@ -1000,6 +995,18 @@ mod tests {
                 "unknown field `include`",
             ),
             (
+                "[tvm-ffi]",
+                "rust-cpu",
+                "depends = []",
+                "unknown field `depends`",
+            ),
+            (
+                "[tvm-ffi]",
+                "rust-cuda",
+                "depends = []",
+                "unknown field `depends`",
+            ),
+            (
                 "[torch]\nsrc = []",
                 "rust-cpu",
                 "",
@@ -1022,7 +1029,6 @@ mod tests {
                 [kernel.cpu_kernel]
                 language = "{language}"
                 cargo-manifest = "Cargo.toml"
-                depends = []
                 src = []
                 {extra}
             "#

@@ -280,7 +280,6 @@ mod tests {
             (
                 Kernel::RustCpu {
                     cargo_manifest: "host/Cargo.toml".into(),
-                    depends: vec![],
                     src: vec![],
                 },
                 "CPU",
@@ -291,7 +290,6 @@ mod tests {
                 Kernel::RustCuda {
                     cargo_manifest: "host/Cargo.toml".into(),
                     cuda_capabilities: Some(vec!["8.0".into(), "9.0".into()]),
-                    depends: vec![],
                     src: vec![],
                 },
                 "CUDA",

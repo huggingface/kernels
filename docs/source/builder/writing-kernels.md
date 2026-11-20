@@ -381,7 +381,7 @@ are available:
 #### rust-cpu
 
 Rust kernels are built with Cargo and require the `tvm-ffi` framework.
-`include` and `cxx-flags` do not apply to them.
+`include`, `cxx-flags` and `depends` do not apply to them.
 
 - `cargo-manifest` (required): path of the crate's `Cargo.toml`.
 

@@ -176,7 +176,7 @@ pub enum Kernel {
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
-    RustCuda {
+    RustCudaOxide {
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
         src: Vec<String>,
@@ -260,7 +260,7 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. }
+                Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. }
                     if !tvm_ffi =>
                 {
                     Err(ConfigError::InvalidKernel {
@@ -443,11 +443,11 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
-            Kernel::RustCuda {
+            Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
                 src,
-            } => super::Kernel::RustCuda {
+            } => super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
                 src,
@@ -702,11 +702,11 @@ impl From<super::Kernel> for Kernel {
                 cargo_manifest,
                 src,
             },
-            super::Kernel::RustCuda {
+            super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
                 src,
-            } => Kernel::RustCuda {
+            } => Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
                 src,

@@ -40,12 +40,12 @@ fn render_kernel_component(
         Kernel::RustCpu { cargo_manifest, .. } => {
             render_kernel_component_rust(env, kernel_name, cargo_manifest, write)?
         }
-        Kernel::RustCuda {
+        Kernel::RustCudaOxide {
             cargo_manifest,
             cuda_capabilities,
             ..
         } => {
-            env.get_template("kernel-component/rust-cuda.cmake")?
+            env.get_template("kernel-component/rust-cuda-oxide.cmake")?
                 .render_captured_to(
                     context! {
                         name => kernel_name,
@@ -287,7 +287,7 @@ mod tests {
                 None,
             ),
             (
-                Kernel::RustCuda {
+                Kernel::RustCudaOxide {
                     cargo_manifest: "host/Cargo.toml".into(),
                     cuda_capabilities: Some(vec!["8.0".into(), "9.0".into()]),
                     src: vec![],

@@ -3,14 +3,16 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-relu_rust_cuda = kernels.get_kernel("kernels-test/relu-rust-cuda", version=1)
+relu_rust_cuda_oxide = kernels.get_kernel(
+    "kernels-test/relu-rust-cuda-oxide", version=1
+)
 
 
 @pytest.mark.kernels_ci
 def test_relu():
     x = torch.randn(1024, 1024, dtype=torch.float32, device="cuda")
     torch.testing.assert_close(
-        F.relu(x), relu_rust_cuda.relu(x, torch.empty_like(x))
+        F.relu(x), relu_rust_cuda_oxide.relu(x, torch.empty_like(x))
     )
 
 
@@ -18,4 +20,6 @@ def test_relu():
 def test_rejects_mismatched_output():
     x = torch.randn(16, dtype=torch.float32, device="cuda")
     with pytest.raises(Exception, match="same number of elements"):
-        relu_rust_cuda.relu(x, torch.empty(32, dtype=torch.float32, device="cuda"))
+        relu_rust_cuda_oxide.relu(
+            x, torch.empty(32, dtype=torch.float32, device="cuda")
+        )

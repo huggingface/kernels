@@ -93,7 +93,7 @@ in
     lib.foldl (backends: kernel: backends // { ${kernelBackend kernel} = true; }) init kernels;
 
   # Does the kernel have Rust CUDA (cuda-oxide) components.
-  usesRustCuda = lib.any (kernel: kernel.language == "rust-cuda") (
+  usesRustCudaOxide = lib.any (kernel: kernel.language == "rust-cuda-oxide") (
     lib.attrValues (toml.kernel or { })
   );
   usesRustCutile = cutileKernels != [ ];

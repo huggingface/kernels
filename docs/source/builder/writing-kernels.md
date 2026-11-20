@@ -339,7 +339,7 @@ The following options can be set for a kernel:
 
 - `language` (required): the language and compute backend of the kernel,
   as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
-  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda`.
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda-oxide`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
@@ -398,7 +398,7 @@ in Git so Nix can include them in the build. Rerun the command whenever Git
 dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
 `Cargo.lock` and do not require this file.
 
-#### rust-cuda (experimental, and subject to change)
+#### rust-cuda-oxide (experimental, and subject to change)
 
 Rust CUDA kernels are built with
 [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and take the same options as
@@ -416,11 +416,11 @@ bindings are generated with bindgen during the build, so building outside of
 Nix requires a CUDA 13 toolkit (found via `CUDA_TOOLKIT_PATH` or `CUDA_HOME`)
 and libclang.
 
-An extension can have only one `rust-cuda` component. Use the cuda-rust
+An extension can have only one `rust-cuda-oxide` component. Use the cuda-rust
 revision pinned in
 [`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)
 and see
-[`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
+[`relu-rust-cuda-oxide`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda-oxide)
 for an example.
 
 ## Torch bindings

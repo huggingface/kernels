@@ -55,9 +55,9 @@ COPY kernels ./kernels-workspace/kernels
 RUN uv add ./kernels-workspace/kernels
 
 # Copy kernels and tests
-COPY relu-rust-cuda-kernel ./relu-rust-cuda-kernel
+COPY relu-rust-cuda-oxide-kernel ./relu-rust-cuda-oxide-kernel
 COPY relu-rust-cutile-kernel ./relu-rust-cutile-kernel
-COPY examples/kernels/relu-rust-cuda/tests ./relu_rust_cuda_tests
+COPY examples/kernels/relu-rust-cuda-oxide/tests ./relu_rust_cuda_oxide_tests
 COPY examples/kernels/relu-rust-cutile/tests ./relu_rust_cutile_tests
 
 # Run tests

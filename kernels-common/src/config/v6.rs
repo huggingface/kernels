@@ -98,6 +98,7 @@ pub struct TpuGeneral {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct XpuGeneral {
+    pub cri_grf_size: Option<u32>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
@@ -359,6 +360,7 @@ impl From<TpuGeneral> for super::TpuGeneral {
 impl From<XpuGeneral> for super::XpuGeneral {
     fn from(xpu: XpuGeneral) -> Self {
         Self {
+            cri_grf_size: xpu.cri_grf_size,
             kernel_depends: xpu.kernel_depends,
             python_depends: xpu.python_depends,
         }
@@ -616,6 +618,7 @@ impl From<super::TpuGeneral> for TpuGeneral {
 impl From<super::XpuGeneral> for XpuGeneral {
     fn from(xpu: super::XpuGeneral) -> Self {
         Self {
+            cri_grf_size: xpu.cri_grf_size,
             kernel_depends: xpu.kernel_depends,
             python_depends: xpu.python_depends,
         }

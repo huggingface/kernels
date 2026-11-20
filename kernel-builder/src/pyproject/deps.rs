@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 
-use eyre::{Context, Result};
+use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 
 use kernels_common::config::{Build, Dependency};
@@ -11,6 +11,13 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
     let mut deps = HashSet::new();
     for kernel in build.kernels.values() {
         deps.extend(kernel.depends())
+    }
+
+    // Only the sycl-tla setup composes the AOT options, do not drop the
+    // GRF size silently.
+    let cri_grf_size = build.general.xpu.as_ref().and_then(|xpu| xpu.cri_grf_size);
+    if cri_grf_size.is_some() && !deps.contains(&Dependency::SyclTla) {
+        bail!("`general.xpu.cri-grf-size` needs a kernel that depends on `sycl-tla`");
     }
 
     for dep in deps {
@@ -109,10 +116,28 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                 } else {
                     ("pvc,bmg-g21,cri", "spir64_gen,spir64")
                 };
+                // The GRF size is an ocloc option for the whole image, which
+                // crashes ocloc for pvc and bmg-g21, so it needs the cri-only
+                // image.
+                let sycl_aot_internal_options = match cri_grf_size {
+                    None => None,
+                    Some(size) if !matches!(size, 128 | 256 | 512) => {
+                        bail!("`general.xpu.cri-grf-size` must be 128, 256, or 512, got {size}")
+                    }
+                    Some(_) if !cri_isolated_image => bail!(
+                        "`general.xpu.cri-grf-size` needs a kernel built for CRI only \
+                         (`-D__SYCL_TARGET_INTEL_GPU_CRI__=1` in its `sycl-flags`)"
+                    ),
+                    Some(size) => Some(format!("-cl-intel-{size}-GRF-per-thread")),
+                };
                 env.get_template("xpu/dep-sycl-tla.cmake")
                     .wrap_err("Cannot get SYCL TLA dependency template")?
                     .render_captured_to(
-                        context! { sycl_aot_devices, sycl_offload_targets },
+                        context! {
+                            sycl_aot_devices,
+                            sycl_offload_targets,
+                            sycl_aot_internal_options,
+                        },
                         &mut *write,
                     )
                     .wrap_err("Cannot render SYCL TLA dependency template")?;
@@ -127,4 +152,79 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(general_xpu: &str, cri_kernel: bool) -> Result<String> {
+        let cri_flags = if cri_kernel {
+            r#"sycl-flags = ["-fsycl-targets=spir64_gen", "-D__SYCL_TARGET_INTEL_GPU_CRI__=1"]"#
+        } else {
+            ""
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("build.toml"),
+            format!(
+                r#"
+                [general]
+                name = "xpu-demo"
+                version = 1
+                edition = 6
+                license = "Apache-2.0"
+                backends = ["xpu"]
+
+                {general_xpu}
+
+                [torch]
+                src = ["torch-ext/torch_binding.cpp"]
+
+                [kernel.demo_xpu]
+                language = "cpp-xpu"
+                depends = ["torch", "sycl_tla"]
+                src = ["demo/demo.cpp"]
+                {cri_flags}
+                "#
+            ),
+        )
+        .unwrap();
+        let build = Build::open(tmp.path()).unwrap();
+
+        let mut env = Environment::new();
+        minijinja_embed::load_templates!(&mut env);
+        let mut rendered = vec![];
+        render_deps(&env, &build, &mut rendered)?;
+        Ok(String::from_utf8(rendered).unwrap())
+    }
+
+    #[test]
+    fn cri_grf_size_sets_ocloc_internal_options() {
+        let rendered = render("[general.xpu]\ncri-grf-size = 512", true).unwrap();
+        assert!(rendered.contains(r#"set(SYCL_AOT_DEVICES "cri")"#));
+        assert!(
+            rendered.contains(r#"set(SYCL_AOT_INTERNAL_OPTIONS "-cl-intel-512-GRF-per-thread")"#)
+        );
+    }
+
+    #[test]
+    fn no_cri_grf_size_keeps_ocloc_defaults() {
+        let rendered = render("", true).unwrap();
+        assert!(!rendered.contains("SYCL_AOT_INTERNAL_OPTIONS"));
+    }
+
+    #[test]
+    fn cri_grf_size_needs_cri_only_image() {
+        let err = render("[general.xpu]\ncri-grf-size = 512", false).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("needs a kernel built for CRI only"));
+    }
+
+    #[test]
+    fn cri_grf_size_rejects_unknown_size() {
+        let err = render("[general.xpu]\ncri-grf-size = 384", true).unwrap_err();
+        assert!(err.to_string().contains("must be 128, 256, or 512"));
+    }
 }

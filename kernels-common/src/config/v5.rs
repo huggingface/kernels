@@ -282,6 +282,7 @@ impl From<TpuGeneral> for super::TpuGeneral {
 impl From<XpuGeneral> for super::XpuGeneral {
     fn from(xpu: XpuGeneral) -> Self {
         Self {
+            cri_grf_size: None,
             kernel_depends: xpu.kernel_depends,
             python_depends: xpu.python_depends,
         }

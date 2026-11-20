@@ -465,12 +465,12 @@
         {
           name = "relu-mlx-kernel";
           path = ./relu-mlx;
-          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
+          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal";
         }
         {
           name = "bfl-mlx-kernel";
           path = ./bfl-mlx;
-          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
+          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal";
         }
         {
           name = "bfl-torch-kernel";

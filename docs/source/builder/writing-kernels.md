@@ -325,10 +325,6 @@ package in `mlx-ext/<name>/`, replacing hyphens in the kernel
 name with underscores. For example, `relu-mlx` would use
 `mlx-ext/relu_mlx/`.
 
-- `metal-version` (required) specifies the minimum Metal
-language version the kernel needs, as a quoted `major.minor`
-string. For example, `metal-version = "4.0"` produces
-the `mlx-metal-4.0` variant.
 - `pyext` (optional) lists the file extensions to include
 from the package directory.
 

@@ -59,8 +59,7 @@ class BuildKernel(build):
         self, backend: str, build_path: Path, build_toml: dict[str, Any]
     ) -> None:
         """Build kernel variant for a specific backend."""
-        metal_version: str = build_toml["mlx-noarch"]["metal-version"]
-        variant_dir = build_path / f"mlx-{backend}-{metal_version}"
+        variant_dir = build_path / f"mlx-{backend}"
         variant_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"  Building for backend {backend}...")

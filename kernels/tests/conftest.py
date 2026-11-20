@@ -4,8 +4,8 @@ import sys
 
 import pytest
 
+from kernels._internals.backends import _get_torch_privateuse_backend_name
 from kernels._rust import Metadata
-from kernels.backends import _get_torch_privateuse_backend_name
 
 try:
     import torch

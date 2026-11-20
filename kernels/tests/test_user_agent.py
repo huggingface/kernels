@@ -4,7 +4,7 @@ import pytest
 from huggingface_hub import constants
 from huggingface_hub.utils import build_hf_headers
 
-from kernels.hf_hub import _get_hf_api, _platform
+from kernels._internals.hf_hub import _get_hf_api, _platform
 
 
 @pytest.fixture(autouse=True)

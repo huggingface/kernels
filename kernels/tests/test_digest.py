@@ -6,7 +6,8 @@ from dataclasses import is_dataclass
 
 import pytest
 
-import kernels.digest as digest_module
+import kernels._internals.digest as digest_module
+from kernels._internals.digest import DigestVerificationResult, verify_digest
 from kernels._rust import (
     Digest,
     DigestAlgorithm,
@@ -16,7 +17,6 @@ from kernels._rust import (
     Metadata,
     Oid,
 )
-from kernels.digest import DigestVerificationResult, verify_digest
 
 _VARIANT = "torch-cpu"
 
@@ -71,7 +71,7 @@ def _no_hashing(monkeypatch):
         def hash_variant(*args, **kwargs):
             raise AssertionError("the variant was rehashed, so this was not a cache hit")
 
-    # Patch the name in `kernels.digest`: `Digest` is an extension type, whose
+    # Patch the name in `kernels._internals.digest`: `Digest` is an extension type, whose
     # attributes cannot be set.
     monkeypatch.setattr(digest_module, "Digest", ExplodingDigest)
 
@@ -209,7 +209,7 @@ def test_unusable_receipt_falls_back_to_verification(tmp_path, receipt_store, ca
     (receipt_path,) = list((tmp_path / "receipts").iterdir())
     receipt_path.write_text("not a receipt")
 
-    with caplog.at_level(logging.WARNING, logger="kernels.digest"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.digest"):
         assert verify_digest(variant_path, metadata=_metadata(variant_path), location=location) == (
             DigestVerificationResult.Success()
         )
@@ -223,8 +223,8 @@ def test_digest_verification_does_not_need_sigstore():
         "import sys\n"
         # A `None` entry makes importing the module fail.
         "sys.modules['sigstore'] = None\n"
-        "import kernels.cli, kernels.digest, kernels.validate\n"
-        "from kernels.compat import has_sigstore\n"
+        "import kernels._internals.cli, kernels._internals.digest, kernels._internals.validate\n"
+        "from kernels._internals.compat import has_sigstore\n"
         "assert not has_sigstore\n"
     )
     subprocess.run([sys.executable, "-c", script], check=True)
@@ -235,7 +235,7 @@ def test_verify_signature_command_needs_sigstore():
     script = (
         "import argparse, sys\n"
         "sys.modules['sigstore'] = None\n"
-        "from kernels.cli.verify_signature import verify_signature\n"
+        "from kernels._internals.cli.verify_signature import verify_signature\n"
         "verify_signature(argparse.Namespace())\n"
     )
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)

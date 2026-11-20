@@ -3,7 +3,7 @@ from typing import Generic, TypeVar
 
 import pytest
 
-from kernels.layer._interval_tree import IntervalTree, _Node
+from kernels._internals.layer._interval_tree import IntervalTree, _Node
 
 T = TypeVar("T")
 

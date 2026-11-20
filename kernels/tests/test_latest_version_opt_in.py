@@ -7,17 +7,17 @@ import pytest
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import GitRefInfo, HfApi
 
-import kernels.backends as backends
-import kernels.hf_hub as hf_hub
-import kernels.importer as importer
-import kernels.layer.func as func_module
-import kernels.layer.layer as layer_module
-import kernels.load as load
-import kernels.resolver as resolver
+import kernels._internals.backends as backends
+import kernels._internals.hf_hub as hf_hub
+import kernels._internals.importer as importer
+import kernels._internals.layer.func as func_module
+import kernels._internals.layer.layer as layer_module
+import kernels._internals.load as load
+import kernels._internals.resolver as resolver
 from kernels import LockedFuncRepository, LockedLayerRepository
+from kernels._internals._versions import _cached_refs_dir
+from kernels._internals.variants import parse_variant
 from kernels._rust import Digest, DigestAlgorithm, KernelDependency, KernelLock, KernelLocks, KernelVersion
-from kernels._versions import _cached_refs_dir
-from kernels.variants import parse_variant
 
 REPO = "test/latest"
 COMMITS = {1: "1" * 40, 2: "2" * 40, 10: "a" * 40}

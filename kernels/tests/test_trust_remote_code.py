@@ -7,13 +7,13 @@ from huggingface_hub import HfApi
 from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import has_kernel
-from kernels.hf_hub import _check_trust_remote_code
+from kernels._internals.hf_hub import _check_trust_remote_code
 
 
 @pytest.fixture
 def api(monkeypatch):
     api = Mock(spec=HfApi)
-    monkeypatch.setattr("kernels.hf_hub._get_hf_api", lambda: api)
+    monkeypatch.setattr("kernels._internals.hf_hub._get_hf_api", lambda: api)
     return api
 
 
@@ -49,8 +49,8 @@ def test_trust_check_authentication_failure(api, unauthorized_error, trust_remot
 def test_has_kernel_propagates_authentication_failure(monkeypatch, api, unauthorized_error):
     monkeypatch.delenv("LOCAL_KERNELS", raising=False)
     monkeypatch.delenv("UNSTABLE_KERNELS_ALL_LATEST", raising=False)
-    monkeypatch.setattr("kernels.load.constants.HF_HUB_OFFLINE", False)
-    monkeypatch.setattr("kernels.load._get_hf_api", lambda: api)
+    monkeypatch.setattr("kernels._internals.load.constants.HF_HUB_OFFLINE", False)
+    monkeypatch.setattr("kernels._internals.load._get_hf_api", lambda: api)
     api.get_organization_overview.side_effect = unauthorized_error
 
     with pytest.raises(HfHubHTTPError, match="hf auth login") as exc_info:

@@ -2,14 +2,13 @@ import importlib.metadata
 
 __version__ = importlib.metadata.version("kernels")
 
-from kernels._rust import Metadata
-from kernels._windows import _add_additional_dll_paths
-from kernels.benchmark import Benchmark
-from kernels.deps import get_kernel_dep
-from kernels.hf_hub import RepoInfo
-from kernels.importer import LoadedKernel, get_loaded_kernels
-from kernels.install import install_kernel
-from kernels.layer import (
+from kernels._internals._windows import _add_additional_dll_paths
+from kernels._internals.benchmark import Benchmark
+from kernels._internals.deps import get_kernel_dep
+from kernels._internals.hf_hub import RepoInfo
+from kernels._internals.importer import LoadedKernel, get_loaded_kernels
+from kernels._internals.install import install_kernel
+from kernels._internals.layer import (
     CUDAProperties,
     Device,
     FuncRepository,
@@ -33,18 +32,19 @@ from kernels.layer import (
     use_kernel_mapping,
     use_kernelized_func,
 )
-from kernels.load import (
+from kernels._internals.load import (
     get_kernel,
     get_local_kernel,
     get_locked_kernel,
     has_kernel,
     load_kernel,
 )
-from kernels.variants import (
+from kernels._internals.variants import (
     VariantAccepted,
     VariantRejected,
     get_kernel_variants,
 )
+from kernels._rust import Metadata
 
 _add_additional_dll_paths()
 

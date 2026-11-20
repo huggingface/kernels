@@ -4,7 +4,7 @@
 }:
 
 let
-  noarch = kernelConfig: "mlx-${buildConfig.backend}-${kernelConfig.toml.mlx-noarch.metal-version}";
+  noarch = _kernelConfig: "mlx-${buildConfig.backend}";
 in
 {
   # There are no arch variants yet.

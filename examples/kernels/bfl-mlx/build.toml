@@ -9,4 +9,3 @@ backends = ["metal"]
 repo-id = "kernels-test/bfl-mlx"
 
 [mlx-noarch]
-metal-version = "4.0"

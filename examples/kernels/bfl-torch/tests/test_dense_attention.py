@@ -8,7 +8,9 @@ bfl = kernels.get_kernel("kernels-test/bfl-torch", version=1)
 
 def _inputs(shape):
     torch.manual_seed(0)
-    return tuple(torch.randn(shape, device="mps", dtype=torch.bfloat16) for _ in range(3))
+    return tuple(
+        torch.randn(shape, device="mps", dtype=torch.bfloat16) for _ in range(3)
+    )
 
 
 @pytest.mark.kernels_ci
@@ -37,7 +39,9 @@ def test_rejects_unsupported_inputs():
 @pytest.mark.kernels_ci
 def test_torch_compile():
     q, k, v = _inputs((1, 64, 1, 128))
-    compiled = torch.compile(lambda q, k, v: bfl.dense_attention(q, k, v) * 2.0, fullgraph=True)
+    compiled = torch.compile(
+        lambda q, k, v: bfl.dense_attention(q, k, v) * 2.0, fullgraph=True
+    )
     assert torch.equal(compiled(q, k, v), bfl.dense_attention(q, k, v) * 2.0)
 
 
@@ -48,6 +52,21 @@ def test_matches_sdpa(shape):
     out = bfl.dense_attention(q, k, v).float()
 
     # Torch SDPA wants [B, H, L, D].
+    qf, kf, vf = (t.float().transpose(1, 2) for t in (q, k, v))
+    ref = F.scaled_dot_product_attention(qf, kf, vf).transpose(1, 2)
+
+    rel_rms = (out - ref).pow(2).mean().sqrt() / ref.pow(2).mean().sqrt()
+    assert rel_rms.item() < 1e-2
+
+
+@pytest.mark.kernels_ci
+@pytest.mark.parametrize("shape", [(1, 64, 1, 128), (2, 128, 3, 128)])
+def test_fallback_matches_sdpa(shape, monkeypatch):
+    # Force the Torch SDPA fallback, so that it is tested on any hardware.
+    monkeypatch.setattr(bfl.op, "_shader_supported", lambda: False)
+    q, k, v = _inputs(shape)
+    out = bfl.dense_attention(q, k, v).float()
+
     qf, kf, vf = (t.float().transpose(1, 2) for t in (q, k, v))
     ref = F.scaled_dot_product_attention(qf, kf, vf).transpose(1, 2)
 

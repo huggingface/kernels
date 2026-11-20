@@ -129,7 +129,6 @@ pub struct Torch {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MlxNoarch {
-    pub metal_version: Version<2>,
     pub pyext: Option<Vec<String>>,
 }
 
@@ -391,7 +390,6 @@ impl From<Torch> for super::Torch {
 impl From<MlxNoarch> for super::MlxNoarch {
     fn from(mlx_noarch: MlxNoarch) -> Self {
         Self {
-            metal_version: mlx_noarch.metal_version,
             pyext: mlx_noarch.pyext,
         }
     }
@@ -648,7 +646,6 @@ impl From<super::Torch> for Torch {
 impl From<super::MlxNoarch> for MlxNoarch {
     fn from(mlx_noarch: super::MlxNoarch) -> Self {
         Self {
-            metal_version: mlx_noarch.metal_version,
             pyext: mlx_noarch.pyext,
         }
     }

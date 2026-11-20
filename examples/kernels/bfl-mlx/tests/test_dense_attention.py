@@ -41,7 +41,26 @@ def test_matches_sdpa(shape):
 
     # MLX SDPA wants [B, H, L, D].
     qf, kf, vf = (a.astype(mx.float32).transpose(0, 2, 1, 3) for a in (q, k, v))
-    ref = mx.fast.scaled_dot_product_attention(qf, kf, vf, scale=128**-0.5).transpose(0, 2, 1, 3)
+    ref = mx.fast.scaled_dot_product_attention(qf, kf, vf, scale=128**-0.5).transpose(
+        0, 2, 1, 3
+    )
+
+    rel_rms = mx.sqrt(mx.mean((out - ref) ** 2)) / mx.sqrt(mx.mean(ref**2))
+    assert rel_rms.item() < 1e-2
+
+
+@pytest.mark.kernels_ci
+@pytest.mark.parametrize("shape", [(1, 64, 1, 128), (2, 128, 3, 128)])
+def test_fallback_matches_sdpa(shape, monkeypatch):
+    # Force the MLX SDPA fallback, so that it is tested on any hardware.
+    monkeypatch.setattr(bfl, "_shader_supported", lambda: False)
+    q, k, v = _inputs(shape)
+    out = bfl.dense_attention(q, k, v).astype(mx.float32)
+
+    qf, kf, vf = (a.astype(mx.float32).transpose(0, 2, 1, 3) for a in (q, k, v))
+    ref = mx.fast.scaled_dot_product_attention(qf, kf, vf, scale=128**-0.5).transpose(
+        0, 2, 1, 3
+    )
 
     rel_rms = mx.sqrt(mx.mean((out - ref) ** 2)) / mx.sqrt(mx.mean(ref**2))
     assert rel_rms.item() < 1e-2

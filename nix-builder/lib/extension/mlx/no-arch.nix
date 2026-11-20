@@ -128,6 +128,9 @@ stdenv.mkDerivation (prevAttrs: {
 
   doInstallCheck = true;
 
+  # Loading the kernel imports MLX, which needs access to the Metal device.
+  __noChroot = true;
+
   passthru = {
     inherit dependencies;
     inherit variant;

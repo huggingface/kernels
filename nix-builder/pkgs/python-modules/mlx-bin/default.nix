@@ -52,6 +52,9 @@ buildPythonPackage {
 
   pythonImportsCheck = [ "mlx.core" ];
 
+  # Importing `mlx.core` needs access to the Metal device.
+  __noChroot = true;
+
   meta = {
     description = "Array framework for Apple silicon";
     homepage = "https://github.com/ml-explore/mlx";

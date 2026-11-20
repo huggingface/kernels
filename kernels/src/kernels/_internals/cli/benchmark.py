@@ -501,11 +501,11 @@ def _time_fn(fn: Any, iterations: int, warmup: int) -> list[float]:
 
     times_ms = []
     for _ in range(iterations):
-        start = time.perf_counter()
+        start = time.perf_counter_ns()
         fn()
         _synchronize()
-        end = time.perf_counter()
-        times_ms.append((end - start) * 1000)
+        end = time.perf_counter_ns()
+        times_ms.append((end - start) / 1e6)
     return times_ms
 
 
@@ -523,25 +523,25 @@ def _timing_results(
     ref_mean_ms = None
     ref_median_ms = None
     if ref_times_ms:
-        ref_mean_ms = round(sum(ref_times_ms) / len(ref_times_ms), 4)
-        ref_median_ms = round(_percentile(sorted(ref_times_ms), 50), 4)
+        ref_mean_ms = sum(ref_times_ms) / len(ref_times_ms)
+        ref_median_ms = _percentile(sorted(ref_times_ms), 50)
 
     return TimingResults(
-        mean_ms=round(mean_ms, 4),
-        std_ms=round(std_ms, 4),
-        min_ms=round(sorted_times[0], 4),
-        max_ms=round(sorted_times[-1], 4),
+        mean_ms=mean_ms,
+        std_ms=std_ms,
+        min_ms=sorted_times[0],
+        max_ms=sorted_times[-1],
         iterations=len(times_ms),
-        median_ms=round(_percentile(sorted_times, 50), 4),
-        q1_ms=round(q1, 4),
-        q3_ms=round(q3, 4),
-        iqr_ms=round(iqr, 4),
+        median_ms=_percentile(sorted_times, 50),
+        q1_ms=q1,
+        q3_ms=q3,
+        iqr_ms=iqr,
         outliers=outlier_count,
         verified=verified,
         ref_mean_ms=ref_mean_ms,
         ref_median_ms=ref_median_ms,
-        samples_ms=[round(t, 6) for t in times_ms],
-        ref_samples_ms=[round(t, 6) for t in ref_times_ms] if ref_times_ms else None,
+        samples_ms=times_ms,
+        ref_samples_ms=ref_times_ms or None,
     )
 
 

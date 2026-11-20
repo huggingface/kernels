@@ -7,7 +7,7 @@ The command:
 - Downloads the kernel repo at a specific **branch** or **version**
 - Runs all `benchmarks/benchmark*.py` scripts
 - Times each `benchmark_*` workload and prints a results table
-- Optionally saves results as JSON
+- Optionally saves results as JSON Lines records
 
 ## Installation
 
@@ -88,10 +88,10 @@ Tune warmup and iteration count:
 kernels benchmark kernels-community/activation@v1 --warmup 20 --iterations 200
 ```
 
-Save results to a file (JSON):
+Save results to a file:
 
 ```bash
-kernels benchmark kernels-community/activation@v1 --output results.json
+kernels benchmark kernels-community/activation@v1 --output results.jsonl
 ```
 
 Benchmark a local kernel checkout (must contain `benchmarks/`):
@@ -103,7 +103,54 @@ kernels benchmark ./my_kernel
 ## Output
 
 - By default, a table is printed (timings in ms).
-- `--output <file>.json` writes a JSON payload to disk.
+- `--output <file>.jsonl` writes one record per workload as JSON Lines.
+- `--json` prints the same records to stdout.
+
+### Result records
+
+Each JSON Lines record is a flat row that describes one workload of one run:
+what was benchmarked (`repo_id`, `revision`, `kernel_sha`, `benchmark_sha`,
+`benchmark`, `workload`), where (`gpu`, `backend`, `cpu`, `os`,
+`torch_version`, `kernels_version`), how (`iterations`, `warmup`), and the
+results (`mean_ms`, `median_ms`, `std_ms`, `min_ms`, `max_ms`, `q1_ms`,
+`q3_ms`, `iqr_ms`, `outliers`, `verified`, `ref_mean_ms`, `ref_median_ms`,
+`speedup`, and the raw `samples_ms` and `ref_samples_ms`). Records from one
+run share a `run_id`.
+
+Because every record is self-contained, files from many runs can be
+concatenated and loaded as a single table, for example with 🤗 Datasets:
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("json", data_files="results/*.jsonl", split="train")
+```
+
+## Comparing runs
+
+Save a run as JSON Lines and pass it as a baseline to a later run, for example
+to check whether a kernel or builder change affected performance:
+
+```bash
+kernels benchmark ./my_kernel --output base.jsonl
+# ... make changes and rebuild ...
+kernels benchmark ./my_kernel --baseline base.jsonl
+```
+
+Two saved runs can also be compared directly:
+
+```bash
+kernels benchmark-compare base.jsonl new.jsonl
+```
+
+Workloads are compared by their median time. A workload is reported as faster
+or slower only when its median changed by more than `--threshold` (default
+`0.05`, i.e. 5%) _and_ the interquartile ranges of the two runs do not
+overlap. A warning is printed when the runs were made on a different GPU,
+backend, or PyTorch version.
+
+Use `--fail-on-regression` to exit with a non-zero status when any workload
+got slower, which is useful in CI.
 
 ## Writing Benchmark Scripts
 

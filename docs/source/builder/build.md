@@ -2,26 +2,26 @@
 
 ## Installation
 
-> [!NOTE]
-> The [install script](writing-kernels.md#quick-install) automates
-> the Nix and kernel-builder setup described below. Use these manual
-> instructions if you prefer step-by-step control.
+> [!NOTE] The [install script](writing-kernels.md#quick-install) automates the
+> Nix and kernel-builder setup described below. Use these manual instructions if
+> you prefer step-by-step control.
 
 ### Installing Nix
 
-The kernel builder uses Nix for building kernels. You can build or
-run the kernels directly if you have Nix installed on your system.
-We recommend installing Nix in the following way:
+The kernel builder uses Nix for building kernels. You can build or run the
+kernels directly if you have Nix installed on your system. We recommend
+installing Nix in the following way:
 
 - Linux: use the [official Nix installer](https://nixos.org/download/).
-- macOS: use the [Determinate Nix installer](https://docs.determinate.systems/determinate-nix/).
+- macOS: use the
+  [Determinate Nix installer](https://docs.determinate.systems/determinate-nix/).
   In addition, Xcode 16.x is currently required to build kernels.
 
 ### Using the Hugging Face binary cache
 
-Since the kernel builder depends on many packages (e.g. every supported
-PyTorch version), it is recommended to enable the huggingface cache
-to avoid expensive rebuilds.
+Since the kernel builder depends on many packages (e.g. every supported PyTorch
+version), it is recommended to enable the huggingface cache to avoid expensive
+rebuilds.
 
 To use the cache, you can either install cachix and configure it:
 
@@ -39,38 +39,39 @@ nix run nixpkgs#cachix -- use huggingface
 
 ### GPU library configuration
 
-The kernel builder also provides Nix development shells with all Torch
-and CUDA/ROCm dependencies needed to develop kernels (see below). If
-you want to test your kernels inside a Nix development shell and you
-are not using NixOS, [make sure that the CUDA driver is visible](https://danieldk.eu/Nix-CUDA-on-non-NixOS-systems#make-runopengl-driverlib-and-symlink-the-driver-library) to Torch.
+The kernel builder also provides Nix development shells with all Torch and
+CUDA/ROCm dependencies needed to develop kernels (see below). If you want to
+test your kernels inside a Nix development shell and you are not using NixOS,
+[make sure that the CUDA driver is visible](https://danieldk.eu/Nix-CUDA-on-non-NixOS-systems#make-runopengl-driverlib-and-symlink-the-driver-library)
+to Torch.
 
 ## Getting started
 
 The easiest way to start a new kernel is using the `kernel-builder init`
-subcommand, which is discussed in [Writing Kernels](writing-kernels.md).
-The commands discussed in the following sections will also work on
-existing kernel sources that have `build.toml`/`flake.nix`.
+subcommand, which is discussed in [Writing Kernels](writing-kernels.md). The
+commands discussed in the following sections will also work on existing kernel
+sources that have `build.toml`/`flake.nix`.
 
 ## Building a kernel
 
-A kernel can be built with the `kernel-builder build-and-copy` command.
-For example:
+A kernel can be built with the `kernel-builder build-and-copy` command. For
+example:
 
 ```bash
 cd examples/relu
 kernel-builder build-and-copy -L
 ```
 
-The `-L` option prints out build logs in the terminal, which can be handy
-for monitoring the build. The compiled kernel will then be in the local
-`build/` directory.
+The `-L` option prints out build logs in the terminal, which can be handy for
+monitoring the build. The compiled kernel will then be in the local `build/`
+directory.
 
 ## Shell for local development
 
-`kernel-builder` provides shells for developing kernels. In such a shell,
-all required dependencies are available, as well as `kernel-builder` for generating
-project files. For example, you can use the development shell to build a
-arch (AOT-compiled) kernel:
+`kernel-builder` provides shells for developing kernels. In such a shell, all
+required dependencies are available, as well as `kernel-builder` for generating
+project files. For example, you can use the development shell to build a arch
+(AOT-compiled) kernel:
 
 ```bash
 $ kernel-builder devshell
@@ -80,11 +81,11 @@ $ cmake -B build-ext
 $ cmake --build build-ext --target local_install
 ```
 
-This will build the kernel and puts the output in the `build` directory
-and can be used with the `kernels` library.
+This will build the kernel and puts the output in the `build` directory and can
+be used with the `kernels` library.
 
-Noarch (JIT-compiled) kernels do not use CMake. For this reason, we also
-create a `setup.py` that works both for arch and noarch kernels:
+Noarch (JIT-compiled) kernels do not use CMake. For this reason, we also create
+a `setup.py` that works both for arch and noarch kernels:
 
 ```bash
 $ kernel-builder devshell
@@ -92,17 +93,16 @@ $ kernel-builder create-pyproject
 $ python setup.py build_kernel
 ```
 
-Development shells are available for every build configuration. For
-instance, you can get a Torch 2.11 development shell for ROCm kernels
-using:
+Development shells are available for every build configuration. For instance,
+you can get a Torch 2.11 development shell for ROCm kernels using:
 
 ```bash
 $ rm -rf .venv  # Remove existing venv if any.
 $ kernel-builder devshell --variant torch214-rocm72-x86_64-linux
 ```
 
-For an editor-driven workflow with `direnv` activating the devshell on
-`cd`, see [IDE Setup](./ide-setup.md).
+For an editor-driven workflow with `direnv` activating the devshell on `cd`, see
+[IDE Setup](./ide-setup.md).
 
 You can list the variants that the kernel supports with the `list-variants`
 subcommand:
@@ -128,9 +128,8 @@ torch211-cxx11-xpu20253-x86_64-linux
 
 ## Shell for testing a kernel
 
-You can also start a test shell. This will give you a Python interpreter
-with the kernel in Python's search path. This makes it more convenient to run
-tests:
+You can also start a test shell. This will give you a Python interpreter with
+the kernel in Python's search path. This makes it more convenient to run tests:
 
 ```bash
 cd examples/relu
@@ -143,8 +142,8 @@ kernel variant.
 
 ## Adding test dependencies to development shells
 
-You can add test dependencies to a development or testing shell. Adapt
-the kernel's `flake.nix` to use the `pythonCheckInputs` option:
+You can add test dependencies to a development or testing shell. Adapt the
+kernel's `flake.nix` to use the `pythonCheckInputs` option:
 
 ```nix
 {
@@ -169,36 +168,36 @@ the kernel's `flake.nix` to use the `pythonCheckInputs` option:
 }
 ```
 
-The available packages can be found on [search.nixos.org](https://search.nixos.org/packages?channel=25.05&query=python312Packages).
+The available packages can be found on
+[search.nixos.org](https://search.nixos.org/packages?channel=25.05&query=python312Packages).
 
-Keep in mind that these additional dependencies will only be available to
-the Nix shells, not the final kernel uploaded to the Hub.
+Keep in mind that these additional dependencies will only be available to the
+Nix shells, not the final kernel uploaded to the Hub.
 
 ## Uploading your kernel to the Hub
 
-Finally, when you are ready to make a kernel release, you can build and
-upload a kernel to the Hub:
+Finally, when you are ready to make a kernel release, you can build and upload a
+kernel to the Hub:
 
 ```bash
 $ cd mykernel
 $ kernel-builder build-and-upload
 ```
 
-> [!NOTE]
-> Uploads go to a `kernel`-type Hub repository (the first-class kernel
-> repository type). The owning user or org must have kernel-creation
-> access. Request it from
+> [!NOTE] Uploads go to a `kernel`-type Hub repository (the first-class kernel
+> repository type). The owning user or org must have kernel-creation access.
+> Request it from
 > [huggingface.co/settings/account](https://huggingface.co/settings/account)
 > ("Request Kernels Creation").
 
-Aside from building and uploading the kernel itself, this will also fill
-the card template and upload it as `README.md` to the Hub if the card
-template is provided in the source repository as `CARD.md`.
+Aside from building and uploading the kernel itself, this will also fill the
+card template and upload it as `README.md` to the Hub if the card template is
+provided in the source repository as `CARD.md`.
 
-The repository to upload to is determined by the `repo-id` and `version`
-fields in `build.toml`. For example, with the following `build.toml`, the
-kernel will be uploaded to the repository `kernels-community/flash-attn4`
-in the `v1` version branch:
+The repository to upload to is determined by the `repo-id` and `version` fields
+in `build.toml`. For example, with the following `build.toml`, the kernel will
+be uploaded to the repository `kernels-community/flash-attn4` in the `v1`
+version branch:
 
 ```toml
 [general]
@@ -214,37 +213,35 @@ format.
 
 ### Uploading through a pull request
 
-If you do not have write access to the target repository — for example,
-when proposing builds for a kernel maintained by another user or org —
-you can pass `--create-pr` to the `upload` or `build-and-upload`
-subcommands:
+If you do not have write access to the target repository — for example, when
+proposing builds for a kernel maintained by another user or org — you can pass
+`--create-pr` to the `upload` or `build-and-upload` subcommands:
 
 ```bash
 $ kernel-builder build-and-upload --create-pr
 ```
 
-Instead of committing directly, this opens a pull request on the Hub for
-each branch that has changes: one against `main` for the kernel card and
-one against the `v<version>` branch for the build artifacts and
-benchmarks. The pull request URLs are printed after the upload, so that
-the repository maintainers can be pointed to them for review.
+Instead of committing directly, this opens a pull request on the Hub for each
+branch that has changes: one against `main` for the kernel card and one against
+the `v<version>` branch for the build artifacts and benchmarks. The pull request
+URLs are printed after the upload, so that the repository maintainers can be
+pointed to them for review.
 
-> [!NOTE]
-> A pull request can only target an existing branch. If the `v<version>`
-> branch does not exist yet and you do not have write access to create
-> it, ask a maintainer of the repository to create the branch first.
+> [!NOTE] A pull request can only target an existing branch. If the `v<version>`
+> branch does not exist yet and you do not have write access to create it, ask a
+> maintainer of the repository to create the branch first.
 
-> [!TIP]
-> You can automate building, uploading, and testing kernels on Hugging Face
-> Jobs from CI, see [Building and testing kernels with GitHub Actions](./github-actions.md).
+> [!TIP] You can automate building, uploading, and testing kernels on Hugging
+> Face Jobs from CI, see
+> [Building and testing kernels with GitHub Actions](./github-actions.md).
 
 ## Updating the kernel build toolchain
 
-The kernel's dependencies are fully pinned down in the `flake.lock` that
-is shipped with the kernel. We periodically release new versions of the
-build toolchain that includes bug fixes and supports newer Torch and compute backend
-versions. To update the kernel build toolchain, run `nix flake update`
-in the kernel directory:
+The kernel's dependencies are fully pinned down in the `flake.lock` that is
+shipped with the kernel. We periodically release new versions of the build
+toolchain that includes bug fixes and supports newer Torch and compute backend
+versions. To update the kernel build toolchain, run `nix flake update` in the
+kernel directory:
 
 ```bash
 ❯ nix flake update
@@ -266,14 +263,13 @@ in the kernel directory:
 
 ## Skipping the `get_kernel` check
 
-`kernel-builder` verifies that a kernel can be
-imported with the [`kernels`](https://github.com/huggingface/kernels)
-package. This check can be disabled by passing `doGetKernelCheck = false`
-to `genKernelFlakeOutputs`. **Warning:** it is strongly recommended to keep
-this check enabled, as it is one of the checks that validates that a kernel
-is compliant. This option is primarily intended for kernels with
-`triton.autotune` decorators, which can fail because there is no GPU available
-in the build sandbox.
+`kernel-builder` verifies that a kernel can be imported with the
+[`kernels`](https://github.com/huggingface/kernels) package. This check can be
+disabled by passing `doGetKernelCheck = false` to `genKernelFlakeOutputs`.
+**Warning:** it is strongly recommended to keep this check enabled, as it is one
+of the checks that validates that a kernel is compliant. This option is
+primarily intended for kernels with `triton.autotune` decorators, which can fail
+because there is no GPU available in the build sandbox.
 
 Generating a kernel's public API symbols (`symbols.json`) also requires
 importing the kernel. So, when the `get_kernel` check is disabled, the build

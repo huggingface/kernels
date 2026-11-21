@@ -2,8 +2,8 @@
 
 A kernel can be compliant for a specific compute framework (e.g. CUDA) or
 architecture (e.g. x86_64). For compliance with a compute framework and
-architecture combination, all the build variants listed below must be
-available. This list will be updated as new PyTorch versions are released.
+architecture combination, all the build variants listed below must be available.
+This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-darwin
 
@@ -111,8 +111,8 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## Python-only kernels
 
-Kernels that are in pure Python (e.g. Triton kernels) only need to provide
-one or more of the following variants:
+Kernels that are in pure Python (e.g. Triton kernels) only need to provide one
+or more of the following variants:
 
 - `torch-cpu`
 - `torch-cuda`

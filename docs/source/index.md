@@ -7,31 +7,33 @@
 </a>
 </div>
 
-The Kernel Hub allows Python libraries and applications to load compute
-kernels directly from the [Hub](https://huggingface.co/). Kernels are a first-class
-repository type on the Hub, with dedicated pages that surface supported
-hardware and versions. To support dynamic loading, Hub kernels differ from
-traditional Python kernel packages in that they are made to be:
+The Kernel Hub allows Python libraries and applications to load compute kernels
+directly from the [Hub](https://huggingface.co/). Kernels are a first-class
+repository type on the Hub, with dedicated pages that surface supported hardware
+and versions. To support dynamic loading, Hub kernels differ from traditional
+Python kernel packages in that they are made to be:
 
 - **Portable**: a kernel can be loaded from paths outside `PYTHONPATH`.
-- **Unique**: multiple versions of the same kernel can be loaded in the
-  same Python process.
-- **Compatible**: `kernels` must support all recent versions of Python and
-  the different PyTorch build configurations (various CUDA versions
-  and C++ ABIs). Furthermore, older C library versions must be supported.
+- **Unique**: multiple versions of the same kernel can be loaded in the same
+  Python process.
+- **Compatible**: `kernels` must support all recent versions of Python and the
+  different PyTorch build configurations (various CUDA versions and C++ ABIs).
+  Furthermore, older C library versions must be supported.
 
-Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
+Browse available kernels at
+[huggingface.co/kernels](https://huggingface.co/kernels).
 
 The Kernels project is divided into two parts:
 
-- Builder: [`kernel-builder`](builder-cli.md) provides utilities to build, package, and distribute compute kernels in a way that is compatible with the Hugging Face Hub and `kernels`.
-- `kernels`: The [`kernels`](basic-usage.md) is a Python package that lets
-  users load compatible compute kernels from the Hub. Refer to the [quickstart](basic-usage.md) to know more.
+- Builder: [`kernel-builder`](builder-cli.md) provides utilities to build,
+  package, and distribute compute kernels in a way that is compatible with the
+  Hugging Face Hub and `kernels`.
+- `kernels`: The [`kernels`](basic-usage.md) is a Python package that lets users
+  load compatible compute kernels from the Hub. Refer to the
+  [quickstart](basic-usage.md) to know more.
 
 If you're looking for a more involved "Why kernels?" answer, refer to
 [this page](./why_kernels.md).
 
-The [talks page](./talks.md) page has links to talks on the
-Kernels project. The [blog page](./blog.md) collects blog posts
-on the Kernels project.
-
+The [talks page](./talks.md) page has links to talks on the Kernels project. The
+[blog page](./blog.md) collects blog posts on the Kernels project.

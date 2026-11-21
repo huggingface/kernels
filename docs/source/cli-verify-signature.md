@@ -1,7 +1,7 @@
 # kernels verify-signature
 
-Use `kernels verify-signature` to verify the metadata signature and check
-that kernel files match the digest embedded in the metadata.
+Use `kernels verify-signature` to verify the metadata signature and check that
+kernel files match the digest embedded in the metadata.
 
 This command requires the `sigstore` package, which is installed with the
 `sigstore` extra: `pip install "kernels[sigstore]"`.
@@ -16,15 +16,15 @@ kernels verify-signature <repo_id> <version> [--all-variants] \
 ## What It Does
 
 - Checks that the signing identity in `metadata.json.sigstore` is approved.
-- Verifies that `metadata.json` is not tampered with, using the signature
-  in `metadata.json.sigstore`.
-- Verifies that other kernel files are not tampered with, using the digest
-  in `metadata.json`.
+- Verifies that `metadata.json` is not tampered with, using the signature in
+  `metadata.json.sigstore`.
+- Verifies that other kernel files are not tampered with, using the digest in
+  `metadata.json`.
 
 ## Examples
 
-Verify version `1` of the `kernels-community/relu` kernel. Only checks
-the variant that is compatible with the current system:
+Verify version `1` of the `kernels-community/relu` kernel. Only checks the
+variant that is compatible with the current system:
 
 ```bash
 kernels verify-signature kernels-community/relu 1

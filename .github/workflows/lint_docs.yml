@@ -1,0 +1,40 @@
+name: Lint docs
+on:
+  push:
+    paths:
+      - "docs/source/**"
+      - ".prettierrc.json"
+      - ".github/workflows/lint_docs.yml"
+  pull_request:
+    paths:
+      - "docs/source/**"
+      - ".prettierrc.json"
+      - ".github/workflows/lint_docs.yml"
+
+concurrency:
+  group:
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  prettier:
+    permissions:
+      contents: read
+    name: Check docs formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Nix
+        with:
+          extra-conf: |
+            sandbox-fallback = false
+        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
+        with:
+          name: huggingface
+        env:
+          USER: runner
+      - name: Check docs formatting
+        run: nix develop --command prettier --check docs/source

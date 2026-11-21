@@ -1,36 +1,54 @@
 # Install agent skills
 
-Use `kernel-builder skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode.
-Supported skills include:
+Use `kernel-builder skills add` to install the skills for AI coding assistants
+like Claude, Codex, and OpenCode. Supported skills include:
+
 - `cuda-kernels` (default)
 - `rocm-kernels`
 - `xpu-kernels`
 - `cpu-kernels`
 - `triton-kernels`
 
-Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
+Skill files are downloaded from the `huggingface/kernels` directory in this
+[repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
 
-Skills instruct agents how to deal with hardware-specific optimizations, integrate with libraries like diffusers and transformers, and benchmark kernel performance in consistent ways.
+Skills instruct agents how to deal with hardware-specific optimizations,
+integrate with libraries like diffusers and transformers, and benchmark kernel
+performance in consistent ways.
 
-> [!TIP]
-> **When are CPU kernels actually helpful?** Two main cases:
-> - **Better performance on Intel Xeon** — custom AVX2/AVX512 kernels (and AMX via brgemm for quantized GEMM) outperform generic PyTorch ops for element-wise and quantized workloads, especially in CPU-only or latency-sensitive serving.
-> - **Enabling functionality that otherwise can't run** — some kernels are a hard requirement, e.g. `megablocks` MoE on CPU, where without the kernel you simply cannot run MXFP4.
+> [!TIP] **When are CPU kernels actually helpful?** Two main cases:
+>
+> - **Better performance on Intel Xeon** — custom AVX2/AVX512 kernels (and AMX
+>   via brgemm for quantized GEMM) outperform generic PyTorch ops for
+>   element-wise and quantized workloads, especially in CPU-only or
+>   latency-sensitive serving.
+> - **Enabling functionality that otherwise can't run** — some kernels are a
+>   hard requirement, e.g. `megablocks` MoE on CPU, where without the kernel you
+>   simply cannot run MXFP4.
 
-Example CPU kernels built with this skill (available on the Hub under [`kernels-community`](https://huggingface.co/kernels-community)):
+Example CPU kernels built with this skill (available on the Hub under
+[`kernels-community`](https://huggingface.co/kernels-community)):
 
-- [`kernels-community/megablocks`](https://huggingface.co/kernels-community/megablocks) — MoE kernels with a CPU backend that enable running MXFP4 MoE models on CPU.
-- [`kernels-community/quantization-gptq`](https://huggingface.co/kernels-community/quantization-gptq) — INT4 quantized GEMM using AVX512.
-- [`kernels-community/rmsnorm`](https://huggingface.co/kernels-community/rmsnorm) — RMSNorm with AVX2/AVX512 element-wise paths.
+- [`kernels-community/megablocks`](https://huggingface.co/kernels-community/megablocks)
+  — MoE kernels with a CPU backend that enable running MXFP4 MoE models on CPU.
+- [`kernels-community/quantization-gptq`](https://huggingface.co/kernels-community/quantization-gptq)
+  — INT4 quantized GEMM using AVX512.
+- [`kernels-community/rmsnorm`](https://huggingface.co/kernels-community/rmsnorm)
+  — RMSNorm with AVX2/AVX512 element-wise paths.
 
-> [!TIP]
-> **When are Triton kernels useful?** Two main cases:
-> - **Portability across NVIDIA and AMD** — a single Triton kernel runs on both CUDA and ROCm without modification. No vendor-specific code needed.
-> - **Fusing multiple ops to reduce memory traffic** — operations like softmax (5 PyTorch ops, ~8MN memory ops) become a single kernel (2MN ops) with a ~4x reduction in DRAM round-trips. Any chain of element-wise + reduction ops that PyTorch executes as separate kernels is a fusion opportunity.
+> [!TIP] **When are Triton kernels useful?** Two main cases:
+>
+> - **Portability across NVIDIA and AMD** — a single Triton kernel runs on both
+>   CUDA and ROCm without modification. No vendor-specific code needed.
+> - **Fusing multiple ops to reduce memory traffic** — operations like softmax
+>   (5 PyTorch ops, ~8MN memory ops) become a single kernel (2MN ops) with a ~4x
+>   reduction in DRAM round-trips. Any chain of element-wise + reduction ops
+>   that PyTorch executes as separate kernels is a fusion opportunity.
 
 Example Triton kernels built with this skill:
 
-- [`jaygala223/triton-layernorm`](https://huggingface.co/kernels/jaygala223/triton-layernorm) — fused LayerNorm with fp32 accumulation, ~1.45x faster than PyTorch on V100.
+- [`jaygala223/triton-layernorm`](https://huggingface.co/kernels/jaygala223/triton-layernorm)
+  — fused LayerNorm with fp32 accumulation, ~1.45x faster than PyTorch on V100.
 
 Examples:
 

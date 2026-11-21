@@ -1,30 +1,27 @@
 # Migrate from older versions
 
-> [!CAUTION]
-> To prevent disruptions we kept the "model" type repositories of
-> kernels alive. However, starting September 13, 2026, we will
-> be taking them down. Please ensure you're using the latest
-> version of `kernels`. If you face any issues, please file them
-> here: https://github.com/huggingface/kernels/issues/new
+> [!CAUTION] To prevent disruptions we kept the "model" type repositories of
+> kernels alive. However, starting September 13, 2026, we will be taking them
+> down. Please ensure you're using the latest version of `kernels`. If you face
+> any issues, please file them here:
+> https://github.com/huggingface/kernels/issues/new
 
 ## 0.12
 
 ### Adopting kernel versions
 
-Before `kernels` 0.12, kernels could be pulled from a repository
-without specifying a version. This is deprecated in kernels 0.12
-and is an error in kernels 0.15. Instead, use of a kernel should
-always specify a version or revision (except for local kernels).
+Before `kernels` 0.12, kernels could be pulled from a repository without
+specifying a version. This is deprecated in kernels 0.12 and is an error in
+kernels 0.15. Instead, use of a kernel should always specify a version or
+revision (except for local kernels).
 
-Kernels only use a major version. The kernel maintainer is responsible
-for never breaking a kernel within a major version and should bump up
-the major version if the kernel API changes and/or when support for
-older Torch versions is removed.
+Kernels only use a major version. The kernel maintainer is responsible for never
+breaking a kernel within a major version and should bump up the major version if
+the kernel API changes and/or when support for older Torch versions is removed.
 
-> [!NOTE]
-> Version `0` kernels are excluded from the API compatibility requirement,
-> since it is used for alpha/beta-quality kernels that may still have
-> rapidly changing APIs.
+> [!NOTE] Version `0` kernels are excluded from the API compatibility
+> requirement, since it is used for alpha/beta-quality kernels that may still
+> have rapidly changing APIs.
 
 You can find the versions that are supported by a kernel using the
 `kernels variants --all-versions` command. For example:
@@ -82,9 +79,9 @@ torch212-cxx11-cpu-x86_64-linux: CPU (x86_64) does not match system CPU (aarch64
 torch210-cxx11-cu130-aarch64-linux: OS (linux) does not match system OS (darwin)
 ```
 
-The command lists all available versions (here only version 1) with
-all the variants that are supported. A check mark is printed after
-the variant that is compatible with your current environment.
+The command lists all available versions (here only version 1) with all the
+variants that are supported. A check mark is printed after the variant that is
+compatible with your current environment.
 
 Code that uses a kernel can be updated as follows:
 
@@ -143,27 +140,26 @@ kernel-creation access. Request it from
 
 To migrate an existing `model`-type kernel repository:
 
-1. Make sure the publishing org has been granted kernel-creation access
-   (see above).
+1. Make sure the publishing org has been granted kernel-creation access (see
+   above).
 2. Re-upload with `kernel-builder build-and-upload` to a `kernel`-type
-   repository. Either keep the same `repo-id` in `build.toml` if the
-   repository has been migrated to the new type, or point it at a newly
-   created `kernel`-type repository.
-3. Update consumers' [`~kernels.get_kernel`] and [`~kernels.LayerRepository`] calls
-   to reference the new repository if the `repo-id` changed.
+   repository. Either keep the same `repo-id` in `build.toml` if the repository
+   has been migrated to the new type, or point it at a newly created
+   `kernel`-type repository.
+3. Update consumers' [`~kernels.get_kernel`] and [`~kernels.LayerRepository`]
+   calls to reference the new repository if the `repo-id` changed.
 
 ## 0.16
 
-> [!WARNING] **Deprecation of kernel functions.**
-> `use_kernel_func_from_hub`, `FuncRepository`, `LocalFuncRepository`, and
-`LockedFuncRepository` are now deprecated.
+> [!WARNING] **Deprecation of kernel functions.** `use_kernel_func_from_hub`,
+> `FuncRepository`, `LocalFuncRepository`, and `LockedFuncRepository` are now
+> deprecated.
 
-To make a function extensible by a layer, use the same decorator as for
-layers ([`~kernels.use_kernel_forward_from_hub`]). This makes it clearer
-that the function is actually replaced by a layer. You can also use the
-[`~kernels.use_kernelized_func`] decorator to attach such a function to
-the layer where it is used, making it discoverable by
-[`~kernels.kernelize`].
+To make a function extensible by a layer, use the same decorator as for layers
+([`~kernels.use_kernel_forward_from_hub`]). This makes it clearer that the
+function is actually replaced by a layer. You can also use the
+[`~kernels.use_kernelized_func`] decorator to attach such a function to the
+layer where it is used, making it discoverable by [`~kernels.kernelize`].
 
 For example:
 
@@ -206,14 +202,13 @@ class FeedForward(nn.Module):
         return silu_and_mul(self.linear(x))
 ```
 
-`FuncRepository`, `LocalFuncRepository`, and `LockedFuncRepository` are
-not replaced. They allowed using an arbitrary function from a kernel
-as a layer, but this was easily misused and did not have a clean way
-of marking such a function as supporting `torch.compile` or backward
-passes. Going forward, kernel functions should be exposed as regular
-kernel layers and used with [`~kernels.LayerRepository`],
-[`~kernels.LocalLayerRepository`], or [`~kernels.LockedLayerRepository`].
-For example:
+`FuncRepository`, `LocalFuncRepository`, and `LockedFuncRepository` are not
+replaced. They allowed using an arbitrary function from a kernel as a layer, but
+this was easily misused and did not have a clean way of marking such a function
+as supporting `torch.compile` or backward passes. Going forward, kernel
+functions should be exposed as regular kernel layers and used with
+[`~kernels.LayerRepository`], [`~kernels.LocalLayerRepository`], or
+[`~kernels.LockedLayerRepository`]. For example:
 
 ```python
 import torch

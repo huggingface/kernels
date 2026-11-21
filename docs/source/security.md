@@ -179,20 +179,19 @@ workflow path/branch.
 Kernels are verified using two separate checks.
 
 Digest verification uses the file hashes in `metadata.json` to verify the
-integrity of kernel files. It is performed for both remote and local
-kernels. If the files do not match the digest, an exception is raised.
+integrity of kernel files. It is performed for both remote and local kernels. If
+the files do not match the digest, an exception is raised.
 
-Digest verification only checks the integrity of the files according to
-the metadata. Signature verification checks the authenticity of the metadata
-itself:
+Digest verification only checks the integrity of the files according to the
+metadata. Signature verification checks the authenticity of the metadata itself:
 
 - Verify the signature against the given policy. The default policy only accepts
   kernels signed by workflows in the `huggingface/kernels-community` and
   `huggingface/kernels-community-rs` GitHub repositories.
 - Verify the authenticity of `metadata.json` using the signature.
 
-Signature verification is only performed for kernels downloaded from the Hub.
-At this time, a signature verification error will only result in a warning.
+Signature verification is only performed for kernels downloaded from the Hub. At
+this time, a signature verification error will only result in a warning.
 Moreover, signature verification is only performed when the `sigstore` Python
 package is installed, which you can do with `pip install "kernels[sigstore]"`.
 However, we will make signature verification mandatory in the future.
@@ -212,8 +211,8 @@ again. When a signature receipt is found, the signature is not verified again.
 However, the signing certificate is still checked against the policy, since the
 receipt could have been written by a verification with a different policy.
 
-Local kernels do not get receipts, since their files may change. They are
-hashed on every load.
+Local kernels do not get receipts, since their files may change. They are hashed
+on every load.
 
 Receipts are stored by kernel identity. The name of a receipt file is a hash of:
 

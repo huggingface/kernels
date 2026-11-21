@@ -15,3 +15,12 @@ repos:
     rev: ccb94535e519e94b77d6bda76ac1de06e9f11284
     hooks:
       - id: nixfmt-nix
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: prettier --write --ignore-unknown
+        language: system
+        types_or: [markdown, yaml]
+        files: ^docs/source/

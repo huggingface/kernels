@@ -1,15 +1,15 @@
 # Ship Triton autotune configurations
 
-Triton kernels typically have parameters, such as tile sizes, number of warps and
-number of pipeline stages, whose optimal values depend on the GPU and the
-problem shape. Autotuning finds good values for these parameters, but doing
-it at runtime (e.g. with the
+Triton kernels typically have parameters, such as tile sizes, number of warps
+and number of pipeline stages, whose optimal values depend on the GPU and the
+problem shape. Autotuning finds good values for these parameters, but doing it
+at runtime (e.g. with the
 [`@triton.autotune`](https://triton-lang.org/main/python-api/generated/triton.autotune.html)
 decorator) re-benchmarks every candidate configuration in each new process.
 
-However, one can run the tuner for the GPU models they like and store the
-best found configurations as files for using them later. This effectively
-reduces the potentially costly tuning time.
+However, one can run the tuner for the GPU models they like and store the best
+found configurations as files for using them later. This effectively reduces the
+potentially costly tuning time.
 
 `kernel-builder` supports this by packaging these configurations as JSON files
 with the kernel. At runtime, the kernel looks up the configuration for the
@@ -19,18 +19,18 @@ matching configuration.
 This is how, for example, the vLLM fused MoE kernel ships on the Hub: the
 [`RedHatAI/moe`](https://huggingface.co/RedHatAI/moe/tree/main/torch-ext/moe/configs)
 repository contains a `configs` directory with tuned configurations for many
-GPUs. This page walks through a small, complete example of the same pattern:
-the [`gemm-triton-autotune`](https://github.com/huggingface/kernels-test/tree/main/gemm-triton-autotune)
+GPUs. This page walks through a small, complete example of the same pattern: the
+[`gemm-triton-autotune`](https://github.com/huggingface/kernels-test/tree/main/gemm-triton-autotune)
 example kernel, a Triton GEMM published as
 [`kernels-test/gemm-triton-autotune`](https://huggingface.co/kernels/kernels-test/gemm-triton-autotune).
 
 ## Shipping data files with a kernel
 
 Since autotune files are plain JSON files, we can store them anywhere inside the
-kernel's Python sources in `torch-ext/<kernel_name>`. For this example,
-we will use `torch-ext/gemm_triton_autotune/configs/`. By default, only `py` and `pyi`
-files are picked up from the kernel's Python source directory, so add `json` to the
-[`pyext` option](writing-kernels.md#torch-noarch) in `build.toml`:
+kernel's Python sources in `torch-ext/<kernel_name>`. For this example, we will
+use `torch-ext/gemm_triton_autotune/configs/`. By default, only `py` and `pyi`
+files are picked up from the kernel's Python source directory, so add `json` to
+the [`pyext` option](writing-kernels.md#torch-noarch) in `build.toml`:
 
 ```toml
 [general]
@@ -49,52 +49,50 @@ pyext = ["json", "py"]
 
 ## Configuration file layout
 
-A GEMM computes `(M, K) @ (K, N)`. For a model, the weight dimensions `N`
-and `K` are known ahead of time, while `M` (e.g. the number of tokens)
-varies at runtime. The example therefore stores one file per `(N, K)` shape
-and GPU, following the same naming convention as the MoE kernel:
+A GEMM computes `(M, K) @ (K, N)`. For a model, the weight dimensions `N` and
+`K` are known ahead of time, while `M` (e.g. the number of tokens) varies at
+runtime. The example therefore stores one file per `(N, K)` shape and GPU,
+following the same naming convention as the MoE kernel:
 
 ```
 torch-ext/gemm_triton_autotune/configs/N=4096,K=4096,device_name=NVIDIA_L4.json
 torch-ext/gemm_triton_autotune/configs/N=14336,K=4096,device_name=NVIDIA_L4.json
 ```
 
-Each file maps an `M` value to the best configuration that the autotuner
-found for that `M`:
+Each file maps an `M` value to the best configuration that the autotuner found
+for that `M`:
 
 ```json
 {
-    "1": {
-        "BLOCK_SIZE_M": 16,
-        "BLOCK_SIZE_N": 128,
-        "BLOCK_SIZE_K": 32,
-        "GROUP_SIZE_M": 8,
-        "num_warps": 4,
-        "num_stages": 3
-    },
-    "1024": {
-        "BLOCK_SIZE_M": 128,
-        "BLOCK_SIZE_N": 128,
-        "BLOCK_SIZE_K": 32,
-        "GROUP_SIZE_M": 8,
-        "num_warps": 4,
-        "num_stages": 3
-    }
+  "1": {
+    "BLOCK_SIZE_M": 16,
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 32,
+    "GROUP_SIZE_M": 8,
+    "num_warps": 4,
+    "num_stages": 3
+  },
+  "1024": {
+    "BLOCK_SIZE_M": 128,
+    "BLOCK_SIZE_N": 128,
+    "BLOCK_SIZE_K": 32,
+    "GROUP_SIZE_M": 8,
+    "num_warps": 4,
+    "num_stages": 3
+  }
 }
 ```
 
-Since the device name is part of the file name, configurations tuned for one
-GPU are never applied to another. A configuration that would exceed the
-resources of a smaller GPU (e.g. shared memory) is therefore harmless to
-ship.
+Since the device name is part of the file name, configurations tuned for one GPU
+are never applied to another. A configuration that would exceed the resources of
+a smaller GPU (e.g. shared memory) is therefore harmless to ship.
 
 ## Looking up configurations at runtime
 
-At kernel launch, the kernel checks whether a configuration file exists for
-the current device and shape. If it does, the configuration with the nearest
-tuned `M` is used; otherwise the kernel falls back to a conservative default
-and logs a warning. The lookup is cached, so the file is read at most once
-per process:
+At kernel launch, the kernel checks whether a configuration file exists for the
+current device and shape. If it does, the configuration with the nearest tuned
+`M` is used; otherwise the kernel falls back to a conservative default and logs
+a warning. The lookup is cached, so the file is read at most once per process:
 
 ```python
 @functools.cache
@@ -123,11 +121,11 @@ def get_config(M: int, N: int, K: int) -> Dict[str, int]:
     return default_config(M, N, K)
 ```
 
-Files are read with `importlib.resources` for compatibility with both
-supported kernel layouts (`files` and `zip`).
+Files are read with `importlib.resources` for compatibility with both supported
+kernel layouts (`files` and `zip`).
 
-The configuration is then passed to the Triton kernel as its `constexpr`
-and launch parameters (see
+The configuration is then passed to the Triton kernel as its `constexpr` and
+launch parameters (see
 [`gemm.py`](https://github.com/huggingface/kernels-test/blob/main/gemm-triton-autotune/torch-ext/gemm_triton_autotune/gemm.py)
 in the example):
 
@@ -148,9 +146,9 @@ every candidate configuration with `triton.testing.do_bench` and keep the
 fastest. The example ships the tuner as part of the kernel (the `tune_gemm`
 function in
 [`tuning.py`](https://github.com/huggingface/kernels-test/blob/main/gemm-triton-autotune/torch-ext/gemm_triton_autotune/tuning.py)),
-so users can also generate configurations for GPUs that the kernel author
-did not tune. Candidates that do not fit the device (Triton raises
-`OutOfResources`) are skipped.
+so users can also generate configurations for GPUs that the kernel author did
+not tune. Candidates that do not fit the device (Triton raises `OutOfResources`)
+are skipped.
 
 The example repository contains a small script,
 [`tune.py`](https://github.com/huggingface/kernels-test/blob/main/gemm-triton-autotune/tune.py),
@@ -164,9 +162,9 @@ $ python tune.py --n 14336 --k 4096
 
 Commit the generated files and build and upload the kernel (see
 [Uploading your kernel to the Hub](build.md#uploading-your-kernel-to-the-hub));
-the configurations then ship with the kernel. When tuning a kernel that is
-not yet published, build it locally (see [Develop locally](local-dev.md))
-and point `LOCAL_KERNELS` at the build:
+the configurations then ship with the kernel. When tuning a kernel that is not
+yet published, build it locally (see [Develop locally](local-dev.md)) and point
+`LOCAL_KERNELS` at the build:
 
 ```bash
 $ LOCAL_KERNELS=kernels-test/gemm-triton-autotune=build python tune.py --n 4096 --k 4096
@@ -174,8 +172,8 @@ $ LOCAL_KERNELS=kernels-test/gemm-triton-autotune=build python tune.py --n 4096 
 
 ## Impact
 
-Tuned configurations are cheap to ship and can make a large difference. On
-an NVIDIA L4, the tuned configuration for a `(1024, 4096) @ (4096, 4096)`
-float16 GEMM is ~1.4× faster than the example's heuristic default (0.50 ms
-vs. 0.71 ms) — on par with cuBLAS for this shape. On an NVIDIA GB10, the
-same GEMM is ~1.6× faster with its tuned configuration (0.43 ms vs. 0.67 ms).
+Tuned configurations are cheap to ship and can make a large difference. On an
+NVIDIA L4, the tuned configuration for a `(1024, 4096) @ (4096, 4096)` float16
+GEMM is ~1.4× faster than the example's heuristic default (0.50 ms vs. 0.71 ms)
+— on par with cuBLAS for this shape. On an NVIDIA GB10, the same GEMM is ~1.6×
+faster with its tuned configuration (0.43 ms vs. 0.67 ms).

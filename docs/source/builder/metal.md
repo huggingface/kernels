@@ -5,9 +5,10 @@ Instructions on this page assume that you installed Nix with the
 
 ## Targeted macOS versions
 
-Since new macOS versions get [adopted quickly](https://telemetrydeck.com/survey/apple/macOS/versions/),
-we only support the latest major macOS version except for the first weeks
-after a release, when we also support the previous major version.
+Since new macOS versions get
+[adopted quickly](https://telemetrydeck.com/survey/apple/macOS/versions/), we
+only support the latest major macOS version except for the first weeks after a
+release, when we also support the previous major version.
 
 We currently support macOS 26.0 and later on ARM64 (Apple silicon).
 
@@ -17,16 +18,15 @@ To build a Metal kernel, the following requirements must be met:
 
 - Xcode 26.x must be available on the build machine.
 - `xcode-select -p` must point to the Xcode 26 installation, typically
-  `/Applications/Xcode.app/Contents/Developer`. If this is not the case,
-  you can set the path with:
+  `/Applications/Xcode.app/Contents/Developer`. If this is not the case, you can
+  set the path with:
   `sudo xcode-select -s /path/to/Xcode.app/Contents/Developer`
-- The Metal Toolchain must be installed. Starting with macOS 26, this is
-  a separate download from Xcode. You can install it with:
+- The Metal Toolchain must be installed. Starting with macOS 26, this is a
+  separate download from Xcode. You can install it with:
   `xcodebuild -downloadComponent MetalToolchain`
-- The Nix sandbox should be set to `relaxed`, because the Nix derivation
-  that builds the kernel must have access to Xcode and the Metal Toolchain.
-  You can verify this by checking that `/etc/nix/nix.custom.conf` contains
-  the line:
+- The Nix sandbox should be set to `relaxed`, because the Nix derivation that
+  builds the kernel must have access to Xcode and the Metal Toolchain. You can
+  verify this by checking that `/etc/nix/nix.custom.conf` contains the line:
 
   ```
   sandbox = relaxed
@@ -47,8 +47,8 @@ Xcode 26.1
 Build version 17B55
 ```
 
-The reported version must be 26.0 or newer. Then you can validate that the
-Metal Toolchain is installed with:
+The reported version must be 26.0 or newer. Then you can validate that the Metal
+Toolchain is installed with:
 
 ```bash
 $ xcodebuild -showComponent metalToolchain

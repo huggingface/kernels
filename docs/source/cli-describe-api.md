@@ -25,12 +25,12 @@ Options:
 - `--revision <revision>`: inspect a specific branch, tag, or commit (Hub only).
 - `--version <version>`: inspect a specific integer kernel version (Hub only).
   Cannot be combined with `--revision`. By default, the latest numbered version
-  is used. Repositories without numbered versions require an explicit `--revision`.
+  is used. Repositories without numbered versions require an explicit
+  `--revision`.
 - `--json`: print the full symbol data, including signatures, docstrings, layer
   attributes, and the selected source and variant, as JSON.
 - `--trust-remote-code`: allow kernels from untrusted publishers (Hub only).
   Disabled by default.
-
 
 ## Examples
 
@@ -63,10 +63,10 @@ Layers:
   LigerTiledGEGLUMLP  has_backward=unknown  can_torch_compile=True
 ```
 
-Functions are the public exports in the kernel's top-level `__all__`; layers
-are the public classes in `layers.__all__`. The generator excludes private
-and testing-only symbols. Layer attributes recorded as `null` are displayed
-as `unknown`. Empty groups are displayed as `(none)`.
+Functions are the public exports in the kernel's top-level `__all__`; layers are
+the public classes in `layers.__all__`. The generator excludes private and
+testing-only symbols. Layer attributes recorded as `null` are displayed as
+`unknown`. Empty groups are displayed as `(none)`.
 
 For kernel metadata, use [kernels info](cli-info.md). For available build
 variants, use [kernels variants](cli-variants.md).

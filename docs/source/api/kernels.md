@@ -44,8 +44,6 @@
 
 ## Resolving kernel dependencies
 
-Import these types from `kernels.resolve`.
-
 ### KernelDependency
 
 [[autodoc]] kernels.resolve.KernelDependency
@@ -96,9 +94,6 @@ Implement `resolve(api=..., backend=..., kernel=...)` to return a
 
 ## Validating kernels
 
-Import these protocols, combinators, and default validator factories from
-`kernels.validate`.
-
 ### MetadataValidator
 
 Implement `validate_metadata(metadata=..., variant=...)` to check each build
@@ -132,8 +127,6 @@ Implement `validate_kernel(kernel=...)` to check each installed
 ## Classes
 
 ### Metadata
-
-Import `Metadata` from `kernels.metadata` or directly from `kernels`.
 
 [[autodoc]] kernels.metadata.Metadata
 

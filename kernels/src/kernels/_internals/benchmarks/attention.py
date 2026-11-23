@@ -48,6 +48,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_small(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -62,6 +63,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_medium(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -76,6 +78,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_large(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
@@ -94,6 +97,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": True}
 
     def benchmark_small(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -108,6 +112,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": True}
 
     def benchmark_medium(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -122,6 +127,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.k = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.v = torch.randn(B, S, H, D, device=self.device, dtype=torch.float16)
         self.out = torch.empty(B, S, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"batch": B, "seq_len": S, "heads": H, "head_dim": D, "dtype": "float16", "causal": True}
 
     def benchmark_large(self):
         self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
@@ -149,6 +155,7 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
         self.max_seqlen = max(seqlens)
         self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"seqlens": seqlens, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_small(self):
         self.out = _extract_output(
@@ -181,6 +188,7 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
         self.max_seqlen = max(seqlens)
         self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"seqlens": seqlens, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_medium(self):
         self.out = _extract_output(
@@ -213,6 +221,7 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
         self.max_seqlen = max(seqlens)
         self.out = torch.empty(total, H, D, device=self.device, dtype=torch.float16)
+        self.params = {"seqlens": seqlens, "heads": H, "head_dim": D, "dtype": "float16", "causal": False}
 
     def benchmark_large(self):
         self.out = _extract_output(

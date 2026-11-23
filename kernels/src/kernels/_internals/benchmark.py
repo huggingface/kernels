@@ -15,6 +15,7 @@ class Benchmark:
             def setup(self):
                 self.x = torch.randn(128, 1024, device=self.device, dtype=torch.float16)
                 self.out = torch.empty(128, 512, device=self.device, dtype=torch.float16)
+                self.params = {"shape": list(self.x.shape), "dtype": "float16"}
 
             def benchmark_silu(self):
                 self.kernel.silu_and_mul(self.out, self.x)
@@ -29,9 +30,12 @@ class Benchmark:
     seed: int | None = None  # Optional: seed for reproducibility
     device: str = "cpu"  # Set automatically by runner
 
+    cuda_graph: bool = False  # Optional: time CUDA graph replays (CUDA/ROCm only)
+
     def __init__(self) -> None:
         self.kernel: Any = None
         self.out: Any = None  # Output tensor, set by setup methods
+        self.params: dict[str, Any] | None = None  # Optional: describes the workload, set by setup methods
 
     def setup(self) -> None:
         """Override to set up tensors as instance attributes."""

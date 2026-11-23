@@ -22,6 +22,7 @@ def machine_info(monkeypatch):
         monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
         monkeypatch.setattr(torch.version, "hip", hip, raising=False)
         monkeypatch.setattr(torch.version, "rocm", hip, raising=False)
+        monkeypatch.setattr(benchmark, "gpu_device", lambda backend_name: None)
         return benchmark.collect_machine_info()
 
     return collect
@@ -49,6 +50,91 @@ def test_machine_info_cpu(machine_info):
     info = machine_info(CPU())
     assert info.gpu == "N/A"
     assert info.backend == "CPU"
+
+
+def test_gpu_state_from_nvidia_smi(monkeypatch):
+    from kernels._internals.cli import benchmark_gpu_state
+
+    values = {
+        "driver_version": "595.84",
+        "clocks.max.sm": "3105",
+        "power.limit": "450.00",
+        "clocks.max.mem": "10501",
+        "persistence_mode": "Disabled",
+        "clocks.sm": "2805",
+        "clocks.mem": "10251",
+        "power.draw": "[N/A]",
+        "temperature.gpu": "47",
+        # Older drivers only know this name.
+        "clocks_throttle_reasons.active": "0x0000000000000005",
+    }
+
+    def run(cmd, **kwargs):
+        fields = cmd[2].removeprefix("--query-gpu=").split(",")
+        if any(f not in values for f in fields):
+            return SimpleNamespace(returncode=2, stdout="")
+        return SimpleNamespace(returncode=0, stdout=", ".join(values[f] for f in fields))
+
+    monkeypatch.setattr(benchmark_gpu_state.subprocess, "run", run)
+    assert benchmark_gpu_state.gpu_config(("nvidia", "GPU-0")) == (
+        {"driver_version": "595.84", "gpu_max_clock_mhz": 3105, "gpu_power_limit_w": 450.0},
+        {"vendor": "nvidia", "max_mem_clock_mhz": 10501, "persistence_mode": "Disabled"},
+    )
+    assert benchmark_gpu_state.gpu_state(("nvidia", "GPU-0")) == (
+        {
+            "gpu_clock_mhz": 2805,
+            "gpu_mem_clock_mhz": 10251,
+            "gpu_power_draw_w": None,
+            "gpu_temperature_c": 47,
+            "gpu_throttled": True,
+        },
+        {"clock_event_reasons": ["gpu_idle", "sw_power_cap"]},
+    )
+    assert benchmark_gpu_state.gpu_state(None) == (dict.fromkeys(benchmark_gpu_state.STATE_FIELDS), {})
+
+
+def test_gpu_state_from_amd_smi(monkeypatch):
+    import json
+
+    from kernels._internals.cli import benchmark_gpu_state
+
+    # Trimmed `amd-smi --json` output of an MI300X.
+    outputs = {
+        "static": {"asic": {"target_graphics_version": "gfx942", "num_compute_units": 304}},
+        "metric": {
+            "clock": {
+                "gfx_0": {
+                    "clk": {"value": 2100, "unit": "MHz"},
+                    "max_clk": {"value": 2100, "unit": "MHz"},
+                    "clk_locked": "DISABLED",
+                },
+                "mem_0": {"clk": {"value": 1300, "unit": "MHz"}},
+            },
+            "power": {"socket_power": {"value": 450, "unit": "W"}, "throttle_status": "UNTHROTTLED"},
+            "temperature": {"edge": "N/A", "hotspot": {"value": 60, "unit": "C"}},
+        },
+    }
+
+    def run(cmd, **kwargs):
+        assert cmd[2:4] == ["-g", "0000:83:00.0"]
+        return SimpleNamespace(returncode=0, stdout=json.dumps({"gpu_data": [outputs[cmd[1]]]}))
+
+    monkeypatch.setattr(benchmark_gpu_state.subprocess, "run", run)
+    device = ("amd", "0000:83:00.0")
+    assert benchmark_gpu_state.gpu_config(device) == (
+        {"driver_version": None, "gpu_max_clock_mhz": 2100, "gpu_power_limit_w": None},
+        {"vendor": "amd", "target_graphics_version": "gfx942", "num_compute_units": 304},
+    )
+    assert benchmark_gpu_state.gpu_state(device) == (
+        {
+            "gpu_clock_mhz": 2100,
+            "gpu_mem_clock_mhz": 1300,
+            "gpu_power_draw_w": 450,
+            "gpu_temperature_c": 60,
+            "gpu_throttled": False,
+        },
+        {"clk_locked": "DISABLED"},
+    )
 
 
 def test_timing_results_stats():
@@ -83,8 +169,9 @@ class ReluBenchmark(Benchmark):
     seed = 0
 
     def setup(self):
-        self.x = torch.randn(64, 64)
+        self.x = torch.randn(64, 64, device=self.device)
         self.out = torch.empty_like(self.x)
+        self.params = {"shape": tuple(self.x.shape), "dtype": self.x.dtype}
 
     def benchmark_small(self):
         self.kernel.relu(self.out, self.x)
@@ -111,6 +198,7 @@ def fake_kernel_repo(tmp_path, monkeypatch):
 
     monkeypatch.setattr(kernels, "get_local_kernel", lambda path: fake_kernel)
     monkeypatch.setattr(benchmark, "_backend", lambda: CPU())
+    monkeypatch.setattr(benchmark, "gpu_device", lambda backend_name: None)
     return tmp_path
 
 
@@ -157,6 +245,32 @@ def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
     assert unverified["verified"] is None
     assert unverified["speedup"] is None
     assert unverified["ref_samples_ms"] is None
+    assert all(list(r) == list(benchmark_results.FIELDS) for r in records)
+    assert small["params"] == {"shape": [64, 64], "dtype": "float32"}
+    assert small["timing_mode"] == "eager"
+    assert small["gpu_clock_mhz"] is None and small["hardware"] is None
+
+
+def test_cuda_graph_falls_back_to_eager_on_cpu(fake_kernel_repo):
+    script = (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").read_text()
+    (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").write_text(
+        script.replace("seed = 0", "seed = 0\n    cuda_graph = True")
+    )
+    result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=2, warmup=0)
+    assert result.timing_results["ReluBenchmark.small"].timing_mode == "eager"
+
+
+@pytest.mark.cuda_only
+def test_cuda_graph_timing(fake_kernel_repo, monkeypatch):
+    monkeypatch.setattr(benchmark, "_backend", lambda: CUDA(version=Version(torch.version.cuda)))
+    script = (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").read_text()
+    (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").write_text(
+        script.replace("seed = 0", "seed = 0\n    cuda_graph = True")
+    )
+    result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=2, warmup=0)
+    small = result.timing_results["ReluBenchmark.small"]
+    assert small.timing_mode == "cuda_graph"
+    assert small.verified is True
 
 
 def test_read_records_rejects_newer_schema(tmp_path):
@@ -168,6 +282,33 @@ def test_read_records_rejects_newer_schema(tmp_path):
     path.write_text(json.dumps({"schema_version": benchmark_results.SCHEMA_VERSION + 1}) + "\n")
     with pytest.raises(ValueError, match="unsupported"):
         benchmark_results.read_records(path)
+
+
+def test_normalize_record():
+    from kernels._internals.cli.benchmark_results import FIELDS, normalize_record
+
+    record = normalize_record({"schema_version": 1, "median_ms": 1, "from_a_newer_version": 1})
+    assert list(record) == list(FIELDS)
+    assert record["median_ms"] == 1.0 and isinstance(record["median_ms"], float)
+    assert record["gpu_clock_mhz"] is None
+    with pytest.raises(ValueError, match="params"):
+        normalize_record({"schema_version": 1, "params": "small"})
+
+
+def test_load_records_across_runs(tmp_path):
+    """`datasets.load_dataset` cannot load these together, it infers the schema from the first file."""
+    pytest.importorskip("datasets", minversion="5")
+    from kernels._internals.cli.benchmark_results import load_records, write_records
+
+    # No fields beyond the basics, e.g. written by an older version.
+    (tmp_path / "a.jsonl").write_text('{"schema_version": 1, "benchmark": "B", "workload": "w", "median_ms": 1.0}\n')
+    write_records(tmp_path / "b.jsonl", [_record("B", "w", 1.0, 0.9, 1.1, verified=True, params={"seq_len": 128})])
+    write_records(
+        tmp_path / "c.jsonl", [_record("B", "w", 1.0, 0.9, 1.1, hardware={"vendor": "amd", "gfx": "gfx942"})]
+    )
+    ds = load_records(str(tmp_path / "*.jsonl"))
+    assert ds["params"] == [None, {"seq_len": 128}, None]
+    assert ds["hardware"][2] == {"vendor": "amd", "gfx": "gfx942"}
 
 
 def _record(benchmark_name, workload, median, q1, q3, **extra):
@@ -227,6 +368,27 @@ def test_compare_records_reports_context_mismatch():
     base = [_record("B", "w", 1.0, 0.9, 1.1)]
     new = [_record("B", "w", 1.0, 0.9, 1.1, gpu="Other GPU")]
     assert compare_records(base, new).context_mismatches == {"gpu": ("Fake GPU", "Other GPU")}
+
+    new = [_record("B", "w", 1.0, 0.9, 1.1, driver_version="595.84")]
+    assert compare_records(base, new).context_mismatches == {"driver_version": (None, "595.84")}
+
+
+def test_compare_records_notes():
+    from kernels._internals.cli.benchmark_compare import compare_records
+
+    base = [
+        _record("B", "params", 1.0, 0.9, 1.1, params={"seq_len": 128}),
+        _record("B", "power", 1.0, 0.9, 1.1, gpu_power_draw_w=100.0),
+        _record("B", "noise", 1.0, 0.9, 1.1, gpu_power_draw_w=60.0),
+    ]
+    new = [
+        _record("B", "params", 1.0, 0.9, 1.1, params={"seq_len": 4096}),
+        _record("B", "power", 2.0, 1.9, 2.1, gpu_power_draw_w=380.0),
+        # Unchanged timing, so the GPU state difference is not shown.
+        _record("B", "noise", 1.0, 0.9, 1.1, gpu_power_draw_w=150.0),
+    ]
+    notes = {w.key: w.notes for w in compare_records(base, new).workloads}
+    assert notes == {"B.noise": (), "B.params": ("params differ",), "B.power": ("power draw 100 vs 380 W",)}
 
 
 def test_compare_fail_on_regression(tmp_path, capsys):
@@ -302,3 +464,10 @@ def test_builtin_benchmarks_use_runner_device(name):
         for t in tensors:
             if t.numel() > 1 or t.device.type != "cpu":
                 assert t.device.type == "meta", f"{name}.{setup} allocated on {t.device}"
+
+
+def test_builtin_benchmarks_are_public():
+    import kernels._internals.benchmarks
+    import kernels.benchmarks
+
+    assert kernels.benchmarks.__all__ == kernels._internals.benchmarks.__all__

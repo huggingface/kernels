@@ -16,7 +16,10 @@ from kernels._internals.cli.benchmark_results import record_key
 DEFAULT_THRESHOLD = 0.05
 
 # Fields that should match for two runs to be directly comparable.
-_CONTEXT_FIELDS = ("gpu", "backend", "torch_version")
+_CONTEXT_FIELDS = ("gpu", "backend", "torch_version", "driver_version", "gpu_power_limit_w")
+# Relative differences of the sampled GPU state that are worth a note.
+CLOCK_DIFF_THRESHOLD = 0.1
+POWER_DIFF_THRESHOLD = 0.5
 
 
 class Status(str, Enum):
@@ -33,6 +36,7 @@ class WorkloadComparison:
     status: Status
     base_ms: float | None = None
     new_ms: float | None = None
+    notes: tuple[str, ...] = ()
 
     @property
     def change(self) -> float | None:
@@ -71,7 +75,10 @@ def compare_records(
         elif n is None:
             workloads.append(WorkloadComparison(key, Status.REMOVED, base_ms=b["median_ms"]))
         else:
-            workloads.append(WorkloadComparison(key, _classify(b, n, threshold), b["median_ms"], n["median_ms"]))
+            status = _classify(b, n, threshold)
+            workloads.append(
+                WorkloadComparison(key, status, b["median_ms"], n["median_ms"], notes=_condition_notes(b, n, status))
+            )
 
     return Comparison(
         workloads=workloads,
@@ -93,6 +100,24 @@ def _classify(base: dict[str, Any], new: dict[str, Any], threshold: float) -> St
         return Status.FASTER
     # Median moved, but the distributions overlap: within noise.
     return Status.UNCHANGED
+
+
+def _condition_notes(base: dict[str, Any], new: dict[str, Any], status: Status) -> tuple[str, ...]:
+    notes = []
+    if base.get("timing_mode") != new.get("timing_mode"):
+        notes.append(f"timing mode {base.get('timing_mode')} vs {new.get('timing_mode')}")
+    if base.get("params") != new.get("params"):
+        notes.append("params differ")
+    # A single sample of the GPU state is noisy, only use it to explain a change.
+    if status == Status.UNCHANGED:
+        return tuple(notes)
+    base_clock, new_clock = base.get("gpu_clock_mhz"), new.get("gpu_clock_mhz")
+    if base_clock and new_clock and abs(new_clock / base_clock - 1.0) > CLOCK_DIFF_THRESHOLD:
+        notes.append(f"clock {base_clock} vs {new_clock} MHz")
+    base_power, new_power = base.get("gpu_power_draw_w"), new.get("gpu_power_draw_w")
+    if base_power and new_power and abs(new_power / base_power - 1.0) > POWER_DIFF_THRESHOLD:
+        notes.append(f"power draw {base_power:.0f} vs {new_power:.0f} W")
+    return tuple(notes)
 
 
 def _context_mismatches(base: list[dict[str, Any]], new: list[dict[str, Any]]) -> dict[str, tuple[Any, Any]]:
@@ -158,6 +183,10 @@ def print_comparison(
         ),
         file=file,
     )
+
+    for w in comparison.workloads:
+        if w.notes:
+            print(f"  Note: {w.key}: {', '.join(w.notes)}", file=file)
 
     n_regressions = len(comparison.regressions)
     n_faster = sum(1 for w in comparison.workloads if w.status == Status.FASTER)

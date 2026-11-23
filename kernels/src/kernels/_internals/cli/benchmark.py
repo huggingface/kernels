@@ -19,6 +19,7 @@ from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
 from kernels._internals.cli.benchmark_compare import DEFAULT_THRESHOLD
 from kernels._internals.cli.benchmark_compare import report as compare_report
+from kernels._internals.cli.benchmark_gpu_state import gpu_config, gpu_device, gpu_state
 from kernels._internals.cli.benchmark_results import build_records, read_records, write_records
 from kernels._internals.hf_hub import _get_hf_api
 
@@ -89,6 +90,10 @@ class TimingResults:
     ref_median_ms: float | None = None  # Reference implementation median time
     samples_ms: list[float] | None = None  # Raw per-iteration timings
     ref_samples_ms: list[float] | None = None  # Raw per-iteration reference timings
+    timing_mode: str = "eager"  # "eager" or "cuda_graph"
+    params: dict[str, Any] | None = None
+    gpu_state: dict[str, Any] | None = None
+    hardware: dict[str, Any] | None = None
 
     def validate_iterations(self):
         if self.iterations <= 0:
@@ -108,6 +113,8 @@ class MachineInfo:
     os: str
     cpu: str
     gpu_cores: int | None = None
+    gpu_config: dict[str, Any] | None = None
+    hardware: dict[str, Any] | None = None
 
 
 @strict
@@ -344,6 +351,7 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     gpu_cores = None
+    config, hardware = None, None
     backend_type = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
@@ -367,6 +375,7 @@ def collect_machine_info() -> MachineInfo:
                 backend_type = f"ROCm {rocm_version}"
             else:
                 backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+            config, hardware = gpu_config(gpu_device(backend_name))
         elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
             backend_type = "XPU"
@@ -387,6 +396,8 @@ def collect_machine_info() -> MachineInfo:
         pytorch_version=pytorch_version,
         os=os_info,
         cpu=cpu,
+        gpu_config=config,
+        hardware=hardware or None,
     )
 
 
@@ -443,6 +454,12 @@ def run_benchmark_class(
     device = device_map.get(backend_name, backend_name)
     print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
+    use_cuda_graph = benchmark_cls.cuda_graph and backend_name in {"cuda", "rocm"}
+    if benchmark_cls.cuda_graph and not use_cuda_graph:
+        print(f"  Warning: CUDA graphs are not supported on {device}, timing eagerly", file=sys.stderr)
+    timing_mode = "cuda_graph" if use_cuda_graph else "eager"
+    device_handle = gpu_device(backend_name)
+
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
 
@@ -485,12 +502,34 @@ def run_benchmark_class(
 
             # Time the reference with the same loop as the kernel, so that
             # the speedup compares like with like.
-            ref_times_ms = _time_fn(verify_fn, iterations=iterations, warmup=warmup)
+            ref_fn = _capture_cuda_graph(verify_fn) if use_cuda_graph else verify_fn
+            ref_times_ms = _time_fn(ref_fn, iterations=iterations, warmup=warmup)
 
-        times_ms = _time_fn(benchmark_fn, iterations=iterations, warmup=warmup)
+        timed_fn = _capture_cuda_graph(benchmark_fn) if use_cuda_graph else benchmark_fn
+        times_ms = _time_fn(timed_fn, iterations=iterations, warmup=warmup)
+        # Sample while the GPU is still under load.
+        state, hardware = gpu_state(device_handle)
         results[workload_name] = _timing_results(times_ms, verified=verified, ref_times_ms=ref_times_ms)
+        results[workload_name].timing_mode = timing_mode
+        results[workload_name].params = instance.params
+        results[workload_name].gpu_state = state
+        results[workload_name].hardware = hardware or None
 
     return results, kernel_sha
+
+
+def _capture_cuda_graph(fn: Any) -> Any:
+    # Warm up on a side stream so that lazy initialization is not captured.
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        for _ in range(3):
+            fn()
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        fn()
+    return graph.replay
 
 
 def _time_fn(fn: Any, iterations: int, warmup: int) -> list[float]:

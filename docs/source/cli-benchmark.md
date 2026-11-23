@@ -112,19 +112,41 @@ kernels benchmark ./my_kernel
 
 Each JSON Lines record is a flat row that describes one workload of one run:
 what was benchmarked (`repo_id`, `revision`, `kernel_sha`, `benchmark_sha`,
-`benchmark`, `workload`), where (`gpu`, `backend`, `cpu`, `os`, `torch_version`,
-`kernels_version`), how (`iterations`, `warmup`), and the results (`mean_ms`,
+`benchmark`, `workload`, `params`), where (`gpu`, `backend`, `cpu`, `os`,
+`torch_version`, `kernels_version`, `driver_version`, `gpu_max_clock_mhz`,
+`gpu_power_limit_w`), how (`iterations`, `warmup`, `timing_mode`), the GPU state
+during the workload (`gpu_clock_mhz`, `gpu_mem_clock_mhz`, `gpu_power_draw_w`,
+`gpu_temperature_c`, `gpu_throttled`, `hardware`), and the results (`mean_ms`,
 `median_ms`, `std_ms`, `min_ms`, `max_ms`, `q1_ms`, `q3_ms`, `iqr_ms`,
 `outliers`, `verified`, `ref_mean_ms`, `ref_median_ms`, `speedup`, and the raw
 `samples_ms` and `ref_samples_ms`). Records from one run share a `run_id`.
 
+`params` (set by the benchmark) and `hardware` (vendor-specific, with a `vendor`
+key) are JSON objects whose keys differ between benchmarks and vendors. Every
+other field is present in every record, `null` when unknown.
+
 Because every record is self-contained, files from many runs can be concatenated
-and loaded as a single table, for example with 🤗 Datasets:
+and loaded as a single table, for example with pandas:
 
 ```python
-from datasets import load_dataset
+import glob
 
-ds = load_dataset("json", data_files="results/*.jsonl", split="train")
+import pandas as pd
+
+df = pd.concat(pd.read_json(f, lines=True) for f in glob.glob("results/*.jsonl"))
+```
+
+### GPU conditions
+
+Clocks, power limits and throttling affect timings, but `kernels benchmark` does
+not change them. They are recorded instead, so that they can be taken into
+account when comparing runs. They are collected with `nvidia-smi` on NVIDIA GPUs
+and `amd-smi` on AMD GPUs, and are `null` on other devices. To get more stable
+results, lock them yourself before benchmarking, e.g.:
+
+```bash
+sudo nvidia-smi --lock-gpu-clocks=2520,2520
+sudo nvidia-smi --power-limit=400
 ```
 
 ## Comparing runs
@@ -147,8 +169,10 @@ kernels benchmark-compare base.jsonl new.jsonl
 Workloads are compared by their median time. A workload is reported as faster or
 slower only when its median changed by more than `--threshold` (default `0.05`,
 i.e. 5%) _and_ the interquartile ranges of the two runs do not overlap. A
-warning is printed when the runs were made on a different GPU, backend, or
-PyTorch version.
+warning is printed when the runs were made on a different GPU, backend, PyTorch
+version, driver version, or power limit. A note is printed for workloads whose
+`params` or timing mode differ, and for changed workloads whose sampled clock or
+power draw differ.
 
 Use `--fail-on-regression` to exit with a non-zero status when any workload got
 slower, which is useful in CI.
@@ -173,6 +197,7 @@ class ActivationBenchmark(Benchmark):
     def setup(self):
         self.x = torch.randn(128, 1024, device=self.device, dtype=torch.float16)
         self.out = torch.empty(128, 512, device=self.device, dtype=torch.float16)
+        self.params = {"shape": list(self.x.shape), "dtype": self.x.dtype}  # optional
 
     def benchmark_silu_and_mul(self):
         self.kernel.silu_and_mul(self.out, self.x)
@@ -190,6 +215,12 @@ The runner will:
 - If `verify_<workload>()` exists, check that outputs match
   (`torch.allclose(..., atol=1e-2)`) and show a speedup vs the reference
   computation
+- Store `self.params`, if set, as the workload's `params`
+
+Set `cuda_graph = True` on a benchmark class to time CUDA graph replays of each
+workload and its reference, which removes most of the launch overhead. This is
+supported on CUDA and ROCm; other devices fall back to eager timing. The mode
+used is recorded as `timing_mode`.
 
 ## Troubleshooting
 

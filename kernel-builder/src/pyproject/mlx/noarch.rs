@@ -140,7 +140,6 @@ mod tests {
             backends = ["metal"]
 
             [mlx-noarch]
-            metal-version = "4.0"
             pyext = ["py", "json"]
             "#,
         )

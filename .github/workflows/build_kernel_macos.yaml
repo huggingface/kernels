@@ -35,16 +35,21 @@ jobs:
           #authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Build all Metal example kernels
         run: nix build -L ./examples/kernels#ci-build-metal
+      - name: Build all Metal kernel builder test kernels
+        run: nix build -L ./nix-builder/tests/kernels#ci-build-metal -o result-tests
       - name: Copy kernel artifacts
-        run: cp -rL result/* .
+        run: cp -rL result/* result-tests/* .
 
       - name: Upload kernel artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: built-kernels-metal
           path: |
+            bfl-mlx-kernel
+            bfl-torch-kernel
             relu-kernel
             relu-metal-cpp-kernel
+            relu-mlx-kernel
           retention-days: 1
           if-no-files-found: error
 
@@ -63,13 +68,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download kernel artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: built-kernels-metal
           path: .
 
       - name: Install uv and set the Python version
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.12"
 
@@ -77,23 +82,30 @@ jobs:
         uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Install test dependencies and kernels from source
-        # Keep Torch aligned with torchVersion in examples/kernels/flake.nix.
+        # Keep Torch aligned with torchVersion in nix-builder/tests/ci-kernels.nix
+        # and MLX with nix-builder/pkgs/python-modules/mlx-bin.
         run: |
           uv venv
-          uv pip install "torch==2.13.0" numpy pytest ./kernels
+          uv pip install "torch==2.13.0" "mlx==0.32.4" numpy pytest ./kernels
 
       - name: Run Metal tests
         env:
-          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel
+          LOCAL_KERNELS: kernels-test/relu=relu-kernel:kernels-test/relu-metal-cpp=relu-metal-cpp-kernel:kernels-test/relu-mlx=relu-mlx-kernel:kernels-test/bfl-mlx=bfl-mlx-kernel:kernels-test/bfl-torch=bfl-torch-kernel
           PYTORCH_ENABLE_MPS_FALLBACK: "0"
         run: |
           .venv/bin/python - <<'PY'
+          import mlx.core as mx
           import torch
 
           if not torch.backends.mps.is_available():
               raise SystemExit("Metal tests require an available MPS device.")
+          if not mx.metal.is_available():
+              raise SystemExit("Metal tests require MLX with Metal support.")
           PY
 
-          # Run separately because both suites contain a test_relu.py module.
+          # Run separately because the suites contain test modules with the same name.
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu/tests
           .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-metal-cpp/tests
+          .venv/bin/python -m pytest -v -m kernels_ci examples/kernels/relu-mlx/tests
+          .venv/bin/python -m pytest -v -m kernels_ci nix-builder/tests/kernels/bfl-mlx/tests
+          .venv/bin/python -m pytest -v -m kernels_ci nix-builder/tests/kernels/bfl-torch/tests

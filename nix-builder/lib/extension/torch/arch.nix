@@ -12,6 +12,7 @@
   kernel-builder,
   cmake,
   cmakeNvccThreadsHook,
+  hipccThreadsHook,
   cuda_nvcc,
   generate-symbols-hook,
   get-kernel-check,
@@ -21,6 +22,7 @@
   ninja,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
   rewrite-nix-paths-macho,
   writeScriptBin,
 
@@ -55,6 +57,7 @@
   # Extra dependencies (such as CUTLASS).
   extraDeps ? [ ],
 
+  hipccThreads,
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -134,6 +137,7 @@ stdenv.mkDerivation (prevAttrs: {
   inherit
     doAbiCheck
     doKernelBuildCheck
+    hipccThreads
     kernelDeps
     moduleName
     nvccThreads
@@ -180,6 +184,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   nativeBuildInputs = [
     cmake
+    zip-build-hook
     hash-kernel-hook
     ninja
     kernel-builder
@@ -202,6 +207,7 @@ stdenv.mkDerivation (prevAttrs: {
     cuda_nvcc
   ]
   ++ lib.optionals rocmSupport [
+    hipccThreadsHook
     clr
   ]
   ++ lib.optionals xpuSupport ([

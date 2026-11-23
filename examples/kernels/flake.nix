@@ -12,47 +12,25 @@
     }:
     let
       inherit (kernel-builder.inputs) flake-utils nixpkgs;
-      inherit (kernel-builder.inputs.nixpkgs) lib;
 
-      cudaVersion = "cu126";
-      cuda13Version = "cu132";
-      rocmVersion = "rocm71";
-      xpuVersion = "xpu20260";
-      torchVersion = "213";
-      tvmFfiVersion = "01";
-
-      # Expected public symbols of the relu example kernels.
-      reluSymbols = {
-        functions = [ "relu" ];
-        layers = [ "ReLU" ];
+      ciKernelsLib = import "${kernel-builder}/nix-builder/tests/ci-kernels.nix" {
+        inherit self kernel-builder;
       };
 
+      inherit (ciKernelsLib)
+        cudaVersion
+        cuda13Version
+        rocmVersion
+        xpuVersion
+        torchVersion
+        tvmFfiVersion
+        reluSymbols
+        mkKernelOutputs'
+        mkCiBuild
+        ;
+
       # All example kernels to build in CI.
-      #
-      # - name: name in the output path
-      # - path: kernel flake path
-      # - drv (system -> flakeOutputs -> derivation): the derivation for the given
-      #        system and flake outputs.
-      # - torchVersions: optional override for the torchVersions argument
-      # - checkRocmArchs: optional list of ROCm architectures (e.g. "gfx942").
-      #        When set, the kernel dylib must contain exactly this set of
-      #        architectures.
-      # - checkCudaCapabilities: optional list of CUDA capabilities (e.g. "9.0").
-      #        When set, the kernel dylib must contain exactly this set of
-      #        capabilities.
-      # - checkSymbols: optional attrset `{ functions = [ ... ]; layers = [ ... ]; }`.
-      #        When set, every build variant must contain a symbols.json with
-      #        exactly these public function and layer names.
-      # - checkNeeded: optional list of sonames (e.g. "libnccl.so.2"). When set,
-      #        every kernel dylib must have a NEEDED entry for each of them.
-      # - checkNotNeeded: optional list of sonames. When set, no kernel dylib
-      #        may have a NEEDED entry for any of them.
       ciKernels = [
-        {
-          name = "cpp20-symbols-kernel";
-          path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
-        }
         # This test should check the capabilities of the oldest supported CUDA.
         {
           name = "relu-kernel";
@@ -93,17 +71,6 @@
           ];
         }
         {
-          # Check arch intersection. 5.0 is dropped because it is not supported.
-          name = "relu-archs-subset";
-          path = ./relu-archs-subset;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
-          checkCudaCapabilities = [
-            "7.5"
-            "8.0"
-            "9.0"
-          ];
-        }
-        {
           name = "relu-torch-stable-abi-kernel";
           path = ./relu-torch-stable-abi;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
@@ -134,14 +101,8 @@
           };
         }
         {
-          name = "relu-tvm-ffi-compiler-flags-kernel";
-          path = ./relu-tvm-ffi-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
-        }
-        {
-          name = "relu-rust-cuda-kernel";
-          path = ./relu-rust-cuda;
+          name = "relu-rust-cuda-oxide-kernel";
+          path = ./relu-rust-cuda-oxide;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
         }
@@ -166,12 +127,6 @@
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
-          name = "cutlass-gemm-tvm-ffi-kernel";
-          path = ./cutlass-gemm-tvm-ffi;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
-        }
-        {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
@@ -180,38 +135,6 @@
           name = "silu-and-mul-kernel";
           path = ./silu-and-mul;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
-        }
-        {
-          # Tests that we can build with the extra torchVersions argument.
-          name = "relu-specific-torch";
-          path = ./relu-specific-torch;
-          drv = sys: out: out.packages.${sys}.default;
-          torchVersions = _defaultVersions: [
-            {
-              torchVersion = "2.13";
-              cudaVersion = "12.6";
-              system = "x86_64-linux";
-              bundleBuild = true;
-            }
-            {
-              torchVersion = "2.13";
-              cudaVersion = "12.6";
-              system = "aarch64-linux";
-              bundleBuild = true;
-            }
-          ];
-        }
-        {
-          name = "relu-compiler-flags";
-          path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
-        }
-        {
-          name = "relu-invalid-capability";
-          path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
-          assertFail = true;
-          assertFailLogs = [ "empty set of capabilities" ];
         }
         {
           # Check that we can build an arch dev shell.
@@ -243,34 +166,6 @@
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
-        {
-          name = "kernel-deps-kernel";
-          path = ./kernel-deps;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
-        }
-        # NCCL is a Torch dependency, so its headers must be available to
-        # kernels and kernels that use NCCL must link against it. NCCL differs
-        # per CUDA major version, so check CUDA 12 and CUDA 13.
-        {
-          name = "nccl-version-kernel";
-          path = ./nccl-version;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
-          checkSymbols = {
-            functions = [
-              "nccl_header_version"
-              "nccl_runtime_version"
-            ];
-            layers = [ ];
-          };
-          checkNeeded = [ "libnccl.so.2" ];
-        }
-        {
-          name = "nccl-version-kernel-cu13";
-          path = ./nccl-version;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cuda13Version}-${sys}"};
-          checkNeeded = [ "libnccl.so.2" ];
-        }
       ];
 
       # ROCm kernels to build in CI.
@@ -279,13 +174,6 @@
           name = "relu-triton-kernel";
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
-        }
-        {
-          name = "relu-invalid-capability";
-          path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
-          assertFail = true;
-          assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
@@ -309,22 +197,6 @@
           ];
         }
         {
-          # Check arch intersection. gfx940 is dropped because it is not supported.
-          name = "relu-archs-subset";
-          path = ./relu-archs-subset;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
-          checkRocmArchs = [
-            "gfx90a"
-            "gfx942"
-            "gfx1100"
-          ];
-        }
-        {
-          name = "relu-compiler-flags";
-          path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
-        }
-        {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
           drv =
@@ -342,34 +214,6 @@
           drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${rocmVersion}-${sys}"};
         }
       ];
-
-      mkKernelOutputs =
-        {
-          path,
-          torchVersions ? null,
-        }:
-        kernel-builder.lib.genKernelFlakeOutputs (
-          {
-            inherit self path;
-          }
-          // lib.optionalAttrs (torchVersions != null) { inherit torchVersions; }
-        );
-
-      mkKernelOutputs' =
-        kernels:
-        map (
-          kernel:
-          kernel
-          // {
-            outputs = mkKernelOutputs {
-              inherit (kernel) path;
-              torchVersions = kernel.torchVersions or null;
-            };
-          }
-        ) kernels;
-
-      ciKernelOutputs = mkKernelOutputs' ciKernels;
-      ciRocmKernelOutputs = mkKernelOutputs' ciRocmKernels;
 
       # XPU kernels to build in CI.
       ciXpuKernels = [
@@ -397,17 +241,6 @@
             ];
             layers = [ ];
           };
-        }
-        {
-          name = "relu-tvm-ffi-compiler-flags-kernel";
-          path = ./relu-tvm-ffi-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
-        }
-        {
-          name = "relu-compiler-flags";
-          path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
@@ -452,7 +285,7 @@
         {
           name = "relu-mlx-kernel";
           path = ./relu-mlx;
-          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal-4.0";
+          drv = sys: out: out.packages.${sys}.redistributable."mlx-metal";
         }
       ];
 
@@ -479,38 +312,6 @@
               '';
         }
         {
-          # This test only requires a CPU, so let's run the test directly during the build.
-          name = "symbol-conflicts-pytest";
-          path = ./symbol-conflicts2;
-          drv =
-            sys: _out:
-            let
-              variant = "torch${torchVersion}-cpu-${sys}";
-              conflictsFlake = mkKernelOutputs { path = ./symbol-conflicts; };
-              conflicts2Flake = mkKernelOutputs { path = ./symbol-conflicts2; };
-              conflicts = conflictsFlake.packages.${sys}.redistributable.${variant};
-              conflicts2 = conflicts2Flake.packages.${sys}.redistributable.${variant};
-              kernelPkgs = conflictsFlake.packages.${sys}.pkgs.${variant};
-              testPython = kernelPkgs.python3.withPackages (
-                ps: with ps; [
-                  torch
-                  pytest
-                  kernels
-                ]
-              );
-            in
-            kernelPkgs.runCommand "symbol-conflicts-pytest"
-              {
-                nativeBuildInputs = [ testPython ];
-              }
-              ''
-                export HOME=$TMPDIR
-                export LOCAL_KERNELS="kernels-test/symbol-conflicts=${conflicts}:kernels-test/symbol-conflicts2=${conflicts2}"
-                python -m pytest ${conflicts2.src}/tests -m kernels_ci -p no:cacheprovider
-                touch $out
-              '';
-        }
-        {
           name = "relu-torch-stable-abi-kernel";
           path = ./relu-torch-stable-abi;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-cpu-${sys}"};
@@ -523,221 +324,39 @@
         }
       ];
 
+      ciKernelOutputs = mkKernelOutputs' ciKernels;
+      ciRocmKernelOutputs = mkKernelOutputs' ciRocmKernels;
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
       ciTpuKernelOutputs = mkKernelOutputs' ciTpuKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
       ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
-    flake-utils.lib.eachSystem
-      [
-        "x86_64-linux"
-        "aarch64-linux"
-        "aarch64-darwin"
-      ]
-      (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
+    flake-utils.lib.eachSystem ciKernelsLib.systems (
+      system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
 
-          # Check that every *.so in the output of `drv` contains exactly the
-          # given set of architectures. `listArchs` is a shell command that
-          # prints the architectures of the kernel library `$so`, one per
-          # line. On success, the output is a symlink to `drv`.
-          checkKernelArchs =
-            drv: expectedArchs: listArchs:
-            pkgs.runCommand "${drv.name}-check-archs"
-              {
-                expected = lib.concatLines expectedArchs;
-                passAsFile = [ "expected" ];
-              }
-              ''
-                kernelLibs=$(find ${drv}/ -name '*.so')
-                if [ -z "$kernelLibs" ]; then
-                  echo "no *.so files found in ${drv}" >&2
-                  exit 1
-                fi
+        mkCiBuild' = mkCiBuild pkgs system;
 
-                sort -u "$expectedPath" > expected
-                for so in $kernelLibs; do
-                  (
-                    ${listArchs}
-                  ) | sort -u > actual
-                  if ! diff -u expected actual; then
-                    echo "unexpected architectures in $so" >&2
-                    exit 1
-                  fi
-                done
-
-                ln -s ${drv} $out
-              '';
-
-          # Check that every build variant in the output of `drv` contains a
-          # symbols.json with exactly the expected public function and layer
-          # names. On success, the output is a symlink to `drv`.
-          checkSymbols =
-            drv: expected:
-            pkgs.runCommand "${drv.name}-check-symbols"
-              {
-                nativeBuildInputs = [ pkgs.jq ];
-                expected = builtins.toJSON expected;
-                passAsFile = [ "expected" ];
-              }
-              ''
-                variants=$(find ${drv}/ -mindepth 2 -maxdepth 2 -name metadata.json)
-                if [ -z "$variants" ]; then
-                  echo "no build variants found in ${drv}" >&2
-                  exit 1
-                fi
-
-                jq -S . "$expectedPath" > expected
-                for metadata in $variants; do
-                  symbols="$(dirname "$metadata")/symbols.json"
-                  if [ ! -f "$symbols" ]; then
-                    echo "missing $symbols" >&2
-                    exit 1
-                  fi
-                  jq -S '{functions: [.functions[].name], layers: [.layers[].name]}' "$symbols" > actual
-                  if ! diff -u expected actual; then
-                    echo "unexpected symbols in $symbols" >&2
-                    exit 1
-                  fi
-                done
-
-                ln -s ${drv} $out
-              '';
-
-          # Check that every *.so in the output of `drv` has a NEEDED entry for
-          # each soname in `needed` and none for the sonames in `notNeeded`. On
-          # success, the output is a symlink to `drv`.
-          checkNeededLibs =
-            drv:
-            {
-              needed ? [ ],
-              notNeeded ? [ ],
-            }:
-            pkgs.runCommand "${drv.name}-check-needed"
-              {
-                nativeBuildInputs = [ pkgs.binutils ];
-                needed = lib.concatLines needed;
-                notNeeded = lib.concatLines notNeeded;
-                passAsFile = [
-                  "needed"
-                  "notNeeded"
-                ];
-              }
-              ''
-                kernelLibs=$(find ${drv}/ -name '*.so')
-                if [ -z "$kernelLibs" ]; then
-                  echo "no *.so files found in ${drv}" >&2
-                  exit 1
-                fi
-
-                for so in $kernelLibs; do
-                  readelf -d "$so" | sed -n 's/.*(NEEDED).*Shared library: \[\(.*\)\]/\1/p' | sort -u > actual
-
-                  while read -r soname; do
-                    [ -z "$soname" ] && continue
-                    if ! grep -qxF "$soname" actual; then
-                      echo "$so does not have a NEEDED entry for $soname" >&2
-                      exit 1
-                    fi
-                  done < "$neededPath"
-
-                  while read -r soname; do
-                    [ -z "$soname" ] && continue
-                    if grep -qxF "$soname" actual; then
-                      echo "$so unexpectedly has a NEEDED entry for $soname" >&2
-                      exit 1
-                    fi
-                  done < "$notNeededPath"
-                done
-
-                ln -s ${drv} $out
-              '';
-
-          checkRocmArchs =
-            drv: expectedArchs:
-            checkKernelArchs drv expectedArchs
-              # Use the ROCm LLVM that the kernel was built with. Stock
-              # llvm-readobj does not support `--offloading`.
-              ''
-                ${drv.torch.rocmPackages.rocm-llvm}/llvm/bin/llvm-readobj --offloading "$so" \
-                    | grep -oE 'gfx[0-9]+[a-z]?'
-              '';
-
-          checkCudaCapabilities =
-            drv: expectedCapabilities:
-            let
-              # Convert capabilities like "9.0a" to sm names like "sm_90a".
-              smArchs = map (cap: "sm_" + lib.replaceStrings [ "." ] [ "" ] cap) expectedCapabilities;
-            in
-            checkKernelArchs drv smArchs ''
-              ${drv.torch.cudaPackages.cuda_cuobjdump}/bin/cuobjdump "$so" \
-                  | grep -oE 'sm_[0-9]+[af]?'
-            '';
-
-          resolveKernels =
-            kernelOutputsList:
-            map (kernel: {
-              inherit (kernel) name;
-              drv =
-                let
-                  baseDrv = kernel.drv system kernel.outputs;
-                  archsDrv =
-                    if kernel ? checkRocmArchs then
-                      checkRocmArchs baseDrv kernel.checkRocmArchs
-                    else if kernel ? checkCudaCapabilities then
-                      checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
-                    else
-                      baseDrv;
-                  neededDrv =
-                    if kernel ? checkNeeded || kernel ? checkNotNeeded then
-                      checkNeededLibs archsDrv {
-                        needed = kernel.checkNeeded or [ ];
-                        notNeeded = kernel.checkNotNeeded or [ ];
-                      }
-                    else
-                      archsDrv;
-                in
-                if kernel.assertFail or false then
-                  pkgs.testers.testBuildFailure' {
-                    drv = baseDrv;
-                    expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
-                  }
-                else if kernel ? checkSymbols then
-                  checkSymbols neededDrv kernel.checkSymbols
-                else
-                  neededDrv;
-            }) kernelOutputsList;
-
-          mkCiBuild =
-            name: kernelOutputsList:
-            pkgs.linkFarm name (
-              map (kernel: {
-                inherit (kernel) name;
-                path = kernel.drv;
-              }) (resolveKernels kernelOutputsList)
-            );
-
-          ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
-          ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
-          ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
-          ci-build-tpu = mkCiBuild "ci-kernels-tpu" ciTpuKernelOutputs;
-          ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
-          ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
-        in
-        {
-          packages = {
-            inherit
-              ci-build-cuda
-              ci-build-rocm
-              ci-build-xpu
-              ci-build-tpu
-              ci-build-metal
-              ci-build-cpu
-              ;
-            default = ci-build-cuda;
-          };
-        }
-      );
+        ci-build-cuda = mkCiBuild' "ci-kernels-cuda" ciKernelOutputs;
+        ci-build-rocm = mkCiBuild' "ci-kernels-rocm" ciRocmKernelOutputs;
+        ci-build-xpu = mkCiBuild' "ci-kernels-xpu" ciXpuKernelOutputs;
+        ci-build-tpu = mkCiBuild' "ci-kernels-tpu" ciTpuKernelOutputs;
+        ci-build-metal = mkCiBuild' "ci-kernels-metal" ciMetalKernelOutputs;
+        ci-build-cpu = mkCiBuild' "ci-kernels-cpu" ciCpuKernelOutputs;
+      in
+      {
+        packages = {
+          inherit
+            ci-build-cuda
+            ci-build-rocm
+            ci-build-xpu
+            ci-build-tpu
+            ci-build-metal
+            ci-build-cpu
+            ;
+          default = ci-build-cuda;
+        };
+      }
+    );
 }

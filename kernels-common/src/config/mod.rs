@@ -45,6 +45,9 @@ const KERNELS_VERSION_BASELINE: Version<3> = Version::new([0, 14, 0]);
 /// First `kernels` version that can resolve kernel dependencies.
 const KERNELS_VERSION_KERNEL_DEPENDS: Version<3> = Version::new([0, 17, 0]);
 
+/// First `kernels` version that can import ZIP builds.
+pub(crate) const KERNELS_VERSION_ZIP_LAYOUT: Version<3> = Version::new([0, 19, 0]);
+
 /// First CUDA version that ships `tileiras`, the cuTile compiler.
 const MIN_TILEIRAS_VERSION: Version<2> = Version::new([13, 2]);
 
@@ -142,6 +145,14 @@ impl Framework {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildLayout {
+    #[default]
+    Files,
+    Zip,
+}
+
 pub struct General {
     pub name: KernelName,
 
@@ -158,6 +169,7 @@ pub struct General {
     pub source: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
+    pub build_layout: BuildLayout,
     pub hub: Option<Hub>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
@@ -331,8 +343,6 @@ impl Torch {
 }
 
 pub struct MlxNoarch {
-    /// Minimum Metal version that the kernel requires.
-    pub metal_version: Version<2>,
     pub pyext: Option<Vec<String>>,
 }
 
@@ -380,15 +390,13 @@ pub enum Kernel {
     RustCpu {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
-    RustCuda {
+    RustCudaOxide {
         /// Path of the host crate's `Cargo.toml`, relative to the kernel directory.
         /// cuda-oxide device crates are read from its `[package.metadata.cuda-oxide]`.
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     RustCutile {
@@ -439,7 +447,9 @@ impl Kernel {
             | Kernel::CppMetal { cxx_flags, .. }
             | Kernel::CppRocm { cxx_flags, .. }
             | Kernel::CppXpu { cxx_flags, .. } => cxx_flags.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                None
+            }
         }
     }
 
@@ -450,7 +460,9 @@ impl Kernel {
             | Kernel::CppMetal { include, .. }
             | Kernel::CppRocm { include, .. }
             | Kernel::CppXpu { include, .. } => include.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                None
+            }
         }
     }
 
@@ -464,7 +476,7 @@ impl Kernel {
     pub fn backend(&self) -> Backend {
         match self {
             Kernel::CppCpu { .. } | Kernel::RustCpu { .. } => Backend::Cpu,
-            Kernel::CppCuda { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+            Kernel::CppCuda { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
                 Backend::Cuda
             }
             Kernel::CppMetal { .. } => Backend::Metal,
@@ -480,7 +492,7 @@ impl Kernel {
             | Kernel::CppMetal { .. }
             | Kernel::CppRocm { .. }
             | Kernel::CppXpu { .. } => Language::Cpp,
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
                 Language::Rust
             }
         }
@@ -489,14 +501,14 @@ impl Kernel {
     pub fn depends(&self) -> &[Dependency] {
         match self {
             Kernel::CppCpu { depends, .. }
-            | Kernel::RustCpu { depends, .. }
-            | Kernel::RustCuda { depends, .. }
             | Kernel::CppCuda { depends, .. }
             | Kernel::CppMetal { depends, .. }
             | Kernel::CppRocm { depends, .. }
             | Kernel::CppXpu { depends, .. } => depends,
-            // All dependencies are C++ dependencies, which cuTile kernels cannot use.
-            Kernel::RustCutile { .. } => &[],
+            // All dependencies are C++ dependencies, which Rust kernels cannot use.
+            Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. } => {
+                &[]
+            }
         }
     }
 
@@ -504,7 +516,7 @@ impl Kernel {
         match self {
             Kernel::CppCpu { src, .. }
             | Kernel::RustCpu { src, .. }
-            | Kernel::RustCuda { src, .. }
+            | Kernel::RustCudaOxide { src, .. }
             | Kernel::RustCutile { src, .. }
             | Kernel::CppCuda { src, .. }
             | Kernel::CppMetal { src, .. }
@@ -618,6 +630,7 @@ mod tests {
             upstream: None,
             source: None,
             backends: vec![Backend::Tpu],
+            build_layout: BuildLayout::Files,
             hub: None,
             kernel_depends: None,
             python_depends: None,
@@ -774,7 +787,6 @@ mod tests {
             backends = ["metal"]
 
             [mlx-noarch]
-            metal-version = "4.0"
             pyext = ["py", "json"]
         "#;
 
@@ -785,7 +797,6 @@ mod tests {
 
         assert!(build.is_noarch());
         let mlx_noarch = build.framework.mlx_noarch().unwrap();
-        assert_eq!(mlx_noarch.metal_version, Version::new([4, 0]));
         assert_eq!(mlx_noarch.data_extensions(), Some(vec!["json".to_string()]));
     }
 
@@ -794,28 +805,18 @@ mod tests {
         let cases = [
             (
                 r#"backends = ["metal", "cuda"]"#,
-                "[mlx-noarch]\nmetal-version = \"4.0\"",
+                "[mlx-noarch]",
                 "only supports the `metal` backend, got `cuda`",
             ),
             (
                 r#"backends = ["cpu"]"#,
-                "[mlx-noarch]\nmetal-version = \"4.0\"",
+                "[mlx-noarch]",
                 "only supports the `metal` backend, got `cpu`",
             ),
             (
                 r#"backends = ["metal"]"#,
-                "[mlx-noarch]\nmetal-version = \"4.0\"\ncuda-capabilities = [\"9.0\"]",
+                "[mlx-noarch]\ncuda-capabilities = [\"9.0\"]",
                 "unknown field `cuda-capabilities`",
-            ),
-            (
-                r#"backends = ["metal"]"#,
-                "[mlx-noarch]",
-                "missing field `metal-version`",
-            ),
-            (
-                r#"backends = ["metal"]"#,
-                "[mlx-noarch]\nmetal-version = \"4\"",
-                "Version has 1 components, expected 2",
             ),
         ];
 
@@ -856,7 +857,6 @@ mod tests {
             [kernel.cpu_kernel]
             language = "rust-cpu"
             cargo-manifest = "cpu/Cargo.toml"
-            depends = []
             src = ["cpu/src/lib.rs"]
         "#;
 
@@ -985,7 +985,7 @@ mod tests {
         let cases = [
             (
                 "[torch]\nsrc = []",
-                "rust-cuda",
+                "rust-cuda-oxide",
                 "",
                 "require a `[tvm-ffi]` framework",
             ),
@@ -1000,6 +1000,18 @@ mod tests {
                 "rust-cpu",
                 r#"include = ["."]"#,
                 "unknown field `include`",
+            ),
+            (
+                "[tvm-ffi]",
+                "rust-cpu",
+                "depends = []",
+                "unknown field `depends`",
+            ),
+            (
+                "[tvm-ffi]",
+                "rust-cuda-oxide",
+                "depends = []",
+                "unknown field `depends`",
             ),
             (
                 "[torch]\nsrc = []",
@@ -1024,7 +1036,6 @@ mod tests {
                 [kernel.cpu_kernel]
                 language = "{language}"
                 cargo-manifest = "Cargo.toml"
-                depends = []
                 src = []
                 {extra}
             "#

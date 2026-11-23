@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from huggingface_hub.hf_api import HfApi
-from kernels.locking import extract_dependency_locks
+from kernels._internals.locking import extract_dependency_locks
 from kernels._rust import Build, KernelLocks, NixKernelLock, NixKernelLocks
 
 

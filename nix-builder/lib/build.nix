@@ -28,6 +28,9 @@ let
   supportedCudaCapabilities = builtins.fromJSON (
     builtins.readFile ../../kernel-builder/src/cuda_supported_archs.json
   );
+  supportedRocmArchs = builtins.fromJSON (
+    builtins.readFile ../../kernel-builder/src/rocm_supported_archs.json
+  );
 in
 rec {
   # Source set function to create a fileset for a path
@@ -52,10 +55,10 @@ rec {
         let
           maxVersion = a: b: if lib.versionOlder a b then b else a;
           # Additional CUDA requirements:
-          # - rust-cuda requires CUDA 13.0.
+          # - rust-cuda-oxide requires CUDA 13.0.
           # - cutile requires the tileiras the kernel needs, but at least 13.2.
           minCuda = lib.foldl maxVersion (kernelConfig.toml.general.cuda.minver or "11.8") (
-            lib.optionals kernelConfig.usesRustCuda [ "13.0" ]
+            lib.optionals kernelConfig.usesRustCudaOxide [ "13.0" ]
             ++ lib.optionals kernelConfig.usesRustCutile [
               "13.2"
               kernelConfig.tileirasMinver
@@ -204,7 +207,7 @@ rec {
       hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
         lib.attrValues kernels
       );
-      usesCudaOxide = lib.any (kernel: kernel.language == "rust-cuda") (lib.attrValues kernels);
+      usesCudaOxide = lib.any (kernel: kernel.language == "rust-cuda-oxide") (lib.attrValues kernels);
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -214,6 +217,12 @@ rec {
       nvccThreads = listMax (
         lib.mapAttrsToList (
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
+        ) kernelConfig.toml.kernel
+      );
+      # Same for the number of HIP compiler threads and ROCm architectures.
+      hipccThreads = listMax (
+        lib.mapAttrsToList (
+          _: kernel: builtins.length (kernel.rocm-archs or supportedRocmArchs)
         ) kernelConfig.toml.kernel
       );
       kernelDeps = pkgs.fetchKernelDeps src;
@@ -260,6 +269,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
+          hipccThreads
           nvccThreads
           src
           stripRPath
@@ -294,6 +304,7 @@ rec {
           buildConfig
           doGetKernelCheck
           extraDeps
+          hipccThreads
           nvccThreads
           src
           stripRPath

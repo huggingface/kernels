@@ -34,14 +34,14 @@ from kernels import (
     use_kernel_mapping,
     use_kernelized_func,
 )
-from kernels._rust import KernelDependency, KernelLock, KernelLocks, KernelVersion
-from kernels.install import (
+from kernels._internals.install import (
     install_kernel,
 )
-from kernels.layer.layer import (
+from kernels._internals.layer.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
 )
+from kernels._rust import KernelDependency, KernelLock, KernelLocks, KernelVersion
 
 
 @pytest.fixture
@@ -455,7 +455,7 @@ def test_missing_kernel_build_falls_back(monkeypatch, caplog):
 
     with (
         use_kernel_mapping(mapping, inherit_mapping=False),
-        caplog.at_level(logging.INFO, logger="kernels.layer.layer"),
+        caplog.at_level(logging.INFO, logger="kernels._internals.layer.layer"),
     ):
         kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=KernelizeFallback.ALL)
     assert "Kernel for layer `SiluAndMul` on cuda could not be loaded" in caplog.text
@@ -474,7 +474,7 @@ def test_kernel_condition_skips_kernelization(caplog):
 
     silu_and_mul = SiluAndMulConditionSkipped()
 
-    with caplog.at_level(logging.INFO, logger="kernels.layer.kernelize"):
+    with caplog.at_level(logging.INFO, logger="kernels._internals.layer.kernelize"):
         kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
 
     assert (
@@ -730,7 +730,7 @@ def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
         calls.append((repo_id, kwargs))
         return SimpleNamespace(layers=SimpleNamespace(SiluAndMul=SiluAndMul))
 
-    monkeypatch.setattr("kernels.layer.layer.get_kernel", get_kernel)
+    monkeypatch.setattr("kernels._internals.layer.layer.get_kernel", get_kernel)
     repo = LayerRepository(
         repo_id="kernels-test/silu-and-mul",
         layer_name="SiluAndMul",
@@ -1468,7 +1468,7 @@ def stub_kernel(monkeypatch):
     def _get_layer_memoize(repo, module_class):
         return _KernelizedStub
 
-    monkeypatch.setattr("kernels.layer.layer._get_layer_memoize", _get_layer_memoize)
+    monkeypatch.setattr("kernels._internals.layer.layer._get_layer_memoize", _get_layer_memoize)
 
 
 def _stub_repo(layer_name: str) -> LayerRepository:

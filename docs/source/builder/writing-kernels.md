@@ -203,6 +203,12 @@ The following sections enumerate all supported options for `build.toml`.
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
+- `build-layout`: configure how Python and extra files of a build variant
+  are stored. Must be `files` (default) or `zip`. Using `zip` stores
+  the kernel's Python and extra files inside a ZIP archive. This is
+  useful to avoid rate limiting for kernels with many files, but is
+  not recommended for other kernels. A kernel build with `zip` requires
+  kernels 0.19 or later.
 - `upstream`: Git-compatible URL (passable to `git clone`) of the original
   upstream repository where the kernel source code comes from.
 - `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
@@ -251,6 +257,7 @@ frameworks are:
 - AOT-compiled Torch kernel (`torch`).
 - AOT-compiled TVM-FFI kernel (`tvm-ffi`).
 - JIT-compiled or not-compiled Torch kernel (`torch-noarch`, experimental).
+- JIT-compiled or not-compiled MLX kernel (`mlx-noarch`, experimental).
 
 ### `torch`
 
@@ -319,6 +326,20 @@ by e.g. the Hugging Face Hub.
 - `rocm-archs` (optional): a list of ROCm architectures the kernel supports
   (e.g. `["gfx942"]`).
 
+### `mlx-noarch`
+
+It is similar to `torch-noarch` but it caters to the [MLX
+framework](https://github.com/ml-explore/mlx).
+
+Metal is the only supported backend, so set
+`backends = ["metal"]` in `[general]`. Place the Python
+package in `mlx-ext/<name>/`, replacing hyphens in the kernel
+name with underscores. For example, `relu-mlx` would use
+`mlx-ext/relu_mlx/`.
+
+- `pyext` (optional) lists the file extensions to include
+  from the package directory.
+
 ### `kernel.<name>`
 
 Specification of a kernel with the name `<name>`. Multiple `kernel.<name>`
@@ -330,7 +351,7 @@ The following options can be set for a kernel:
 
 - `language` (required): the language and compute backend of the kernel,
   as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
-  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda`.
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda-oxide`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
@@ -372,7 +393,7 @@ are available:
 #### rust-cpu
 
 Rust kernels are built with Cargo and require the `tvm-ffi` framework.
-`include` and `cxx-flags` do not apply to them.
+`include`, `cxx-flags` and `depends` do not apply to them.
 
 - `cargo-manifest` (required): path of the crate's `Cargo.toml`.
 
@@ -389,7 +410,7 @@ in Git so Nix can include them in the build. Rerun the command whenever Git
 dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
 `Cargo.lock` and do not require this file.
 
-#### rust-cuda (experimental, and subject to change)
+#### rust-cuda-oxide (experimental, and subject to change)
 
 Rust CUDA kernels are built with
 [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and take the same options as
@@ -407,12 +428,34 @@ bindings are generated with bindgen during the build, so building outside of
 Nix requires a CUDA 13 toolkit (found via `CUDA_TOOLKIT_PATH` or `CUDA_HOME`)
 and libclang.
 
-An extension can have only one `rust-cuda` component. Use the cuda-rust
+An extension can have only one `rust-cuda-oxide` component. Use the cuda-rust
 revision pinned in
 [`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)
 and see
-[`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
+[`relu-rust-cuda-oxide`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda-oxide)
 for an example.
+
+#### rust-cutile (experimental, and subject to change)
+
+Rust cuTile kernels are built with
+[cutile-rs](https://github.com/NVIDIA/cuda-rust) and take the same options as
+`rust-cpu`, plus:
+
+- `tileiras-minver` (required): minimum version (`x.y`) of the `tileiras` CUDA Tile IR
+  compiler. The minimum required version depends on the features used by
+  the kernel. See [CUDA and Tile IR compatibility](https://nvlabs.github.io/cutile-rs/main/reference/compatibility.html)
+  for more information.
+
+The variants that are built depend on the setting of `tileiras-minver`. For
+instance, setting `tileiras-minver = "13.3"` will build using the first
+CUDA version that satisfies `>= 13.3`. So if only CUDA 13.2 and 13.4 build
+sets are available, the kernel will be built for CUDA 13.4.
+
+`rust-cutile` kernels require the `tileiras` version that the kernel was
+compiled for to be available at runtime.
+
+See [`relu-rust-cutile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cutile)
+for an example kernel.
 
 ## Torch bindings
 
@@ -541,6 +584,41 @@ except ImportError:
 def add_op_namespace_prefix(name: str) -> str:
     return _generated_add_op_namespace_prefix(name)
 ```
+
+## Reading data files
+
+Kernels can ship additional data files, such as
+[Triton autotune configurations](triton-autotune.md). To package such files
+with a kernel, add the extension of the data files to the `pyext`
+option of the framework section in `build.toml`.
+
+If the kernel uses `kernel-layout = "zip"`, data files are stored in the
+kernel ZIP archive. Consequently, `__file__` cannot be used to find the
+path of the files and the files cannot be opened directly. Use
+[`importlib.resources`](https://docs.python.org/3/library/importlib.resources.html)
+instead, which works with every build layout supported by the project:
+
+```python
+import importlib.resources
+import json
+
+config = importlib.resources.files(__package__) / "configs" / "device.json"
+data = json.loads(config.read_text())
+```
+
+Since using `importlib.resources` works with both `files` and `zip`
+layouts, it is the preferred way of reading files.
+
+If you have to call code that must be passed a real path, use
+`importlib.resources.as_file`:
+
+```python
+with importlib.resources.as_file(config) as path:
+    ...  # `path` is a real file.
+```
+
+`as_file` may create a temporary copy of the file that is only available
+through the duration of the `with` block.
 
 ## Kernel tests
 

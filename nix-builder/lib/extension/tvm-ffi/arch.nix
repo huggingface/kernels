@@ -13,6 +13,7 @@
   cargo,
   cmake,
   cmakeNvccThreadsHook,
+  hipccThreadsHook,
   cuda-oxide,
   cuda_nvcc,
   generate-symbols-hook,
@@ -22,6 +23,7 @@
   ninja,
   python3,
   remove-bytecode-hook,
+  zip-build-hook,
   rewrite-nix-paths-macho,
   rustc,
   rustPlatform,
@@ -69,6 +71,7 @@
   # Whether the Rust kernels are built with the cuda-oxide codegen backend.
   cudaOxide ? false,
 
+  hipccThreads,
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -190,6 +193,7 @@ stdenv.mkDerivation (
     inherit
       doAbiCheck
       doKernelBuildCheck
+      hipccThreads
       kernelDeps
       moduleName
       nvccThreads
@@ -236,6 +240,7 @@ stdenv.mkDerivation (
 
     nativeBuildInputs = [
       cmake
+      zip-build-hook
       hash-kernel-hook
       ninja
       kernel-builder
@@ -260,6 +265,7 @@ stdenv.mkDerivation (
       cuda_nvcc
     ]
     ++ lib.optionals rocmSupport [
+      hipccThreadsHook
       clr
     ]
     ++ lib.optionals xpuSupport ([

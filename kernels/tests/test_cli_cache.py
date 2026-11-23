@@ -8,8 +8,8 @@ import sys
 import pytest
 from huggingface_hub import scan_cache_dir
 
-from kernels.cli import cache as cache_cli
-from kernels.cli import main
+from kernels._internals.cli import cache as cache_cli
+from kernels._internals.cli import main
 
 REPO_ID = "kernels-community/example"
 COMMIT = "a" * 40

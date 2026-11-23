@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kernels.status import (
+from kernels._internals.status import (
     KernelStatus,
     Redirect,
     resolve_status,

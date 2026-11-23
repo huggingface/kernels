@@ -202,6 +202,7 @@ impl TryFrom<General> for super::General {
             upstream: general.upstream,
             source: None,
             backends: general.backends.into_iter().map(Into::into).collect(),
+            build_layout: super::BuildLayout::Files,
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
             kernel_depends: None,

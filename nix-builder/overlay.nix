@@ -7,6 +7,10 @@ final: prev:
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
+  hipccThreadsHook = final.callPackage ./pkgs/hipcc-threads-hook { };
+
+  hip-parallel-driver = final.callPackage ./pkgs/hip-parallel-driver { };
+
   fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
 
   fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };
@@ -28,7 +32,7 @@ final: prev:
   kernelsCargoDeps = final.rustPlatform.importCargoLock {
     lockFile = ../Cargo.lock;
     outputHashes = {
-      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
+      "hf-hub-1.1.0" = "sha256-PhF4kLJNnaqoVDNfR1ziafBYPVI7912/H4St0qon0IM=";
     };
   };
 
@@ -52,6 +56,8 @@ final: prev:
   rewrite-nix-paths-macho = final.callPackage ./pkgs/rewrite-nix-paths-macho { };
 
   remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
+
+  zip-build-hook = final.callPackage ./pkgs/zip-build-hook { };
 
   torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
 
@@ -244,6 +250,13 @@ final: prev:
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
+
+        # nixpkgs builds MLX without Metal support, use the upstream binaries.
+        mlx =
+          if final.stdenv.hostPlatform.isDarwin then
+            python-self.callPackage ./pkgs/python-modules/mlx-bin { }
+          else
+            python-super.mlx;
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
 

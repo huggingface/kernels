@@ -50,6 +50,9 @@ use util::check_or_infer_kernel_dir;
 mod validate_builds;
 use validate_builds::check_builds;
 
+mod zip_build;
+use zip_build::zip_build;
+
 #[derive(Args, Debug)]
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.
@@ -243,6 +246,18 @@ enum Commands {
         kernel_dir: Option<PathBuf>,
     },
 
+    /// Zip the builds of a kernel that use the ZIP build layout.
+    #[command(hide = true)]
+    ZipBuild {
+        /// Directory with the `build.toml` of the kernel.
+        #[arg(name = "SOURCE_DIR")]
+        source_dir: PathBuf,
+
+        /// Directory with the build variants. Defaults to the source directory.
+        #[arg(name = "VARIANTS_DIR")]
+        variants_dir: Option<PathBuf>,
+    },
+
     /// Spawn a kernel test shell.
     Testshell {
         #[arg(name = "KERNEL_DIR")]
@@ -413,6 +428,10 @@ fn main() -> Result<()> {
         ),
         Commands::ListVariants { kernel_dir, arch } => list_variants(kernel_dir, arch),
         Commands::Hash { kernel_dir } => hash_kernel(kernel_dir),
+        Commands::ZipBuild {
+            source_dir,
+            variants_dir,
+        } => zip_build(source_dir, variants_dir),
         Commands::Testshell {
             kernel_dir,
             variant,

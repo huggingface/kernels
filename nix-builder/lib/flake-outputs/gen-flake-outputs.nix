@@ -107,6 +107,8 @@ let
   headOrEmpty = l: if l == [ ] then [ ] else [ (builtins.head l) ];
 in
 {
+  formatter = pkgs.nixfmt-tree;
+
   devShells =
     let
       devShells = mkDevShells applicableBuildSets;

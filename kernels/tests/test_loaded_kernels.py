@@ -3,8 +3,8 @@ from dataclasses import fields
 import pytest
 
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
-from kernels.hf_hub import RepoInfo
-from kernels.importer import LoadedKernel, _loaded_kernels
+from kernels._internals.hf_hub import RepoInfo
+from kernels._internals.importer import LoadedKernel, _loaded_kernels
 
 _REPO_ID = "kernels-community/relu"
 _PACKAGE_NAME = "relu"

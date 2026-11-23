@@ -3,11 +3,11 @@ from types import SimpleNamespace
 import pytest
 from packaging.version import Version
 
-from kernels.backends import CPU, CUDA, XPU, Backend, ROCm
+from kernels._internals.backends import CPU, CUDA, XPU, Backend, ROCm
 
 torch = pytest.importorskip("torch")
 
-from kernels.cli import benchmark  # noqa: E402
+from kernels._internals.cli import benchmark  # noqa: E402
 
 
 @pytest.fixture

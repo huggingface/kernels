@@ -10,10 +10,10 @@ import tomlkit
 from huggingface_hub.hf_api import GitRefInfo
 from packaging.version import Version
 
-from kernels.backends import CPU
-from kernels.cli import main
-from kernels.cli import variants as variants_cli
-from kernels.variants import _resolve_variant_for_system, parse_variant
+from kernels._internals.backends import CPU
+from kernels._internals.cli import main
+from kernels._internals.cli import variants as variants_cli
+from kernels._internals.variants import _resolve_variant_for_system, parse_variant
 
 REPO_ID = "kernels-community/example"
 PREFERRED = "torch210-cpu-x86_64-linux"
@@ -227,12 +227,12 @@ def test_versions_deprecated(monkeypatch, hub, capsys, caplog):
     assert Version(str(project["project"]["version"])) < Version("0.20.0.dev0"), (
         "The deprecation cycle has ended: remove the `kernels versions` command, its implementation, and this test."
     )
-    with caplog.at_level(logging.WARNING, logger="kernels.cli.versions"):
+    with caplog.at_level(logging.WARNING, logger="kernels._internals.cli.versions"):
         run_cli(monkeypatch, "versions", REPO_ID)
     legacy = capsys.readouterr()
     assert caplog.record_tuples == [
         (
-            "kernels.cli.versions",
+            "kernels._internals.cli.versions",
             logging.WARNING,
             "`kernels versions` is deprecated and will be removed in kernels 0.20. "
             "Use `kernels variants --all-versions` instead.",

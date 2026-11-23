@@ -10,10 +10,11 @@ CUTLASS_TVM_FFI_PATH=$(echo cutlass-gemm-tvm-ffi-kernel/tvm-ffi*)
 RELU_TRITON_PATH=$(echo relu-triton-kernel/torch*)
 SILU_MUL_PATH=$(echo silu-and-mul-kernel/torch*)
 RELU_CPU_PATH=$(echo relu-kernel-cpu/torch*)
+RELU_ZIP_PATH=$(echo relu-zip-kernel/torch*)
 CPP20_SYMBOLS_PATH=$(echo cpp20-symbols-kernel/torch*)
 
-LOCAL_KERNELS="kernels-test/relu=${RELU_PATH}:kernels-test/relu-torch-stable-abi=${RELU_TORCH_STABLE_ABI_PATH}:kernels-test/relu-tvm-ffi=${RELU_TVM_FFI_PATH}:kernels-test/cutlass-gemm=${CUTLASS_PATH}:kernels-test/cutlass-gemm-tvm-ffi=${CUTLASS_TVM_FFI_PATH}" \
-  .venv/bin/pytest relu_tests relu_tvm_ffi_tests cutlass_gemm_tests cutlass_gemm_tvm_ffi_tests
+LOCAL_KERNELS="kernels-test/relu=${RELU_PATH}:kernels-test/relu-torch-stable-abi=${RELU_TORCH_STABLE_ABI_PATH}:kernels-test/relu-tvm-ffi=${RELU_TVM_FFI_PATH}:kernels-test/cutlass-gemm=${CUTLASS_PATH}:kernels-test/cutlass-gemm-tvm-ffi=${CUTLASS_TVM_FFI_PATH}:kernels-test/relu-zip=${RELU_ZIP_PATH}" \
+  .venv/bin/pytest relu_tests relu_tvm_ffi_tests relu_zip_tests cutlass_gemm_tests cutlass_gemm_tvm_ffi_tests
 
 LOCAL_KERNELS="kernels-test/relu-triton=${RELU_TRITON_PATH}" \
   .venv/bin/pytest relu_triton_tests

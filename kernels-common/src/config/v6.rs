@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{ConfigError, Dependency, GitUrl, KernelDependency, KernelName};
+use super::{BuildLayout, ConfigError, Dependency, GitUrl, KernelDependency, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -54,6 +54,9 @@ pub struct General {
     pub source: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
+
+    #[serde(default)]
+    pub build_layout: BuildLayout,
 
     pub cuda: Option<CudaGeneral>,
 
@@ -127,7 +130,6 @@ pub struct Torch {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MlxNoarch {
-    pub metal_version: Version<2>,
     pub pyext: Option<Vec<String>>,
 }
 
@@ -172,14 +174,12 @@ pub enum Kernel {
     RustCpu {
         /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
         cargo_manifest: String,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
-    RustCuda {
+    RustCudaOxide {
         cargo_manifest: String,
         cuda_capabilities: Option<Vec<String>>,
-        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -261,7 +261,7 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. }
+                Kernel::RustCpu { .. } | Kernel::RustCudaOxide { .. } | Kernel::RustCutile { .. }
                     if !tvm_ffi =>
                 {
                     Err(ConfigError::InvalidKernel {
@@ -301,6 +301,7 @@ impl From<General> for super::General {
             upstream: general.upstream,
             source: general.source,
             backends: general.backends.into_iter().map(Into::into).collect(),
+            build_layout: general.build_layout,
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
             kernel_depends: general.kernel_depends,
@@ -389,7 +390,6 @@ impl From<Torch> for super::Torch {
 impl From<MlxNoarch> for super::MlxNoarch {
     fn from(mlx_noarch: MlxNoarch) -> Self {
         Self {
-            metal_version: mlx_noarch.metal_version,
             pyext: mlx_noarch.pyext,
         }
     }
@@ -445,15 +445,13 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
-            Kernel::RustCuda {
+            Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
-            } => super::Kernel::RustCuda {
+            } => super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
             },
             Kernel::RustCutile {
@@ -467,11 +465,9 @@ impl From<Kernel> for super::Kernel {
             },
             Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             } => super::Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             },
             Kernel::CppCuda {
@@ -558,6 +554,7 @@ impl From<super::General> for General {
             upstream: general.upstream,
             source: general.source,
             backends: general.backends.into_iter().map(Into::into).collect(),
+            build_layout: general.build_layout,
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
             kernel_depends: general.kernel_depends,
@@ -646,7 +643,6 @@ impl From<super::Torch> for Torch {
 impl From<super::MlxNoarch> for MlxNoarch {
     fn from(mlx_noarch: super::MlxNoarch) -> Self {
         Self {
-            metal_version: mlx_noarch.metal_version,
             pyext: mlx_noarch.pyext,
         }
     }
@@ -704,22 +700,18 @@ impl From<super::Kernel> for Kernel {
             },
             super::Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             } => Kernel::RustCpu {
                 cargo_manifest,
-                depends,
                 src,
             },
-            super::Kernel::RustCuda {
+            super::Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
-            } => Kernel::RustCuda {
+            } => Kernel::RustCudaOxide {
                 cargo_manifest,
                 cuda_capabilities,
-                depends,
                 src,
             },
             super::Kernel::RustCutile {

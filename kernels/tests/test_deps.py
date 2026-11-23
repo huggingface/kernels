@@ -87,8 +87,8 @@ def test_resolve_kernel_tree_builds_tree():
         ),
     ],
 )
-@pytest.mark.parametrize("resolver", [None, _MapResolver({})])
-def test_resolve_kernel_tree_unresolvable(kernel, resolver, message):
+def test_resolve_kernel_tree_unresolvable(kernel, message):
+    resolver = _MapResolver({})
     with pytest.raises(ValueError, match="Could not resolve kernel") as exc_info:
         resolve_kernel_tree(api=None, backend=None, kernel=kernel, resolver=resolver)
 

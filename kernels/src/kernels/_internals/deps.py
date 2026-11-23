@@ -93,7 +93,7 @@ def resolve_kernel_tree(
     api: HfApi,
     kernel: KernelDependency,
     backend: str | None,
-    resolver: Resolver | None,
+    resolver: Resolver,
     seen: set[KernelDependency] | None = None,
 ) -> DepTreeNode[LocalKernel | RemoteKernel]:
     """
@@ -110,9 +110,7 @@ def resolve_kernel_tree(
         raise ValueError(f"Cyclic kernel dependency detected: {kernel.repo_id}")
     seen.add(kernel)
 
-    location: LocalKernel | RemoteKernel | None
-
-    location = resolver.resolve(api=api, backend=backend, kernel=kernel) if resolver else None
+    location = resolver.resolve(api=api, backend=backend, kernel=kernel)
 
     if location is None:
         match kernel.version:

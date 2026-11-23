@@ -19,20 +19,18 @@ from kernels._internals.resolver import (
     LockedHubCacheResolver,
     LockedHubResolver,
     NoopResolver,
-    RepoPathsResolver,
-    Resolver,
-    SequentialResolver,
 )
-from kernels._internals.validate import (
+from kernels._internals.validate import ArchValidator
+from kernels._rust import KernelLocks
+from kernels.resolve import KernelDependency, KernelVersion, RepoPathsResolver, Resolver, SequentialResolver
+from kernels.validate import (
     AllKernelValidator,
     AllMetadataValidator,
-    ArchValidator,
     KernelValidator,
     MetadataValidator,
     default_kernel_validators,
     default_metadata_validators,
 )
-from kernels._rust import KernelDependency, KernelLocks, KernelVersion
 
 
 def _get_local_kernel_overrides() -> Resolver:
@@ -86,7 +84,7 @@ def get_kernel_with_resolver(
     api: HfApi,
     backend: str | None,
     kernel: KernelDependency,
-    resolver: Resolver | None,
+    resolver: Resolver,
     kernel_validator: KernelValidator,
     metadata_validator: MetadataValidator,
 ) -> ModuleType:
@@ -96,16 +94,16 @@ def get_kernel_with_resolver(
     Args:
         api (`HfApi`):
             The Hugging Face Hub API client.
-        backend (`str`, *optional*):
+        backend (`str` or `None`):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
-            The backend will be detected automatically if not provided.
-        kernel (`KernelDependency`):
+            Pass `None` to detect the backend automatically.
+        kernel ([`~kernels.resolve.KernelDependency`]):
             The kernel to load.
-        resolver (`Resolver`, *optional*):
+        resolver ([`~kernels.resolve.Resolver`]):
             The resolver used to resolve the kernel and its (transitive) dependencies.
-        kernel_validator (`KernelValidator`):
+        kernel_validator ([`~kernels.validate.KernelValidator`]):
             The validator to apply to the kernels in the kernel dependency tree.
-        metadata_validator (`MetadataValidator`):
+        metadata_validator ([`~kernels.validate.MetadataValidator`]):
             The validator to apply to the metadata in the kernel dependency tree.
 
     Returns:

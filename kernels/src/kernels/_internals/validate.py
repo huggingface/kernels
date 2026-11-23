@@ -15,8 +15,9 @@ from kernels._internals.archs import _check_arch_incompatibility
 from kernels._internals.backends import _backend
 from kernels._internals.compat import has_sigstore
 from kernels._internals.python_deps import validate_dependencies
-from kernels._internals.resolver import LocalKernel
-from kernels._rust import KernelLocation, Metadata, Version
+from kernels._rust import KernelLocation, Version
+from kernels.metadata import Metadata
+from kernels.resolve import LocalKernel
 
 logger = logging.getLogger(__name__)
 

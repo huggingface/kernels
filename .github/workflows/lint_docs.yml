@@ -16,6 +16,9 @@ concurrency:
     ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  PRETTIER_VERSION: "3.9.10"
+
 permissions: {}
 
 jobs:
@@ -26,15 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install Nix
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          extra-conf: |
-            sandbox-fallback = false
-        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
-      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
-        with:
-          name: huggingface
-        env:
-          USER: runner
+          node-version: "20"
+      # Keep the version in sync with prettier in flake.nix.
       - name: Check docs formatting
-        run: nix develop --command prettier --check docs/source
+        run: npx --yes prettier@${{ env.PRETTIER_VERSION }} --check docs/source

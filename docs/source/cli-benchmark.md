@@ -1,6 +1,7 @@
 # kernels benchmark
 
-Use `kernels benchmark` to run benchmark scripts shipped with a kernel repository.
+Use `kernels benchmark` to run benchmark scripts shipped with a kernel
+repository.
 
 The command:
 
@@ -53,7 +54,8 @@ Kernel: 2385e44  Benchmark: 5b53516
 
 ## Usage
 
-You must specify which revision to benchmark, either via flags or with `@...` in the repo id:
+You must specify which revision to benchmark, either via flags or with `@...` in
+the repo id:
 
 ```bash
 kernels benchmark <repo_id> --version <N>
@@ -107,8 +109,9 @@ kernels benchmark ./my_kernel
 
 ## Writing Benchmark Scripts
 
-Benchmark scripts must live under `benchmarks/` in the kernel repository and match `benchmark*.py`.
-Each script should define one or more subclasses of `kernels.benchmark.Benchmark`.
+Benchmark scripts must live under `benchmarks/` in the kernel repository and
+match `benchmark*.py`. Each script should define one or more subclasses of
+`kernels.benchmark.Benchmark`.
 
 Minimal example (`benchmarks/benchmark_activation.py`):
 
@@ -138,10 +141,15 @@ The runner will:
 - Call `setup()` once per workload (or `setup_<workload>()` if present)
 - Warm up (`--warmup`)
 - Time `benchmark_<workload>()` for `--iterations`
-- If `verify_<workload>()` exists, check that outputs match (`torch.allclose(..., atol=1e-2)`) and show a speedup vs the reference computation
+- If `verify_<workload>()` exists, check that outputs match
+  (`torch.allclose(..., atol=1e-2)`) and show a speedup vs the reference
+  computation
 
 ## Troubleshooting
 
-- If the repo does not contain a `benchmarks/` directory (or no `benchmark*.py` files), the command exits with an error.
-- If a benchmark script defines no `Benchmark` subclasses, the command exits with an error.
-- If `verify_<workload>()` exists and the outputs do not match, the command exits with an error.
+- If the repo does not contain a `benchmarks/` directory (or no `benchmark*.py`
+  files), the command exits with an error.
+- If a benchmark script defines no `Benchmark` subclasses, the command exits
+  with an error.
+- If `verify_<workload>()` exists and the outputs do not match, the command
+  exits with an error.

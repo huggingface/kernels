@@ -1,0 +1,37 @@
+name: Lint docs
+on:
+  push:
+    paths:
+      - "docs/source/**"
+      - ".prettierrc.json"
+      - ".github/workflows/lint_docs.yml"
+  pull_request:
+    paths:
+      - "docs/source/**"
+      - ".prettierrc.json"
+      - ".github/workflows/lint_docs.yml"
+
+concurrency:
+  group:
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PRETTIER_VERSION: "3.9.10"
+
+permissions: {}
+
+jobs:
+  prettier:
+    permissions:
+      contents: read
+    name: Check docs formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+      # Keep the version in sync with prettier in flake.nix.
+      - name: Check docs formatting
+        run: npx --yes prettier@${{ env.PRETTIER_VERSION }} --check docs/source

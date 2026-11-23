@@ -1,27 +1,45 @@
 # Building and testing kernels with GitHub Actions
 
-Compiling a kernel is CPU-intensive and testing it requires an accelerator (such as a GPU), two things that GitHub's standard runners do not provide cheaply. Instead of maintaining self-hosted runners, you can offload both steps to [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) directly from a GitHub Actions workflow.
+Compiling a kernel is CPU-intensive and testing it requires an accelerator (such
+as a GPU), two things that GitHub's standard runners do not provide cheaply.
+Instead of maintaining self-hosted runners, you can offload both steps to
+[Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs)
+directly from a GitHub Actions workflow.
 
 Two prebuilt actions make this possible:
 
-- [`huggingface/kernel-builder-job`](https://github.com/huggingface/kernel-builder-job) runs the Nix kernel builder on a CPU flavor and publishes the built kernel to the Hub.
-- [`huggingface/hf-jobs-action`](https://github.com/huggingface/hf-jobs-action) runs an arbitrary script on any flavor (including GPUs), which is convenient for testing the kernel you just built. This also helps to test the kernel across different hardware.
+- [`huggingface/kernel-builder-job`](https://github.com/huggingface/kernel-builder-job)
+  runs the Nix kernel builder on a CPU flavor and publishes the built kernel to
+  the Hub.
+- [`huggingface/hf-jobs-action`](https://github.com/huggingface/hf-jobs-action)
+  runs an arbitrary script on any flavor (including GPUs), which is convenient
+  for testing the kernel you just built. This also helps to test the kernel
+  across different hardware.
 
-A typical setup has two workflows: one that **builds** the kernel on push, and one that **tests** it on a GPU. They communicate through the Hub, the build uploads artifacts, the test pulls them back down.
+A typical setup has two workflows: one that **builds** the kernel on push, and
+one that **tests** it on a GPU. They communicate through the Hub, the build
+uploads artifacts, the test pulls them back down.
 
 ## Prerequisites
 
-- An [HF access token](https://huggingface.co/settings/tokens) with the `job.write` permission. If the test job loads gated models, the token also needs read access to them.
-- The token stored as a repository secret named `HF_TOKEN` (**Settings → Secrets and variables → Actions**).
-- A kernel repository on the Hub to upload to, with kernel-creation access for the owning user or org (see [Building kernels](build.md#uploading-your-kernel-to-the-hub)).
+- An [HF access token](https://huggingface.co/settings/tokens) with the
+  `job.write` permission. If the test job loads gated models, the token also
+  needs read access to them.
+- The token stored as a repository secret named `HF_TOKEN` (**Settings → Secrets
+  and variables → Actions**).
+- A kernel repository on the Hub to upload to, with kernel-creation access for
+  the owning user or org (see
+  [Building kernels](build.md#uploading-your-kernel-to-the-hub)).
 
-> [!NOTE]
-> Jobs run under the `namespace` you specify (your username or an org) and
-> count against that namespace's compute quota.
+> [!NOTE] Jobs run under the `namespace` you specify (your username or an org)
+> and count against that namespace's compute quota.
 
 ## Building on push
 
-The build action checks out nothing by itself, your script clones the exact commit and invokes `kernel-builder`, which comes preinstalled in the default job image. Compilation happens on the HF Jobs CPU flavor, and `build-and-upload` pushes the finished variants to the Hub.
+The build action checks out nothing by itself, your script clones the exact
+commit and invokes `kernel-builder`, which comes preinstalled in the default job
+image. Compilation happens on the HF Jobs CPU flavor, and `build-and-upload`
+pushes the finished variants to the Hub.
 
 ```yaml
 # .github/workflows/build-kernel.yml
@@ -68,13 +86,16 @@ jobs:
               --repo-id your-username/your-kernel
 ```
 
-The path filter keeps the build from running on unrelated commits, and `workflow_dispatch` lets you trigger it by hand from the **Actions** tab. The upload destination is taken from `--repo-id` (or, if omitted, from the `repo-id`/`version` fields in `build.toml`).
+The path filter keeps the build from running on unrelated commits, and
+`workflow_dispatch` lets you trigger it by hand from the **Actions** tab. The
+upload destination is taken from `--repo-id` (or, if omitted, from the
+`repo-id`/`version` fields in `build.toml`).
 
-> [!TIP]
-> Builds can take a long time on the first run because every PyTorch and CUDA
-> variant is compiled. Set a generous `timeout` (the example allows six hours)
-> and rely on the [Hugging Face binary cache](build.md#using-the-hugging-face-binary-cache)
-> to keep subsequent builds fast.
+> [!TIP] Builds can take a long time on the first run because every PyTorch and
+> CUDA variant is compiled. Set a generous `timeout` (the example allows six
+> hours) and rely on the
+> [Hugging Face binary cache](build.md#using-the-hugging-face-binary-cache) to
+> keep subsequent builds fast.
 
 You can speed up builds by tuning how much work runs in parallel. `--max-jobs`
 sets how many kernel variants are built concurrently, while `--cores` sets how
@@ -94,21 +115,25 @@ time. Setting them too high for the flavor only adds scheduling overhead.
 | `image`     | no       | `ghcr.io/huggingface/kernel-builder-job:latest` | Container image to run the build in.              |
 | `timeout`   | no       | `1200`                                          | Maximum seconds to wait for the job.              |
 
-The action exposes `job_id` and `job_url` outputs that link to the run on huggingface.co.
+The action exposes `job_id` and `job_url` outputs that link to the run on
+huggingface.co.
 
-> [!NOTE]
-> The default image ships `kernel-builder` on `PATH`, so the script can call it
-> directly. Every push to the action's `main` branch republishes `:latest` and
-> also pushes an immutable `sha-<commit>` tag, so you can pin a known-good image
-> through the `image` input. If you point `image` at your own image that only has
-> Nix, either install the CLI first with
+> [!NOTE] The default image ships `kernel-builder` on `PATH`, so the script can
+> call it directly. Every push to the action's `main` branch republishes
+> `:latest` and also pushes an immutable `sha-<commit>` tag, so you can pin a
+> known-good image through the `image` input. If you point `image` at your own
+> image that only has Nix, either install the CLI first with
 > `nix profile install --accept-flake-config github:huggingface/kernels#kernel-builder`
 > or invoke it ad-hoc with
 > `nix run github:huggingface/kernels#kernel-builder -- build-and-upload ...`.
 
 ## Testing on a GPU
 
-Once the kernel is on the Hub, the generic jobs action runs a test script on a GPU flavor. The `files` input copies repository files into the container (under `/tmp/files` by default), and a [`uv` script](https://docs.astral.sh/uv/guides/scripts/) with inline dependencies keeps the environment self-contained.
+Once the kernel is on the Hub, the generic jobs action runs a test script on a
+GPU flavor. The `files` input copies repository files into the container (under
+`/tmp/files` by default), and a
+[`uv` script](https://docs.astral.sh/uv/guides/scripts/) with inline
+dependencies keeps the environment self-contained.
 
 ```yaml
 # .github/workflows/run-tests.yml
@@ -141,7 +166,9 @@ jobs:
             uv run /tmp/files/test.py
 ```
 
-The test script pulls the kernel straight from the Hub with the [`kernels`](../basic-usage.md) library, so it always runs against the artifacts the build workflow just published:
+The test script pulls the kernel straight from the Hub with the
+[`kernels`](../basic-usage.md) library, so it always runs against the artifacts
+the build workflow just published:
 
 ```python
 # scripts/test.py
@@ -154,7 +181,9 @@ kernel = get_kernel("your-username/your-kernel")
 # ... exercise the kernel and assert on the results ...
 ```
 
-Run the build workflow before the test workflow so the Hub has a fresh kernel to pull. For tightly coupled steps, you can also have one workflow trigger the other, or combine both jobs in a single workflow with a `needs:` dependency.
+Run the build workflow before the test workflow so the Hub has a fresh kernel to
+pull. For tightly coupled steps, you can also have one workflow trigger the
+other, or combine both jobs in a single workflow with a `needs:` dependency.
 
 ### `hf-jobs-action` inputs
 
@@ -172,14 +201,18 @@ Run the build workflow before the test workflow so the Hub has a fresh kernel to
 
 ## Choosing a flavor
 
-Flavors map to the machine types available on Hugging Face Jobs, CPU flavors such as `cpu-upgrade` and `cpu-xl` for builds, and GPU flavors such as `l4x1`, `a100-large`, `h200`, or `rtx-pro-6000` for tests. Pick the most reasonable GPU that fits your model to keep jobs low cost. The current list and pricing are in the [Hugging Face Jobs documentation](https://huggingface.co/docs/huggingface_hub/guides/jobs).
+Flavors map to the machine types available on Hugging Face Jobs, CPU flavors
+such as `cpu-upgrade` and `cpu-xl` for builds, and GPU flavors such as `l4x1`,
+`a100-large`, `h200`, or `rtx-pro-6000` for tests. Pick the most reasonable GPU
+that fits your model to keep jobs low cost. The current list and pricing are in
+the
+[Hugging Face Jobs documentation](https://huggingface.co/docs/huggingface_hub/guides/jobs).
 
-> [!NOTE]
-> HF Jobs currently only offers a few CPU architectures, so the kernel is built
-> for whatever architecture the available CPU flavors provide. This is a current
-> limitation to keep in mind if you need to target a specific architecture.
+> [!NOTE] HF Jobs currently only offers a few CPU architectures, so the kernel
+> is built for whatever architecture the available CPU flavors provide. This is
+> a current limitation to keep in mind if you need to target a specific
+> architecture.
 
-> [!WARNING]
-> HF Jobs containers start with shell tracing enabled (`set -x`). Always run
-> `set +x` before exporting `HF_TOKEN` so the token does not leak into the
-> streamed build logs.
+> [!WARNING] HF Jobs containers start with shell tracing enabled (`set -x`).
+> Always run `set +x` before exporting `HF_TOKEN` so the token does not leak
+> into the streamed build logs.

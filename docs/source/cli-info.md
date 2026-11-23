@@ -1,13 +1,13 @@
 # kernels info
 
-Use `kernels info` to describe a kernel from a Hub repo ID or a local path.
-It prints the kernel metadata (name, version, license, upstream/source
+Use `kernels info` to describe a kernel from a Hub repo ID or a local path. It
+prints the kernel metadata (name, version, license, upstream/source
 repositories, and supported backends), along with the recursive kernel and
 Python package dependencies of the variant selected for your current system.
 Only variant metadata is fetched. Kernel artifacts are not downloaded or
-imported, and metadata and kernel validators are not run. To list the
-build variants of a kernel and their compatibility with the current system,
-use [kernels variants](cli-variants.md).
+imported, and metadata and kernel validators are not run. To list the build
+variants of a kernel and their compatibility with the current system, use
+[kernels variants](cli-variants.md).
 
 ## Usage
 
@@ -21,23 +21,23 @@ treated as a Hub repo ID.
 
 Options:
 
-- `--revision <revision>`: describe a specific branch, tag, or commit
-  (Hub only). Cannot be used together with `--version`.
-- `--version <version>`: describe a specific kernel version (Hub only).
-  Cannot be used together with `--revision`. When neither is given, the
-  latest version is used (or `main` for unversioned repositories).
+- `--revision <revision>`: describe a specific branch, tag, or commit (Hub
+  only). Cannot be used together with `--version`.
+- `--version <version>`: describe a specific kernel version (Hub only). Cannot
+  be used together with `--revision`. When neither is given, the latest version
+  is used (or `main` for unversioned repositories).
 - `--json`: print the kernel information as JSON for machine-readable output.
 - `--dep-tree`: show kernel dependencies as an ASCII tree instead of a flat
-  list. With `--json`, include a nested `dependency_tree` object as well as
-  the flat lists.
+  list. With `--json`, include a nested `dependency_tree` object as well as the
+  flat lists.
 
-Python dependencies include packages required by the selected kernel
-and all its transitive kernel dependencies. Shared kernel dependencies
-appear once in the flat list and under each parent in the tree.
+Python dependencies include packages required by the selected kernel and all its
+transitive kernel dependencies. Shared kernel dependencies appear once in the
+flat list and under each parent in the tree.
 
-The selected variant is shown in the output. If a compatible variant cannot
-be found, metadata is unavailable, or a dependency cannot be resolved, the
-command reports an error.
+The selected variant is shown in the output. If a compatible variant cannot be
+found, metadata is unavailable, or a dependency cannot be resolved, the command
+reports an error.
 
 ## Examples
 
@@ -75,8 +75,8 @@ dependency tree; leaves are empty objects.
   "kernel_depends": ["example/b", "example/c", "example/d"],
   "python_depends": ["numpy", "torch"],
   "dependency_tree": {
-    "example/b": {"example/d": {}},
-    "example/c": {"example/d": {}}
+    "example/b": { "example/d": {} },
+    "example/c": { "example/d": {} }
   }
 }
 ```
@@ -111,5 +111,6 @@ example/a
 
 ## See Also
 
-- [kernels variants](cli-variants.md) - List kernel variants and compatibility decisions
+- [kernels variants](cli-variants.md) - List kernel variants and compatibility
+  decisions
 - [kernels download](cli-download.md) - Download locked kernels

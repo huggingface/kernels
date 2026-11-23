@@ -9,16 +9,16 @@ for questions and discussions about building kernels!
 
 ## Repository type
 
-Compliant kernels are published as `kernel`-type repositories on the Hub
-(the first-class kernel repository type). New uploads via `kernel-builder`
-default to this type; see the [migration guide](migration.md) if you
-maintain an older `model`-type kernel repository.
+Compliant kernels are published as `kernel`-type repositories on the Hub (the
+first-class kernel repository type). New uploads via `kernel-builder` default to
+this type; see the [migration guide](migration.md) if you maintain an older
+`model`-type kernel repository.
 
 ## Trusted publishers
 
 `kernels` only loads kernels from a curated set of trusted publishers by
-default. Loading from any other publisher raises an error unless the caller
-opts in with `trust_remote_code=True` or explicitly allowlists the repository:
+default. Loading from any other publisher raises an error unless the caller opts
+in with `trust_remote_code=True` or explicitly allowlists the repository:
 
 ```python
 # Trusted publisher: works without opt-in.
@@ -35,84 +35,83 @@ get_kernel(
 )
 ```
 
-The repository IDs in the allowlist must match exactly. Other repositories
-from the same publisher remain subject to the default trust check.
+The repository IDs in the allowlist must match exactly. Other repositories from
+the same publisher remain subject to the default trust check.
 
 The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
 displays a corresponding badge in the UI.
 
 ## Directory layout
 
-A kernel repository on the Hub must contain a `build` directory. This
-directory contains build variants of a kernel in the form of directories
-following the template
-`<framework><version>-<cu><cudaver>-<arch>-<os>`.
-For example `build/torch214-cu130-x86_64-linux`.
+A kernel repository on the Hub must contain a `build` directory. This directory
+contains build variants of a kernel in the form of directories following the
+template `<framework><version>-<cu><cudaver>-<arch>-<os>`. For example
+`build/torch214-cu130-x86_64-linux`.
 
-The kernel is in the build variant directory and must contain a
-`__init__.py` file. For compatibility with older versions of the
-`kernels` package, each variant directory must also contain a single
-directory with the same name as the repository (replacing `-` by `_`).
-For instance, kernels in the `kernels-community/activation` repository
-have a directory like `build/<variant>/activation`. This directory
-must contain an `__init__.py` file that exports the same symbols as
-`__init__.py` in the build variant directory `build/<variant>`.
+The kernel is in the build variant directory and must contain a `__init__.py`
+file. For compatibility with older versions of the `kernels` package, each
+variant directory must also contain a single directory with the same name as the
+repository (replacing `-` by `_`). For instance, kernels in the
+`kernels-community/activation` repository have a directory like
+`build/<variant>/activation`. This directory must contain an `__init__.py` file
+that exports the same symbols as `__init__.py` in the build variant directory
+`build/<variant>`.
 [This example](https://huggingface.co/kernels-test/flattened-build/blob/main/build/torch-universal/flattened_build/__init__.py)
-shows how this can be done. This compatibility directory is
-automatically created by `kernel-builder`.
+shows how this can be done. This compatibility directory is automatically
+created by `kernel-builder`.
 
 ## Build variants
 
 A kernel can be compliant for a specific compute framework (e.g. CUDA) or
 architecture (e.g. x86_64). For compliance with a compute framework and
-architecture combination, all the variants from the [build variant list](builder/build-variants)
-must be available for that combination.
+architecture combination, all the variants from the
+[build variant list](builder/build-variants) must be available for that
+combination.
 
 ## Kernel metadata
 
 The build variant directory must contain a `metadata.json` file with kernel
 metadata. Currently the following top-level keys are supported:
 
-- `id` (`str`, required): an identifier that **must** be unique to
-  the kernel build and build variant. This identifier must also be a valid
-  Python module name. If the kernel registers Torch ops, they must be
-  registered as `torch.ops.<id>`
-- `name` (`str`, required): then name of the kernel. Replacing dashes
-  by underscores should result in the module name of the kernel.
+- `id` (`str`, required): an identifier that **must** be unique to the kernel
+  build and build variant. This identifier must also be a valid Python module
+  name. If the kernel registers Torch ops, they must be registered as
+  `torch.ops.<id>`
+- `name` (`str`, required): then name of the kernel. Replacing dashes by
+  underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.
 - `kernels-minver` (`str`, optional): the minimum version of the `kernels`
   Python library required to load the kernel (e.g. `"0.17.0"`). This key is
-  determined by the kernel builder from the features that the kernel uses,
-  it is not set by kernel authors. The `kernels` library raises an error when
-  loading a kernel that requires a newer version than the one that is
-  installed.
-- `license` (`str`, required): the kernel license in. Refer to the
-  list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
-- `upstream` (`str`, optional): Git-compatible URL (passable to `git clone`)
-  of the original upstream repository where the kernel source code comes from.
-- `source` (`str`, optional): Git-compatible URL (passable to `git clone`)
-  of the kernel-builder formatted source repository (must contain `build.toml`
-  and `flake.nix`).
-- `backend` (`dict`, required): information about the compute backend that
-  this build variant supports.
+  determined by the kernel builder from the features that the kernel uses, it is
+  not set by kernel authors. The `kernels` library raises an error when loading
+  a kernel that requires a newer version than the one that is installed.
+- `license` (`str`, required): the kernel license in. Refer to the list of
+  [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
+- `upstream` (`str`, optional): Git-compatible URL (passable to `git clone`) of
+  the original upstream repository where the kernel source code comes from.
+- `source` (`str`, optional): Git-compatible URL (passable to `git clone`) of
+  the kernel-builder formatted source repository (must contain `build.toml` and
+  `flake.nix`).
+- `backend` (`dict`, required): information about the compute backend that this
+  build variant supports.
 - `digest` (`Digest`, required): hash digest of the kernel files.
-- `python-depends` (`list[str]`, optional): list of Python dependencies
-  from a curated set of Python dependencies.
+- `python-depends` (`list[str]`, optional): list of Python dependencies from a
+  curated set of Python dependencies.
 - `provenance` (`dict`, optional): provenance of the build, used to flag
   non-reproducible (dirty) builds. It contains two optional sub-objects:
   - `kernel-builder`: the `kernel-builder` that produced the build, with its
     `version` (`str`), the `commit` (`str`) of the `kernel-builder` source it
     was built from (when known), and a `dirty` (`bool`) flag that is `true` when
     `kernel-builder` was built from a source tree with uncommitted changes.
-  - `kernel`: the kernel source that was built, with its `commit` (`str`)
-    and a `dirty` (`bool`) flag that is `true` when the kernel source had
-    uncommitted changes.
+  - `kernel`: the kernel source that was built, with its `commit` (`str`) and a
+    `dirty` (`bool`) flag that is `true` when the kernel source had uncommitted
+    changes.
 
   A `commit` is the object identifier of the Git commit: the hexadecimal
   encoding of its SHA-1 or SHA-256 hash.
 
-  When either `dirty` flag is set, the kernel was built from uncommitted
-  sources and cannot be reliably reproduced.
+  When either `dirty` flag is set, the kernel was built from uncommitted sources
+  and cannot be reliably reproduced.
 
   The provenance is added by `kernel-builder` as part of the build, together
   with the `digest`. Builds that were not made with the Nix builder (for
@@ -166,16 +165,19 @@ The `backend` specifies a dictionary of the following form:
 ```
 
 The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `neuron`,
-`rocm`, `tpu`, or `xpu`. For CUDA and ROCm, the supported architectures must
-be specified in the `archs` field.
+`rocm`, `tpu`, or `xpu`. For CUDA and ROCm, the supported architectures must be
+specified in the `archs` field.
 
 ### Python dependencies
 
-You can specify Python dependencies that your kernel requires. Dependencies can be either general (required for all backends) or backend-specific (required only for certain compute backends like CUDA, ROCm, XPU, Metal, or CPU).
+You can specify Python dependencies that your kernel requires. Dependencies can
+be either general (required for all backends) or backend-specific (required only
+for certain compute backends like CUDA, ROCm, XPU, Metal, or CPU).
 
 #### General dependencies
 
-For dependencies required regardless of the backend, use the `python-depends` field:
+For dependencies required regardless of the backend, use the `python-depends`
+field:
 
 ```json
 {
@@ -185,7 +187,8 @@ For dependencies required regardless of the backend, use the `python-depends` fi
 
 #### Backend-specific dependencies
 
-For dependencies that are only needed for specific backends, use the `python-depends-backends` field:
+For dependencies that are only needed for specific backends, use the
+`python-depends-backends` field:
 
 ```json
 {
@@ -224,101 +227,97 @@ The following dependencies are currently allowed:
 - CUDA: `nvidia-cutlass-dsl`
 - XPU: `onednn`
 
-Dependencies are validated based on the backend being used. When a kernel is loaded, only the dependencies relevant to the active backend are checked.
+Dependencies are validated based on the backend being used. When a kernel is
+loaded, only the dependencies relevant to the active backend are checked.
 
 ## Versioning
 
-Kernels are versioned using a major version. The kernel revisions of a
-version are stored in a branch of the form `v<version>`. Each build
-variant will also have the kernel version in `metadata.json`.
+Kernels are versioned using a major version. The kernel revisions of a version
+are stored in a branch of the form `v<version>`. Each build variant will also
+have the kernel version in `metadata.json`.
 
 The version **must** be bumped in the following cases:
 
 - The kernel API is changed in an incompatible way.
-- The API is extended in a compatible way, but not all build variants
-  receive the extension (e.g. because they are for older Torch versions
-  that are not supported by `kernel-builder` anymore).
+- The API is extended in a compatible way, but not all build variants receive
+  the extension (e.g. because they are for older Torch versions that are not
+  supported by `kernel-builder` anymore).
 
-In both cases, build variants that are not updated must be removed from
-the new version's branch.
+In both cases, build variants that are not updated must be removed from the new
+version's branch.
 
-> [!IMPORTANT]
-> The second case covers *additions* as well: adding a function, layer, or
-> any other public symbol also requires a version bump, not just API
-> changes or removals. It also covers extensions that do not change the
-> API surface at all, see [below](#extensions-without-api-changes).
+> [!IMPORTANT] The second case covers _additions_ as well: adding a function,
+> layer, or any other public symbol also requires a version bump, not just API
+> changes or removals. It also covers extensions that do not change the API
+> surface at all, see [below](#extensions-without-api-changes).
 
-> [!IMPORTANT]
-> The *kernel API* covered by these versioning guarantees is only the
-> public API: the symbols listed in the `__all__` of the kernel's
-> top-level `__init__.py`. Anything not in `__all__` (e.g. internal
-> helpers or names prefixed with `_`) is considered private and may
-> change or be removed at any time without a version bump. Export every
-> symbol you intend consumers to rely on in `__all__`.
+> [!IMPORTANT] The _kernel API_ covered by these versioning guarantees is only
+> the public API: the symbols listed in the `__all__` of the kernel's top-level
+> `__init__.py`. Anything not in `__all__` (e.g. internal helpers or names
+> prefixed with `_`) is considered private and may change or be removed at any
+> time without a version bump. Export every symbol you intend consumers to rely
+> on in `__all__`.
 
-> [!NOTE]
-> By convention, we reserve version `0` for kernels that are still in
-> alpha or beta stage and are not recommended for production use (e.g.
-> because the API is still changing regularly or there are still too
-> many issues).
+> [!NOTE] By convention, we reserve version `0` for kernels that are still in
+> alpha or beta stage and are not recommended for production use (e.g. because
+> the API is still changing regularly or there are still too many issues).
 
 ### Rule of thumb
 
-> The human test is: does this PR change anything such that code may work
-> with the builds that would be the output of this PR, but not older
-> builds?
+> The human test is: does this PR change anything such that code may work with
+> the builds that would be the output of this PR, but not older builds?
 
 If the answer is yes, the version needs to be bumped, unless one of the
 [exceptions](#exceptions) applies.
 
 ### Why additions need a version bump
 
-Suppose that a kernel exposes a single function `a` and that there are
-already builds for Torch 2.9 up to Torch 2.13. Now a function `b` is
-added. Since `kernel-builder` only builds for the last two Torch
-versions, only the Torch 2.12 and 2.13 variants will contain `b`.
+Suppose that a kernel exposes a single function `a` and that there are already
+builds for Torch 2.9 up to Torch 2.13. Now a function `b` is added. Since
+`kernel-builder` only builds for the last two Torch versions, only the Torch
+2.12 and 2.13 variants will contain `b`.
 
-If the version is not bumped, downstream software (e.g. Transformers)
-will start using `b` and then fail on Torch 2.9 to 2.11 with a nasty
-exception that the function cannot be found. If the version *is* bumped
-(and the stale variants are removed from the new version's branch),
-`kernels` will instead tell the user that there is no build variant for
-their current system, which is a far clearer error.
+If the version is not bumped, downstream software (e.g. Transformers) will start
+using `b` and then fail on Torch 2.9 to 2.11 with a nasty exception that the
+function cannot be found. If the version _is_ bumped (and the stale variants are
+removed from the new version's branch), `kernels` will instead tell the user
+that there is no build variant for their current system, which is a far clearer
+error.
 
 ### Extensions without API changes
 
-The same reasoning applies to extensions that leave the API surface
-untouched. For example, the function signatures could be the same, but if
-a kernel internally first only covered tensors of `float16` and then adds
-support for tensors of `bfloat16`, that is also a change that warrants a
-bump. Downstream software that passes `bfloat16` tensors would otherwise
-fail on the build variants that were not rebuilt.
+The same reasoning applies to extensions that leave the API surface untouched.
+For example, the function signatures could be the same, but if a kernel
+internally first only covered tensors of `float16` and then adds support for
+tensors of `bfloat16`, that is also a change that warrants a bump. Downstream
+software that passes `bfloat16` tensors would otherwise fail on the build
+variants that were not rebuilt.
 
 ### Exceptions
 
-For the following types of kernels, some API changes do not require
-bumping the version:
+For the following types of kernels, some API changes do not require bumping the
+version:
 
 - Python-only (noarch) kernels, e.g. `torch-cuda`. All build variants get
   updated, so this issue does not exist.
-- AoT-compiled kernels where a build replaces all variants. This is the
-  case for:
-  - Very new kernels that only have builds for the latest two Torch
-    versions.
+- AoT-compiled kernels where a build replaces all variants. This is the case
+  for:
+  - Very new kernels that only have builds for the latest two Torch versions.
   - Torch stable ABI kernels, as long as the CUDA versions that get built
     overlap with the current build variants.
 
 In the following cases no version bump is required for these types of kernels:
 
 - Adding new functions/methods/classes.
-- Adding new arguments with default values to a function/method/constructor, as long as the default values do not change previous behavior.
+- Adding new arguments with default values to a function/method/constructor, as
+  long as the default values do not change previous behavior.
 
 ## Native Python module
 
-Kernels will typically contain a native Python module with precompiled
-compute kernels and bindings. This module must fulfill the requirements
-outlined in this section. For all operating systems, a kernel must not
-have dynamic library dependencies outside:
+Kernels will typically contain a native Python module with precompiled compute
+kernels and bindings. This module must fulfill the requirements outlined in this
+section. For all operating systems, a kernel must not have dynamic library
+dependencies outside:
 
 - Torch;
 - CUDA/ROCm libraries installed as dependencies of Torch.
@@ -331,14 +330,16 @@ compliant way. This helps to ensure that the kernels are compatible with
 recompilation which can limit the benefits of compilation.
 
 [Here](https://github.com/huggingface/kernels/blob/f83b4da6b7f6b171b47bb9bf96271ae2273bc9d3/builder/examples/relu-backprop-compile/tests/test_relu.py#L162)
-is a simple test example which checks for graph breaks and
-recompilation triggers during `torch.compile`.
+is a simple test example which checks for graph breaks and recompilation
+triggers during `torch.compile`.
 
 ### Linux
 
-- Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
+- Use
+  [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
-- Compatible with [`manylinux_2_28`](https://github.com/pypa/manylinux?tab=readme-ov-file#manylinux_2_28-almalinux-8-based).
+- Compatible with
+  [`manylinux_2_28`](https://github.com/pypa/manylinux?tab=readme-ov-file#manylinux_2_28-almalinux-8-based).
   This means that the extension **must not** use symbols versions higher than:
   - GLIBC 2.28
   - GLIBCXX 3.4.24
@@ -349,7 +350,8 @@ These requirements can be checked with the ABI checker (see below).
 
 ### macOS
 
-- Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
+- Use
+  [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
 - macOS deployment target 26.0.
 - Metal 4.0 (`-std=metal4.0`).
@@ -376,30 +378,30 @@ $ kernel-builder check-abi examples/kernels/relu
 
 ## Torch extension
 
-Torch native extension functions must be [registered](https://pytorch.org/tutorials/advanced/cpp_custom_ops.html#cpp-custom-ops-tutorial)
-in `torch.ops.<namespace>`. Since we allow loading of multiple versions of
-a module in the same Python process, `namespace` must be unique for each
-version of a kernel. Failing to do so will create clashes when different
-versions of the same kernel are loaded. Two suggested ways of doing this
-are:
+Torch native extension functions must be
+[registered](https://pytorch.org/tutorials/advanced/cpp_custom_ops.html#cpp-custom-ops-tutorial)
+in `torch.ops.<namespace>`. Since we allow loading of multiple versions of a
+module in the same Python process, `namespace` must be unique for each version
+of a kernel. Failing to do so will create clashes when different versions of the
+same kernel are loaded. Two suggested ways of doing this are:
 
-- Appending a truncated SHA-1 hash of the git commit that the kernel was
-  built from to the name of the extension.
+- Appending a truncated SHA-1 hash of the git commit that the kernel was built
+  from to the name of the extension.
 - Appending random material to the name of the extension.
 
-**Note:** we recommend against appending a version number or git tag.
-Version numbers are typically not bumped on each commit, so users
-might use two different commits that happen to have the same version
-number. Git tags are not stable, so they do not provide a good way
-of guaranteeing uniqueness of the namespace.
+**Note:** we recommend against appending a version number or git tag. Version
+numbers are typically not bumped on each commit, so users might use two
+different commits that happen to have the same version number. Git tags are not
+stable, so they do not provide a good way of guaranteeing uniqueness of the
+namespace.
 
 ## Layers
 
-A kernel can provide layers in addition to kernel functions. A layer from
-the Hub can replace the `forward` method of an existing layer for a certain
-device type. This makes it possible to provide more performant kernels for
-existing layers. See the [layers documentation](layers.md) for more information
-on how to use layers.
+A kernel can provide layers in addition to kernel functions. A layer from the
+Hub can replace the `forward` method of an existing layer for a certain device
+type. This makes it possible to provide more performant kernels for existing
+layers. See the [layers documentation](layers.md) for more information on how to
+use layers.
 
 ### Writing layers
 
@@ -407,18 +409,18 @@ To make the extension of layers safe, the layers must fulfill the following
 requirements:
 
 - The layers are subclasses of `torch.nn.Module`.
-- The layers are pure, meaning that they do not have their own state. This
-  means that:
+- The layers are pure, meaning that they do not have their own state. This means
+  that:
   - The layer must not define its own constructor.
   - The layer must not use class variables.
 - No other methods must be defined than `forward`.
-- The `forward` method has a signature that is compatible with the
-  `forward` method that it is extending.
+- The `forward` method has a signature that is compatible with the `forward`
+  method that it is extending.
 
 There are two exceptions to the _no class variables rule_:
 
-1. The `has_backward` variable can be used to indicate whether the layer has
-   a backward pass implemented (`True` when absent).
+1. The `has_backward` variable can be used to indicate whether the layer has a
+   backward pass implemented (`True` when absent).
 2. The `can_torch_compile` variable can be used to indicate whether the layer
    supports `torch.compile` (`False` when absent).
 
@@ -477,14 +479,13 @@ __all__ = [
 ]
 ```
 
-> [!IMPORTANT]
-> Only symbols listed in `__all__` are treated as the kernel's public
-> API. This is the surface that consumers can rely on and that the
-> [versioning guarantees](#versioning) apply to, so be sure to export
-> every function, class, and `layers` module you want to expose.
+> [!IMPORTANT] Only symbols listed in `__all__` are treated as the kernel's
+> public API. This is the surface that consumers can rely on and that the
+> [versioning guarantees](#versioning) apply to, so be sure to export every
+> function, class, and `layers` module you want to expose.
 
-The same applies to the `layers` module itself: only the layers listed in
-the `__all__` of `layers` are part of the public API. For example:
+The same applies to the `layers` module itself: only the layers listed in the
+`__all__` of `layers` are part of the public API. For example:
 
 ```python
 class SiluAndMul(nn.Module):
@@ -496,9 +497,9 @@ __all__ = ["SiluAndMul"]
 ## Python requirements
 
 - Python code must be compatible with Python 3.9 and later.
-- All Python code imports from the kernel itself must be relative. So,
-  for instance if in the example kernel `example`,
-  `module_b` needs a function from `module_a`, import as:
+- All Python code imports from the kernel itself must be relative. So, for
+  instance if in the example kernel `example`, `module_b` needs a function from
+  `module_a`, import as:
 
   ```python
   from .module_a import foo
@@ -512,9 +513,9 @@ __all__ = ["SiluAndMul"]
   from example.module_a import foo
   ```
 
-  The latter would import from the module `example` that is in Python's
-  global module dict. However, since we allow loading multiple versions
-  of a module, we uniquely name the module.
+  The latter would import from the module `example` that is in Python's global
+  module dict. However, since we allow loading multiple versions of a module, we
+  uniquely name the module.
 
-- Only modules from the Python standard library, Torch, or the kernel itself
-  can be imported.
+- Only modules from the Python standard library, Torch, or the kernel itself can
+  be imported.

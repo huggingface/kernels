@@ -1,12 +1,14 @@
 # Use layers
 
-> [!NOTE]
-> Open the [Kernelize your model with ease](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb) notebook to build a kernel, replace a layer definition, and use a kernel layer with functions.
+> [!NOTE] Open the
+> [Kernelize your model with ease](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb)
+> notebook to build a kernel, replace a layer definition, and use a kernel layer
+> with functions.
 
-A kernel can provide layers in addition to kernel functions. A layer from
-the Hub can replace the `forward` method of an existing layer for a certain
-device type. This makes it possible to provide more performant kernels for
-existing layers.
+A kernel can provide layers in addition to kernel functions. A layer from the
+Hub can replace the `forward` method of an existing layer for a certain device
+type. This makes it possible to provide more performant kernels for existing
+layers.
 
 See [Kernel requirements](kernel-requirements.md) for more information on the
 requirements of Hub layers.
@@ -26,17 +28,17 @@ class SiluAndMul(nn.Module):
         return F.silu(input[..., :d]) * input[..., d:]
 ```
 
-The decorator does not change the behavior of the class -- it annotates
-the class with the given name (here `SiluAndMul`). The [`~kernels.kernelize`] function
-described below uses this name to look up kernels for the layer.
+The decorator does not change the behavior of the class -- it annotates the
+class with the given name (here `SiluAndMul`). The [`~kernels.kernelize`]
+function described below uses this name to look up kernels for the layer.
 
-Sometimes you only want to kernelize a layer depending on some state inside
-that layer. For instance, an MLP layer could support multiple activations, but
-a kernel that you want to register only supports one particular activation. In
-such cases, you can add a condition to a `use_kernel_forward_from_hub` decorator.
-The layer will then only be kernelized when the condition holds. The condition
-must be a callable that takes the instantiated layer and returns a `bool`. For
-example:
+Sometimes you only want to kernelize a layer depending on some state inside that
+layer. For instance, an MLP layer could support multiple activations, but a
+kernel that you want to register only supports one particular activation. In
+such cases, you can add a condition to a `use_kernel_forward_from_hub`
+decorator. The layer will then only be kernelized when the condition holds. The
+condition must be a callable that takes the instantiated layer and returns a
+`bool`. For example:
 
 ```python
 @use_kernel_forward_from_hub(
@@ -49,9 +51,9 @@ class MyMLP(nn.Module):
 
 ### External layers
 
-An existing layer that does not (yet) have the [`~kernels.use_kernel_forward_from_hub`]
-decorator can be made extensible using the [`~kernels.replace_kernel_forward_from_hub`]
-function:
+An existing layer that does not (yet) have the
+[`~kernels.use_kernel_forward_from_hub`] decorator can be made extensible using
+the [`~kernels.replace_kernel_forward_from_hub`] function:
 
 ```python
 from somelibrary import SiluAndMul
@@ -59,22 +61,21 @@ from somelibrary import SiluAndMul
 replace_kernel_forward_from_hub(SiluAndMul, "SiluAndMul")
 ```
 
-**Warning:** we strongly recommend using layers with a decorator, since
-it signifies that the maintainer intends to keep the `forward` signature
-compatible with layers from the hub.
+**Warning:** we strongly recommend using layers with a decorator, since it
+signifies that the maintainer intends to keep the `forward` signature compatible
+with layers from the hub.
 
 ### Using a function as a layer
 
-
-> [!WARNING]
-> Decorating functions is mainly intended for compatibility cases, such as in
-`transformers`, where a function cannot be converted into a module. If you
-control the model code, prefer converting the function to an `nn.Module` and
-decorating that class with [`~kernels.use_kernel_forward_from_hub`], as shown
-in [Using a decorator](#using-a-decorator). In the parent module's `__init__`,
-assign an instance of the decorated class to an attribute, such as
-`self.activation = SiluAndMul()`. PyTorch then registers it as a submodule,
-making it part of the model graph.
+> [!WARNING] Decorating functions is mainly intended for compatibility cases,
+> such as in `transformers`, where a function cannot be converted into a module.
+> If you control the model code, prefer converting the function to an
+> `nn.Module` and decorating that class with
+> [`~kernels.use_kernel_forward_from_hub`], as shown in
+> [Using a decorator](#using-a-decorator). In the parent module's `__init__`,
+> assign an instance of the decorated class to an attribute, such as
+> `self.activation = SiluAndMul()`. PyTorch then registers it as a submodule,
+> making it part of the model graph.
 
 When a function cannot be replaced by a layer, you can use the
 [`~kernels.use_kernel_forward_from_hub`] decorator on the function:
@@ -86,16 +87,15 @@ def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
     return F.silu(x[..., :d]) * x[..., d:]
 ```
 
-This will replace the function by an instantiated `torch.nn.Module`
-(singleton) that calls the function itself in its forward method. It will
-still behave as a function, since `torch.nn.Module` provides an
-implementation of `__call__` that delegates to `forward`.
+This will replace the function by an instantiated `torch.nn.Module` (singleton)
+that calls the function itself in its forward method. It will still behave as a
+function, since `torch.nn.Module` provides an implementation of `__call__` that
+delegates to `forward`.
 
 For [`~kernels.kernelize`] to see the function, you must use
-[`~kernels.use_kernelized_func`] on an `torch.nn.Module` that is part
-of the to-be kernlized model to make the function visible to
-[`~kernels.kernelize`]. The function is typically attached to the module
-that uses it. For example:
+[`~kernels.use_kernelized_func`] on an `torch.nn.Module` that is part of the
+to-be kernlized model to make the function visible to [`~kernels.kernelize`].
+The function is typically attached to the module that uses it. For example:
 
 ```python
 @use_kernelized_func(silu_and_mul)
@@ -114,31 +114,31 @@ Functions used by [`~kernels.use_kernelized_func`] must always have a
 
 A model will not use Hub kernels by default, even if it contains extensible
 layers. To enable the use of Hub kernels in the model, it needs to be
-'kernelized' using the [`~kernels.kernelize`] function. This function traverses the
-model graph and replaces the `forward` methods of extensible layers for which
-Hub kernels are registered. [`~kernels.kernelize`] can be used as follows:
+'kernelized' using the [`~kernels.kernelize`] function. This function traverses
+the model graph and replaces the `forward` methods of extensible layers for
+which Hub kernels are registered. [`~kernels.kernelize`] can be used as follows:
 
 ```python
 model = MyModel(...)
 model = kernelize(model, mode=Mode.INFERENCE)
 ```
 
-The [`~kernels.kernelize`] function modifies the model in-place, the model itself is
-returned as a convenience. The `mode` specifies that the model will be used
-in inference. Similarly, you can ask [`~kernels.kernelize`] to prepare the model for
-training:
+The [`~kernels.kernelize`] function modifies the model in-place, the model
+itself is returned as a convenience. The `mode` specifies that the model will be
+used in inference. Similarly, you can ask [`~kernels.kernelize`] to prepare the
+model for training:
 
 ```python
 model = MyModel(...)
 model = kernelize(model, mode=Mode.TRAINING)
 ```
 
-A model that is kernelized for training can also be used for inference, but
-not the other way around. If you want to change the mode of the kernelized
-model, you can just run [`~kernels.kernelize`] on the model again with the new mode.
+A model that is kernelized for training can also be used for inference, but not
+the other way around. If you want to change the mode of the kernelized model,
+you can just run [`~kernels.kernelize`] on the model again with the new mode.
 
-If you want to compile a model with `torch.compile`, this should be indicated
-in the mode as well. You can do this by combining `Mode.INFERENCE` or
+If you want to compile a model with `torch.compile`, this should be indicated in
+the mode as well. You can do this by combining `Mode.INFERENCE` or
 `Mode.TRAINING` with `Mode.TORCH_COMPILE` using the set union (`|`) operator:
 
 ```python
@@ -155,9 +155,9 @@ model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
 
 Kernels can be registered per device type. For instance, separate `cuda` and
 `metal` kernels could be registered for the name `SiluAndMul`. By default,
-[`~kernels.kernelize`] will try to infer the device type from the model's parameters.
-You can pass the device type to [`~kernels.kernelize`] if the device type cannot be
-inferred (e.g. because the model has no parameters):
+[`~kernels.kernelize`] will try to infer the device type from the model's
+parameters. You can pass the device type to [`~kernels.kernelize`] if the device
+type cannot be inferred (e.g. because the model has no parameters):
 
 ```python
 model = MyModel(...)
@@ -166,10 +166,11 @@ model = kernelize(model, device="cuda", mode=Mode.INFERENCE)
 
 ### Fallback `forward`
 
-If the `TRAINING` and/or `TORCH_COMPILE` modes are used, but a registered
-kernel does not support backward passes or `torch.compile` respectively,
-[`~kernels.kernelize`] will fall back to the original, non-kernelized, layer. You
-can let [`~kernels.kernelize`] raise an exception instead by using `use_fallback=False`:
+If the `TRAINING` and/or `TORCH_COMPILE` modes are used, but a registered kernel
+does not support backward passes or `torch.compile` respectively,
+[`~kernels.kernelize`] will fall back to the original, non-kernelized, layer.
+You can let [`~kernels.kernelize`] raise an exception instead by using
+`use_fallback=False`:
 
 ```python
 model = MyModel(...)
@@ -180,15 +181,16 @@ This can be useful if you want to guarantee that Hub kernels are used.
 
 ### Inspecting which kernels are used
 
-The kernels that are used are logged at the `INFO` level by [`~kernels.kernelize`].
-See the [Python logging](https://docs.python.org/3/library/logging.html)
-documentation for information on how to configure logging.
+The kernels that are used are logged at the `INFO` level by
+[`~kernels.kernelize`]. See the
+[Python logging](https://docs.python.org/3/library/logging.html) documentation
+for information on how to configure logging.
 
 ## Registering a hub kernel for a layer
 
 [`~kernels.kernelize`] relies on kernel mappings to find Hub kernels for layers.
-Kernel mappings map a kernel name such as `SiluAndMul` to a kernel on
-the Hub. For example:
+Kernel mappings map a kernel name such as `SiluAndMul` to a kernel on the Hub.
+For example:
 
 ```python
 kernel_layer_mapping = {
@@ -208,29 +210,28 @@ kernel_layer_mapping = {
 ```
 
 This uses version `1` of the `SiluAndMul` kernel layer from
-`kernels-community/activation` for the `cuda` and `rocm` backends. Kernel
-layers are versioned using a major version number. Using `version=1`
-will get the latest kernel build from the `v1` branch. Kernel layers
-within a version branch must never break the API or remove builds for
-older PyTorch versions. This ensures that your code will continue to
-work.
-Hub-backed [`~kernels.LayerRepository`] and [`~kernels.FuncRepository`] entries must specify
-either a `version` or an explicit `revision`.
+`kernels-community/activation` for the `cuda` and `rocm` backends. Kernel layers
+are versioned using a major version number. Using `version=1` will get the
+latest kernel build from the `v1` branch. Kernel layers within a version branch
+must never break the API or remove builds for older PyTorch versions. This
+ensures that your code will continue to work. Hub-backed
+[`~kernels.LayerRepository`] and [`~kernels.FuncRepository`] entries must
+specify either a `version` or an explicit `revision`.
 
-> [!NOTE]
-> Version `0` kernels are excluded from the API compatibility requirement,
-> since it is used for alpha/beta-quality kernels that may still have
-> rapidly changing APIs.
+> [!NOTE] Version `0` kernels are excluded from the API compatibility
+> requirement, since it is used for alpha/beta-quality kernels that may still
+> have rapidly changing APIs.
 
-You can register a mapping, like the one above, using [`~kernels.register_kernel_mapping`]:
+You can register a mapping, like the one above, using
+[`~kernels.register_kernel_mapping`]:
 
 ```python
 register_kernel_mapping(kernel_layer_mapping)
 ```
 
-This will register the kernel mapping in the current context, which is
-normally global. It is recommended to scope the mapping to where it is
-used with the [`~kernels.use_kernel_mapping`] context manager:
+This will register the kernel mapping in the current context, which is normally
+global. It is recommended to scope the mapping to where it is used with the
+[`~kernels.use_kernel_mapping`] context manager:
 
 ```python
 with use_kernel_mapping(kernel_layer_mapping):
@@ -238,8 +239,7 @@ with use_kernel_mapping(kernel_layer_mapping):
     model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
 ```
 
-This ensures that the mapping is not active anymore outside the
-`with`-scope.
+This ensures that the mapping is not active anymore outside the `with`-scope.
 
 ### Attributing Hub requests
 
@@ -259,9 +259,10 @@ layer_repo = LayerRepository(
 application-specific metadata is added. Setting `HF_HUB_DISABLE_TELEMETRY=1`
 disables user-agent telemetry, including metadata supplied this way.
 
-If the layer is stateless (it does not use member variables in its forward _or_ it was
-originally a function that was converted into a kernel layer with
-[`~kernels.use_kernel_func_from_hub`]), it can also be mapped to a kernel function:
+If the layer is stateless (it does not use member variables in its forward _or_
+it was originally a function that was converted into a kernel layer with
+[`~kernels.use_kernel_func_from_hub`]), it can also be mapped to a kernel
+function:
 
 ```python
 kernel_layer_mapping = {
@@ -277,9 +278,9 @@ kernel_layer_mapping = {
 
 ### Registering kernels for specific modes
 
-You might want to register two different kernels for a particular layer,
-where one kernel is optimized for a specific mode. You can do so by
-registering layer repositories for specific modes. For example:
+You might want to register two different kernels for a particular layer, where
+one kernel is optimized for a specific mode. You can do so by registering layer
+repositories for specific modes. For example:
 
 ```python
 kernel_layer_mapping = {
@@ -310,8 +311,8 @@ kernels for a given mode:
 - `TRAINING`: `TRAINING` → `TRAINING | TORCH_COMPILE` → `FALLBACK`
 - `TRAINING | TORCH_COMPILE`: `TRAINING | TORCH_COMPILE` → `FALLBACK`
 
-`Mode.FALLBACK` is a special mode that is used when no other mode matches. It
-is also used when a kernel is registered without a mode, as described in the
+`Mode.FALLBACK` is a special mode that is used when no other mode matches. It is
+also used when a kernel is registered without a mode, as described in the
 previous section.
 
 ```python
@@ -339,16 +340,16 @@ kernel_layer_mapping = {
 ```
 
 In this case, both `Mode.INFERENCE | Mode.TORCH_COMPILE` and
-`Mode.TRAINING | Mode.TORCH_COMPILE` will use the `Mode.FALLBACK` kernel,
-since the other kernels do not support `torch.compile`.
+`Mode.TRAINING | Mode.TORCH_COMPILE` will use the `Mode.FALLBACK` kernel, since
+the other kernels do not support `torch.compile`.
 
 ### Registering kernels for specific CUDA capabilities
 
-Some kernels only work with newer CUDA architectures. For instance, some
-kernels require capability 9.0 for the TMA unit on Hopper GPUs. `kernels`
-supports registering layers for a range of CUDA capabilities. To do so,
-you need to register the layer for a [`~kernels.Device`] with type `cuda` and
-set the supported range of CUDA capabilities with using `CUDAProperties`:
+Some kernels only work with newer CUDA architectures. For instance, some kernels
+require capability 9.0 for the TMA unit on Hopper GPUs. `kernels` supports
+registering layers for a range of CUDA capabilities. To do so, you need to
+register the layer for a [`~kernels.Device`] with type `cuda` and set the
+supported range of CUDA capabilities with using `CUDAProperties`:
 
 ```python
 kernel_layer_mapping = {
@@ -380,29 +381,29 @@ kernel_layer_mapping = {
 Capabilities behave as follows:
 
 - The minimum and maximum capabilities are inclusive.
-- When a new kernel is registered with the same min/max capabilities as
-  an existing kernel, the new kernel will replace the old kernel.
-- When there are multiple kernels that support a capability, the kernel
-  with the smaller capability interval will be used. E.g. given:
+- When a new kernel is registered with the same min/max capabilities as an
+  existing kernel, the new kernel will replace the old kernel.
+- When there are multiple kernels that support a capability, the kernel with the
+  smaller capability interval will be used. E.g. given:
   - `KernelA` with `min_capability=80` and `max_capability=89`;
   - `KernelB` with `min_capability=75` and `max_capability=89`;
   - [`~kernels.kernelize`] runs on a system with capability 8.6.
 
-  Then `KernelA` will be used because the interval 80..89 is smaller
-  than 75..89. The motivation is that kernels with smaller ranges
-  tend to be more optimized for a specific set of GPUs. **This behavior
-  might still change in the future.**
+  Then `KernelA` will be used because the interval 80..89 is smaller than
+  75..89. The motivation is that kernels with smaller ranges tend to be more
+  optimized for a specific set of GPUs. **This behavior might still change in
+  the future.**
 
 ### Registering kernels for specific ROCm capabilities
 
-Registering kernels for the ROCm architecture follows the exact same
-pattern as CUDA kernels, using `min_capability` and `max_capability` to restrict
-a kernel to a range of ROCm capabilities.
+Registering kernels for the ROCm architecture follows the exact same pattern as
+CUDA kernels, using `min_capability` and `max_capability` to restrict a kernel
+to a range of ROCm capabilities.
 
 ### Loading from a local repository for testing
 
-The [`~kernels.LocalLayerRepository`] class is provided to load a repository from
-a local directory. For example:
+The [`~kernels.LocalLayerRepository`] class is provided to load a repository
+from a local directory. For example:
 
 ```python
 with use_kernel_mapping(
@@ -420,8 +421,8 @@ with use_kernel_mapping(
     kernelize(linear, mode=Mode.INFERENCE)
 ```
 
-Similarly, the [`~kernels.LocalFuncRepository`] class can be used to load a kernel
-function from a local directory:
+Similarly, the [`~kernels.LocalFuncRepository`] class can be used to load a
+kernel function from a local directory:
 
 ```python
 with use_kernel_mapping(
@@ -443,9 +444,9 @@ with use_kernel_mapping(
 
 To check which layers are currently using a kernel, use
 [`~kernels.get_kernelized_layers`]. It returns a [`~kernels.KernelizedLayers`]
-object that contains a dict `layers` with kernelized layers and a dict
-`funcs` with kernelized functions. Each entry holds the kernelized module
-and the repository that its kernel was retrieved from:
+object that contains a dict `layers` with kernelized layers and a dict `funcs`
+with kernelized functions. Each entry holds the kernelized module and the
+repository that its kernel was retrieved from:
 
 ```python
 from kernels import get_kernelized_layers

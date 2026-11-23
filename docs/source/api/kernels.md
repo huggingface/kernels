@@ -48,14 +48,19 @@ Import these types from `kernels.resolve`.
 
 ### KernelDependency
 
-`KernelDependency(repo_id, version)` identifies a kernel by its repository ID
-and a [`KernelVersion`](#kernelversion). Its `repo_id` and `version` attributes
-are read-only.
+[[autodoc]] kernels.resolve.KernelDependency
 
 ### KernelVersion
 
-Use `KernelVersion.Version(number)` for a numbered kernel version or
-`KernelVersion.Revision(ref)` for a Git branch, tag, or commit.
+[[autodoc]] kernels.resolve.KernelVersion
+
+#### KernelVersion.Version
+
+[[autodoc]] kernels.resolve.KernelVersion.Version
+
+#### KernelVersion.Revision
+
+[[autodoc]] kernels.resolve.KernelVersion.Revision
 
 ### Resolver
 
@@ -79,10 +84,7 @@ Implement `resolve(api=..., backend=..., kernel=...)` to return a
 
 ### KernelPaths
 
-`KernelPaths(paths)` wraps a mapping from `KernelDependency` objects to local
-paths. It behaves as a read-only mapping and accepts path strings or path-like
-objects when constructed. Use `KernelPaths.from_json(text)` to read a serialized
-mapping and `paths.to_json()` to write one.
+[[autodoc]] kernels.resolve.KernelPaths
 
 ### LocalKernel
 
@@ -131,10 +133,9 @@ Implement `validate_kernel(kernel=...)` to check each installed
 
 ### Metadata
 
-`kernels.metadata.Metadata` represents the parsed `metadata.json` for a kernel
-build variant. Use `Metadata.read_from_file(path)` to read a file or
-`Metadata.from_bytes(data)` to parse JSON bytes. Both raise `ValueError` on
-invalid metadata. The same class is also available as `kernels.Metadata`.
+Import `Metadata` from `kernels.metadata` or directly from `kernels`.
+
+[[autodoc]] kernels.metadata.Metadata
 
 ### LoadedKernel
 

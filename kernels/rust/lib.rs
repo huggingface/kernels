@@ -304,10 +304,19 @@ impl PyProvenance {
 }
 
 /// A kernel version: either a numeric version or a git revision string.
-#[pyclass(name = "KernelVersion", frozen, eq, hash, from_py_object)]
+#[pyclass(
+    name = "KernelVersion",
+    module = "kernels.resolve",
+    frozen,
+    eq,
+    hash,
+    from_py_object
+)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum PyKernelVersion {
+    /// A numbered kernel version.
     Version { version: usize },
+    /// A Git branch, tag, or commit.
     Revision { revision: String },
 }
 
@@ -341,8 +350,16 @@ impl PyKernelVersion {
     }
 }
 
-/// A dependency on another kernel.
-#[pyclass(name = "KernelDependency", frozen, eq, hash, from_py_object)]
+/// A dependency on another kernel, identified by a repository ID and a
+/// `KernelVersion`. Its `repo_id` and `version` attributes are read-only.
+#[pyclass(
+    name = "KernelDependency",
+    module = "kernels.resolve",
+    frozen,
+    eq,
+    hash,
+    from_py_object
+)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct PyKernelDependency {
     repo_id: String,
@@ -439,7 +456,7 @@ impl PyBuildLayout {
 }
 
 /// Parsed `metadata.json` for a kernel build variant.
-#[pyclass(name = "Metadata", frozen)]
+#[pyclass(name = "Metadata", module = "kernels.metadata", frozen)]
 #[derive(Clone, Debug)]
 struct PyMetadata {
     id: String,

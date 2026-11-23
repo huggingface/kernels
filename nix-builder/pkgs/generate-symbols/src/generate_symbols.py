@@ -120,15 +120,17 @@ def load_kernel_with_paths(
     This is used in the Nix build sandbox, since there is no network access to
     download dependencies.
     """
-    from kernels._rust import KernelDependency, KernelPaths, KernelVersion
-    from kernels._internals.hf_hub import _get_hf_api
-    from kernels._internals.load import get_kernel_with_resolver
-    from kernels._internals.resolver import (
+    from kernels.hf_hub import get_hf_api
+    from kernels.load import get_kernel_with_resolver
+    from kernels.resolve import (
+        KernelDependency,
+        KernelPaths,
         KernelPathsResolver,
+        KernelVersion,
         RepoPathsResolver,
         SequentialResolver,
     )
-    from kernels._internals.validate import (
+    from kernels.validate import (
         AllKernelValidator,
         AllMetadataValidator,
         default_metadata_validators,
@@ -142,7 +144,7 @@ def load_kernel_with_paths(
     ]
 
     return get_kernel_with_resolver(
-        api=_get_hf_api(),
+        api=get_hf_api(),
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers=resolvers),

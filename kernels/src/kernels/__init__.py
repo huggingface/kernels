@@ -44,7 +44,7 @@ from kernels._internals.variants import (
     VariantRejected,
     get_kernel_variants,
 )
-from kernels._rust import Metadata
+from kernels.metadata import Metadata
 
 _add_additional_dll_paths()
 

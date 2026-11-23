@@ -404,7 +404,10 @@ impl PyNixKernelLocks {
 }
 
 /// A collection of kernel paths keyed by the dependency they resolve.
-#[pyclass(name = "KernelPaths", frozen, eq, hash)]
+///
+/// It behaves as a read-only mapping from `KernelDependency`
+/// objects to local paths. The constructor accepts strings and path-like objects as values.
+#[pyclass(name = "KernelPaths", module = "kernels.resolve", frozen, eq, hash)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct PyKernelPaths {
     paths: BTreeMap<PyKernelDependency, PathBuf>,

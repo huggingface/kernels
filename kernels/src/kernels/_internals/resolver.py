@@ -269,6 +269,8 @@ def resolve_hub_cache_kernel(
 
 @runtime_checkable
 class Resolver(Protocol):
+    """Locate a build variant for a kernel dependency."""
+
     def resolve(
         self, *, api: HfApi, backend: str | None, kernel: KernelDependency
     ) -> LocalKernel | RemoteKernel | None:

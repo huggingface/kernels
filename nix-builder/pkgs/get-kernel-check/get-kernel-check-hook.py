@@ -1,19 +1,21 @@
 import os
 from pathlib import Path
 
-from kernels._internals.hf_hub import _get_hf_api
-from kernels._internals.load import get_kernel_with_resolver
-from kernels._internals.resolver import (
+from kernels.hf_hub import get_hf_api
+from kernels.load import get_kernel_with_resolver
+from kernels.resolve import (
+    KernelDependency,
+    KernelPaths,
     KernelPathsResolver,
+    KernelVersion,
     RepoPathsResolver,
     SequentialResolver,
 )
-from kernels._internals.validate import (
+from kernels.validate import (
     AllKernelValidator,
     AllMetadataValidator,
     default_metadata_validators,
 )
-from kernels._rust import KernelDependency, KernelPaths, KernelVersion
 
 out = os.getenv("out")
 if not out:
@@ -50,7 +52,7 @@ resolvers = [
 ]
 
 get_kernel_with_resolver(
-    api=_get_hf_api(),
+    api=get_hf_api(),
     backend=None,
     kernel=kernel,
     resolver=SequentialResolver(resolvers=resolvers),

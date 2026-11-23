@@ -804,7 +804,10 @@ def _replace_forward(
     *,
     repo: RepositoryProtocol | None = None,
 ):
-    module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
+    if layer is type(module):
+        module.__dict__.pop("forward", None)
+    else:
+        module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
 
     if repo is None:
         # No repository, typically when reverting to the original forward.

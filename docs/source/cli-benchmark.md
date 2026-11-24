@@ -160,6 +160,10 @@ kernels benchmark ./my_kernel --output base.jsonl
 kernels benchmark ./my_kernel --baseline base.jsonl
 ```
 
+This compares the kernel against an earlier run of itself. `Speedup` in the
+results table is different: it compares the kernel against its `verify_*`
+reference in the same run.
+
 Two saved runs can also be compared directly:
 
 ```bash

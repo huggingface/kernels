@@ -849,6 +849,29 @@ def test_invalid_mode_for_mapping_rejected():
 
 
 @pytest.mark.cuda_only
+def test_unsupported_mode_falls_back_with_all():
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearNoBackward",
+                        revision="main",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.TRAINING, use_fallback=KernelizeFallback.ALL)
+
+    linear(torch.randn(10, 32, device="cuda"))
+    assert linear.n_calls == 1
+
+
+@pytest.mark.cuda_only
 def test_kernel_modes():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 

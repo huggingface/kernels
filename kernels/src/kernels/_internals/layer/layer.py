@@ -703,7 +703,11 @@ def kernelize_layer(
     # e.g. if a repo class is registered for TRAINING | TORCH_COMPILE,
     # the actual layer is compatible with that. Unfortunately, this would
     # mean that we have to pre-download everything.
-    _validate_layer_has_mode(layer_name=layer_name, module=layer, repo=repo, repo_mode=repo_mode)
+    # A layer can also lack a mode only in some environments (e.g. a Triton
+    # kernel whose backward the installed Triton miscompiles). When falling
+    # back on loading errors, fall back on those too instead of raising.
+    if KernelizeFallback.CANNOT_LOAD not in use_fallback:
+        _validate_layer_has_mode(layer_name=layer_name, module=layer, repo=repo, repo_mode=repo_mode)
 
     _conditionally_replace_forward(
         module=module,

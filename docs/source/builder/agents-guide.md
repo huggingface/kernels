@@ -240,8 +240,7 @@ matched the fact that RMSNorm accounted for only a small share of total compute.
 
 ## 7. Publish to the Hub
 
-> [!NOTE]
-> To publish a kernel on the Hub, the user or organization that owns the
+> [!NOTE] To publish a kernel on the Hub, the user or organization that owns the
 > repository must have kernel-creation access. To request access,
 > [open a discussion on kernels-community](https://huggingface.co/spaces/kernels-community/README/discussions).
 

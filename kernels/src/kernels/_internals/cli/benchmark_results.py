@@ -19,10 +19,29 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from kernels._internals.cli.benchmark import MachineInfo, TimingResults
+    from kernels._internals.cli.benchmark import MachineInfo, Stats, TimingResults
 
 # Bump when fields are renamed or change meaning. Adding fields is compatible.
 SCHEMA_VERSION = 1
+
+# Statistics recorded for every subject and clock, as `<subject>_<clock>_<stat>`.
+STATS_FIELDS: dict[str, str] = {
+    "mean_ms": "float",
+    "median_ms": "float",
+    "std_ms": "float",
+    "min_ms": "float",
+    "max_ms": "float",
+    "q1_ms": "float",
+    "q3_ms": "float",
+    "iqr_ms": "float",
+    "outliers": "int",
+    "samples_ms": "list[float]",
+}
+
+
+def _stats_fields(prefix: str) -> dict[str, str]:
+    return {f"{prefix}_{stat}": kind for stat, kind in STATS_FIELDS.items()}
+
 
 # Record fields and their types, in output order.
 FIELDS: dict[str, str] = {
@@ -59,22 +78,16 @@ FIELDS: dict[str, str] = {
     "gpu_temperature_c": "int",
     "gpu_throttled": "bool",
     "hardware": "json",
-    # Results
-    "mean_ms": "float",
-    "median_ms": "float",
-    "std_ms": "float",
-    "min_ms": "float",
-    "max_ms": "float",
-    "q1_ms": "float",
-    "q3_ms": "float",
-    "iqr_ms": "float",
-    "outliers": "int",
+    # Results. `wall` is the host clock per call, including the launch.
+    # `device` is the time between device events around the call.
+    # The kernel and its `verify_*` reference (`ref_`) get the same statistics.
     "verified": "bool",
-    "ref_mean_ms": "float",
-    "ref_median_ms": "float",
-    "speedup": "float",
-    "samples_ms": "list[float]",
-    "ref_samples_ms": "list[float]",
+    "wall_speedup": "float",
+    "device_speedup": "float",
+    **_stats_fields("wall"),
+    **_stats_fields("ref_wall"),
+    **_stats_fields("device"),
+    **_stats_fields("ref_device"),
 }
 
 
@@ -107,9 +120,6 @@ def build_records(
     records = []
     for name, timing in sorted(timing_results.items()):
         benchmark, _, workload = name.rpartition(".")
-        speedup = None
-        if timing.ref_median_ms is not None and timing.median_ms > 0:
-            speedup = round(timing.ref_median_ms / timing.median_ms, 4)
 
         record: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
@@ -139,26 +149,30 @@ def build_records(
             **(timing.gpu_state or {}),
             "hardware": {**(machine_info.hardware or {}), **(timing.hardware or {})} or None,
             # Results
-            "mean_ms": timing.mean_ms,
-            "median_ms": timing.median_ms,
-            "std_ms": timing.std_ms,
-            "min_ms": timing.min_ms,
-            "max_ms": timing.max_ms,
-            "q1_ms": timing.q1_ms,
-            "q3_ms": timing.q3_ms,
-            "iqr_ms": timing.iqr_ms,
-            "outliers": timing.outliers,
             "verified": timing.verified,
-            "ref_mean_ms": timing.ref_mean_ms,
-            "ref_median_ms": timing.ref_median_ms,
-            "speedup": speedup,
+            "wall_speedup": _round(timing.wall_speedup),
+            "device_speedup": _round(timing.device_speedup),
+            **_stats_record("wall", timing.wall, include_samples),
+            **_stats_record("ref_wall", timing.ref_wall, include_samples),
+            **_stats_record("device", timing.device, include_samples),
+            **_stats_record("ref_device", timing.ref_device, include_samples),
         }
-        if include_samples:
-            record["samples_ms"] = timing.samples_ms
-            record["ref_samples_ms"] = timing.ref_samples_ms
         assert record.keys() <= FIELDS.keys(), f"undeclared record fields: {record.keys() - FIELDS.keys()}"
         records.append(normalize_record(record))
     return records
+
+
+def _round(speedup: float | None) -> float | None:
+    return round(speedup, 4) if speedup is not None else None
+
+
+def _stats_record(prefix: str, stats: "Stats | None", include_samples: bool) -> dict[str, Any]:
+    if stats is None:
+        return {}
+    values = {stat: getattr(stats, stat) for stat in STATS_FIELDS}
+    if not include_samples:
+        del values["samples_ms"]
+    return {f"{prefix}_{stat}": value for stat, value in values.items()}
 
 
 def write_records(path: str | Path, records: list[dict[str, Any]]) -> None:

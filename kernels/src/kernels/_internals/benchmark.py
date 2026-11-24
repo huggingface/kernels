@@ -30,7 +30,7 @@ class Benchmark:
     seed: int | None = None  # Optional: seed for reproducibility
     device: str = "cpu"  # Set by the runner to the active backend's torch device, e.g. "cuda"
 
-    cuda_graph: bool = False  # Optional: time CUDA graph replays (CUDA/ROCm only)
+    cuda_graph: bool = False  # Optional: time replays of a CUDA graph of several calls (CUDA/ROCm only)
 
     def __init__(self) -> None:
         self.kernel: Any = None

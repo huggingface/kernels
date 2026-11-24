@@ -1,9 +1,8 @@
 """Compare two benchmark runs to detect performance changes.
 
-Comparisons use the median, which is robust against the occasional slow
-iteration. A workload only counts as changed when the median moved by more
-than the threshold *and* the interquartile ranges of both runs do not overlap,
-so that noisy workloads are not reported as regressions.
+Comparisons use the median wall time, which is robust against the occasional slow iteration.
+A workload only counts as changed when the median moved by more than the threshold *and* the
+interquartile ranges of both runs do not overlap, so that noisy workloads are not reported as regressions.
 """
 
 import sys
@@ -71,13 +70,15 @@ def compare_records(
         n = new_by_key.get(key)
         if b is None:
             assert n is not None
-            workloads.append(WorkloadComparison(key, Status.ADDED, new_ms=n["median_ms"]))
+            workloads.append(WorkloadComparison(key, Status.ADDED, new_ms=n["wall_median_ms"]))
         elif n is None:
-            workloads.append(WorkloadComparison(key, Status.REMOVED, base_ms=b["median_ms"]))
+            workloads.append(WorkloadComparison(key, Status.REMOVED, base_ms=b["wall_median_ms"]))
         else:
             status = _classify(b, n, threshold)
             workloads.append(
-                WorkloadComparison(key, status, b["median_ms"], n["median_ms"], notes=_condition_notes(b, n, status))
+                WorkloadComparison(
+                    key, status, b["wall_median_ms"], n["wall_median_ms"], notes=_condition_notes(b, n, status)
+                )
             )
 
     return Comparison(
@@ -88,15 +89,15 @@ def compare_records(
 
 
 def _classify(base: dict[str, Any], new: dict[str, Any], threshold: float) -> Status:
-    base_ms, new_ms = base["median_ms"], new["median_ms"]
+    base_ms, new_ms = base["wall_median_ms"], new["wall_median_ms"]
     if base_ms <= 0:
         return Status.UNCHANGED
     change = new_ms / base_ms - 1.0
     if abs(change) <= threshold:
         return Status.UNCHANGED
-    if change > 0 and new["q1_ms"] > base["q3_ms"]:
+    if change > 0 and new["wall_q1_ms"] > base["wall_q3_ms"]:
         return Status.SLOWER
-    if change < 0 and new["q3_ms"] < base["q1_ms"]:
+    if change < 0 and new["wall_q3_ms"] < base["wall_q1_ms"]:
         return Status.FASTER
     # Median moved, but the distributions overlap: within noise.
     return Status.UNCHANGED

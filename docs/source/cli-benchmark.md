@@ -38,7 +38,7 @@ Running benchmark.py...
   Running SiluWorkloads on cuda
 
 ┌───────────────┬────────────┬─────┬───────────┬──────────────┬───────────┬─────────┐
-│ Benchmark     │ Workload   │   N │ Speedup   │   Median(ms) │   Ref(ms) │ Match   │
+│ Benchmark     │ Workload   │   N │ Speedup   │     Wall(ms) │   Ref(ms) │ Match   │
 ├───────────────┼────────────┼─────┼───────────┼──────────────┼───────────┼─────────┤
 │ SiluWorkloads │ large      │ 100 │ 0.84x     │       1.7466 │    1.4702 │ ✓       │
 │ SiluWorkloads │ medium     │ 100 │ 1.67x     │       0.226  │    0.3769 │ ✓       │
@@ -48,9 +48,12 @@ Running benchmark.py...
 Kernel: cedce2e  Benchmark: 5b53516
 ```
 
-`Speedup` is the reference median divided by the kernel median. Pass
-`--show-stats` to also show the mean, standard deviation, min, max, IQR and
-outlier count of each workload, and a 95% confidence interval for the mean.
+Times are medians of the wall time per call, and `Speedup` is the reference
+median divided by the kernel median.
+
+Pass `--show-stats` to also show the mean, standard deviation, min, max, IQR and
+outlier count of each workload, a 95% confidence interval for the mean, and the
+device time (see below).
 
 ## Usage
 
@@ -116,10 +119,17 @@ what was benchmarked (`repo_id`, `revision`, `kernel_sha`, `benchmark_sha`,
 `torch_version`, `kernels_version`, `driver_version`, `gpu_max_clock_mhz`,
 `gpu_power_limit_w`), how (`iterations`, `warmup`, `timing_mode`), the GPU state
 during the workload (`gpu_clock_mhz`, `gpu_mem_clock_mhz`, `gpu_power_draw_w`,
-`gpu_temperature_c`, `gpu_throttled`, `hardware`), and the results (`mean_ms`,
-`median_ms`, `std_ms`, `min_ms`, `max_ms`, `q1_ms`, `q3_ms`, `iqr_ms`,
-`outliers`, `verified`, `ref_mean_ms`, `ref_median_ms`, `speedup`, and the raw
-`samples_ms` and `ref_samples_ms`). Records from one run share a `run_id`.
+`gpu_temperature_c`, `gpu_throttled`, `hardware`), and the results (`verified`,
+`wall_speedup`, `device_speedup` and the timing statistics). Records from one
+run share a `run_id`.
+
+Timing statistics are named `[ref_]<clock>_<stat>`. The `ref_` prefix marks the
+`verify_*` reference, the clock is `wall` or `device`, and every combination has
+the same statistics: `mean_ms`, `median_ms`, `std_ms`, `min_ms`, `max_ms`,
+`q1_ms`, `q3_ms`, `iqr_ms`, `outliers`, and the raw `samples_ms`. For example
+`wall_median_ms` is the kernel's median wall time and `ref_device_median_ms` the
+reference's median device time. The `device` fields are `null` on devices
+without timing events.
 
 `params` (set by the benchmark) and `hardware` (vendor-specific, with a `vendor`
 key) are JSON objects whose keys differ between benchmarks and vendors. Every
@@ -225,10 +235,33 @@ The runner will:
   the kernel
 - Store `self.params`, if set, as the workload's `params`
 
-Set `cuda_graph = True` on a benchmark class to time CUDA graph replays of each
-workload and its reference, which removes most of the launch overhead. This is
-supported on CUDA and ROCm; other devices fall back to eager timing. The mode
-used is recorded as `timing_mode`.
+Each iteration is timed with the host clock and a synchronize, so a sample is
+the cost of one call, including its launch. This is the `wall` time.
+
+On CUDA, ROCm and XPU, each workload and its reference are then timed again in a
+separate pass with device events recorded before and after each call. This is
+the `device` time: it leaves out the launch, but includes the time the device
+waits between the kernels of a call. When the host cannot launch kernels as fast
+as they run, as with eager calls of small kernels, the device waits for the host
+and the device time is not much lower than the wall time. The events have a
+resolution of about a microsecond, so the device IQR of small kernels is
+often 0.
+
+Set `cuda_graph = True` on a benchmark class to capture several calls of each
+workload and of its reference in a CUDA graph and time its replays, which is how
+a kernel runs in a model captured with CUDA graphs: the launch overhead is
+removed and the replay overhead is spread over the calls. Replays are timed the
+same way, and each sample is divided by the number of calls. To time a benchmark
+both ways, subclass it:
+
+```python
+class SiluWorkloadsGraph(SiluWorkloads):
+    cuda_graph = True
+```
+
+CUDA graphs are supported on CUDA and ROCm. Other devices, and workloads that
+fail to capture, fall back to eager timing. The mode used is recorded as
+`timing_mode`.
 
 ## Troubleshooting
 

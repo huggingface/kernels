@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -140,18 +141,24 @@ def test_gpu_state_from_amd_smi(monkeypatch):
     )
 
 
-def test_timing_results_stats():
-    t = benchmark._timing_results([1.0, 2.0, 3.0, 4.0, 100.0], ref_times_ms=[10.0, 20.0, 30.0])
-    assert t.iterations == 5
-    assert t.mean_ms == 22.0
-    assert t.median_ms == 3.0
-    assert t.min_ms == 1.0
-    assert t.max_ms == 100.0
-    assert t.outliers == 1
-    assert t.ref_mean_ms == 20.0
-    assert t.ref_median_ms == 20.0
-    assert t.samples_ms == [1.0, 2.0, 3.0, 4.0, 100.0]
-    assert t.ref_samples_ms == [10.0, 20.0, 30.0]
+def test_compute_stats():
+    s = benchmark.compute_stats([1.0, 2.0, 3.0, 4.0, 100.0])
+    assert s.mean_ms == 22.0
+    assert s.median_ms == 3.0
+    assert s.min_ms == 1.0
+    assert s.max_ms == 100.0
+    assert (s.q1_ms, s.q3_ms, s.iqr_ms) == (2.0, 4.0, 2.0)
+    assert s.outliers == 1
+    assert s.samples_ms == [1.0, 2.0, 3.0, 4.0, 100.0]
+
+
+def _timing(samples_ms, ref_samples_ms=None, verified=None):
+    return benchmark.TimingResults(
+        iterations=len(samples_ms),
+        wall=benchmark.compute_stats(samples_ms),
+        ref_wall=benchmark.compute_stats(ref_samples_ms) if ref_samples_ms else None,
+        verified=verified,
+    )
 
 
 def test_time_fn_runs_warmup_and_iterations():
@@ -212,13 +219,13 @@ def test_run_benchmark_local(fake_kernel_repo):
     small = result.timing_results["ReluBenchmark.small"]
     assert small.verified is True
     assert small.iterations == 5
-    assert len(small.samples_ms) == 5
-    assert small.ref_mean_ms is not None
-    assert len(small.ref_samples_ms) == 5
+    assert len(small.wall.samples_ms) == 5
+    assert small.ref_wall is not None
+    assert len(small.ref_wall.samples_ms) == 5
 
     unverified = result.timing_results["ReluBenchmark.unverified"]
     assert unverified.verified is None
-    assert unverified.ref_mean_ms is None
+    assert unverified.ref_wall is None
 
 
 def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
@@ -243,11 +250,15 @@ def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
     assert small["iterations"] == 5
     assert small["warmup"] == 1
     assert small["verified"] is True
-    assert small["speedup"] is not None
-    assert len(small["samples_ms"]) == 5
+    assert small["wall_speedup"] is not None
+    assert len(small["wall_samples_ms"]) == 5
+    assert len(small["ref_wall_samples_ms"]) == 5
+    assert small["ref_wall_iqr_ms"] is not None
     assert unverified["verified"] is None
-    assert unverified["speedup"] is None
-    assert unverified["ref_samples_ms"] is None
+    assert unverified["wall_speedup"] is None
+    assert unverified["ref_wall_median_ms"] is None
+    # No device events on the CPU.
+    assert small["device_median_ms"] is None and small["device_speedup"] is None
     assert all(list(r) == list(benchmark_results.FIELDS) for r in records)
     assert small["params"] == {"shape": [64, 64], "dtype": "float32"}
     assert small["timing_mode"] == "eager"
@@ -256,40 +267,76 @@ def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
 
 def test_speedup_uses_medians():
     # One slow reference sample moves the mean but not the median.
-    t = benchmark._timing_results([1.0, 1.0, 1.0], verified=True, ref_times_ms=[2.0, 2.0, 32.0])
-    assert benchmark._speedup(t) == pytest.approx(2.0)
+    t = _timing([1.0, 1.0, 1.0], [2.0, 2.0, 32.0], verified=True)
+    assert t.wall_speedup == pytest.approx(2.0)
 
 
 @pytest.mark.parametrize("show_stats", [False, True])
 def test_results_table_stats_columns(capsys, show_stats):
-    t = benchmark._timing_results([1.0, 1.0, 1.0], verified=True, ref_times_ms=[2.0, 2.0, 2.0])
+    t = _timing([1.0, 1.0, 1.0], [2.0, 2.0, 2.0], verified=True)
     benchmark._print_results_table({"Bench.small": t}, show_stats=show_stats)
     err = capsys.readouterr().err
-    assert "Speedup" in err and "Median(ms)" in err and "2.00x" in err
+    assert "Speedup" in err and "Wall(ms)" in err and "2.00x" in err
     assert ("Std(ms)" in err) is show_stats
     assert ("95% CI" in err) is show_stats
 
 
-def test_cuda_graph_falls_back_to_eager_on_cpu(fake_kernel_repo):
-    script = (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").read_text()
-    (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").write_text(
+def _enable_cuda_graph(repo):
+    script = (repo / "benchmarks" / "benchmark_relu.py").read_text()
+    (repo / "benchmarks" / "benchmark_relu.py").write_text(
         script.replace("seed = 0", "seed = 0\n    cuda_graph = True")
     )
+
+
+def test_cuda_graph_falls_back_to_eager_on_cpu(fake_kernel_repo):
+    _enable_cuda_graph(fake_kernel_repo)
     result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=2, warmup=0)
-    assert result.timing_results["ReluBenchmark.small"].timing_mode == "eager"
+    small = result.timing_results["ReluBenchmark.small"]
+    assert small.timing_mode == "eager"
 
 
 @pytest.mark.cuda_only
 def test_cuda_graph_timing(fake_kernel_repo, monkeypatch):
     monkeypatch.setattr(benchmark, "_backend", lambda: CUDA(version=Version(torch.version.cuda)))
-    script = (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").read_text()
-    (fake_kernel_repo / "benchmarks" / "benchmark_relu.py").write_text(
-        script.replace("seed = 0", "seed = 0\n    cuda_graph = True")
-    )
+    _enable_cuda_graph(fake_kernel_repo)
     result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=2, warmup=0)
     small = result.timing_results["ReluBenchmark.small"]
     assert small.timing_mode == "cuda_graph"
     assert small.verified is True
+    assert len(small.wall.samples_ms) == 2
+    assert len(small.device.samples_ms) == 2
+    assert small.device_speedup is not None
+
+
+@pytest.mark.cuda_only
+def test_device_timing_eager(fake_kernel_repo, monkeypatch):
+    monkeypatch.setattr(benchmark, "_backend", lambda: CUDA(version=Version(torch.version.cuda)))
+    result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=3, warmup=1)
+    small = result.timing_results["ReluBenchmark.small"]
+    assert small.timing_mode == "eager"
+    assert len(small.device.samples_ms) == 3
+    assert len(small.ref_device.samples_ms) == 3
+    unverified = result.timing_results["ReluBenchmark.unverified"]
+    assert unverified.device is not None and unverified.ref_device is None
+
+
+@pytest.mark.cuda_only
+def test_cuda_graph_capture_failure_falls_back_to_eager(fake_kernel_repo, monkeypatch):
+    monkeypatch.setattr(benchmark, "_backend", lambda: CUDA(version=Version(torch.version.cuda)))
+    _enable_cuda_graph(fake_kernel_repo)
+
+    def fail(fn, calls):
+        raise RuntimeError("operation not permitted when stream is capturing")
+
+    monkeypatch.setattr(benchmark, "_capture_cuda_graph", fail)
+    result = benchmark.run_benchmark(str(fake_kernel_repo), branch=None, version=None, iterations=2, warmup=0)
+    assert result.timing_results["ReluBenchmark.small"].timing_mode == "eager"
+
+
+def test_time_fn_divides_by_calls():
+    samples = benchmark._time_fn(lambda: time.sleep(0.002), iterations=3, warmup=0, calls=2)
+    assert len(samples) == 3
+    assert all(0.9 <= t < 20 for t in samples)
 
 
 def test_read_records_rejects_newer_schema(tmp_path):
@@ -306,9 +353,9 @@ def test_read_records_rejects_newer_schema(tmp_path):
 def test_normalize_record():
     from kernels._internals.cli.benchmark_results import FIELDS, normalize_record
 
-    record = normalize_record({"schema_version": 1, "median_ms": 1, "from_a_newer_version": 1})
+    record = normalize_record({"schema_version": 1, "wall_median_ms": 1, "from_a_newer_version": 1})
     assert list(record) == list(FIELDS)
-    assert record["median_ms"] == 1.0 and isinstance(record["median_ms"], float)
+    assert record["wall_median_ms"] == 1.0 and isinstance(record["wall_median_ms"], float)
     assert record["gpu_clock_mhz"] is None
     with pytest.raises(ValueError, match="params"):
         normalize_record({"schema_version": 1, "params": "small"})
@@ -320,7 +367,9 @@ def test_load_records_across_runs(tmp_path):
     from kernels._internals.cli.benchmark_results import load_records, write_records
 
     # No fields beyond the basics, e.g. written by an older version.
-    (tmp_path / "a.jsonl").write_text('{"schema_version": 1, "benchmark": "B", "workload": "w", "median_ms": 1.0}\n')
+    (tmp_path / "a.jsonl").write_text(
+        '{"schema_version": 1, "benchmark": "B", "workload": "w", "wall_median_ms": 1.0}\n'
+    )
     write_records(tmp_path / "b.jsonl", [_record("B", "w", 1.0, 0.9, 1.1, verified=True, params={"seq_len": 128})])
     write_records(
         tmp_path / "c.jsonl", [_record("B", "w", 1.0, 0.9, 1.1, hardware={"vendor": "amd", "gfx": "gfx942"})]
@@ -343,9 +392,9 @@ def _record(benchmark_name, workload, median, q1, q3, **extra):
         "gpu": "Fake GPU",
         "backend": "CUDA 12.8",
         "torch_version": "2.10.0",
-        "median_ms": median,
-        "q1_ms": q1,
-        "q3_ms": q3,
+        "wall_median_ms": median,
+        "wall_q1_ms": q1,
+        "wall_q3_ms": q3,
         **extra,
     }
 

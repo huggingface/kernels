@@ -19,7 +19,7 @@ from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
 from kernels._internals.cli.benchmark_compare import DEFAULT_THRESHOLD
 from kernels._internals.cli.benchmark_compare import report as compare_report
-from kernels._internals.cli.benchmark_gpu_state import gpu_config, gpu_device, gpu_state
+from kernels._internals.cli.benchmark_gpu_state import gpu_telemetry
 from kernels._internals.cli.benchmark_results import build_records, read_records, write_records
 from kernels._internals.hf_hub import _get_hf_api
 
@@ -127,7 +127,14 @@ class BenchmarkResult:
     benchmark_script_sha: str | None = None
 
 
-def _print_results_table(results: dict[str, TimingResults]) -> None:
+def _speedup(t: TimingResults) -> float | None:
+    """Reference median over kernel median, or None without a reference."""
+    if t.ref_median_ms is None or t.median_ms <= 0:
+        return None
+    return t.ref_median_ms / t.median_ms
+
+
+def _print_results_table(results: dict[str, TimingResults], show_stats: bool = False) -> None:
     # Parse workload names into (class, method) tuples
     parsed: list[tuple[str, str, str]] = []  # (full_name, class_name, method_name)
     for name in sorted(results.keys()):
@@ -138,87 +145,45 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
         parsed.append((name, cls, method))
 
     # Check if we have any ref times to show
-    has_ref = any(results[name].ref_mean_ms is not None for name in results)
+    has_ref = any(results[name].ref_median_ms is not None for name in results)
 
-    # Build table data
+    headers = ["Benchmark", "Workload", "N"]
+    if has_ref:
+        headers.append("Speedup")
+    headers.append("Median(ms)")
+    if show_stats:
+        headers += ["Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)", "Outliers"]
+    if has_ref:
+        headers.append("Ref(ms)")
+    headers.append("Match")
+
     rows = []
     for full_name, cls, method in parsed:
         t = results[full_name]
-        check = "✓" if t.verified else ("✗" if t.verified is False else "·")
-
+        row: list[Any] = [cls, method, t.iterations]
         if has_ref:
-            ref_str = f"{t.ref_mean_ms:.4f}" if t.ref_mean_ms is not None else ""
-            if t.ref_mean_ms is not None and t.mean_ms > 0:
-                speedup_str = f"{t.ref_mean_ms / t.mean_ms:.2f}x"
-            else:
-                speedup_str = ""
-            rows.append(
-                [
-                    cls,
-                    method,
-                    t.iterations,
-                    speedup_str,
-                    f"{t.mean_ms:.4f}",
-                    f"{t.std_ms:.4f}",
-                    f"{t.min_ms:.4f}",
-                    f"{t.max_ms:.4f}",
-                    f"{t.iqr_ms:.4f}",
-                    t.outliers,
-                    ref_str,
-                    check,
-                ]
-            )
-        else:
-            rows.append(
-                [
-                    cls,
-                    method,
-                    t.iterations,
-                    f"{t.mean_ms:.4f}",
-                    f"{t.std_ms:.4f}",
-                    f"{t.min_ms:.4f}",
-                    f"{t.max_ms:.4f}",
-                    f"{t.iqr_ms:.4f}",
-                    t.outliers,
-                    check,
-                ]
-            )
-
-    # Define headers
-    if has_ref:
-        headers = [
-            "Benchmark",
-            "Workload",
-            "N",
-            "Speedup",
-            "Mean(ms)",
-            "Std(ms)",
-            "Min(ms)",
-            "Max(ms)",
-            "IQR(ms)",
-            "Outliers",
-            "Ref(ms)",
-            "Match",
-        ]
-    else:
-        headers = [
-            "Benchmark",
-            "Workload",
-            "N",
-            "Mean(ms)",
-            "Std(ms)",
-            "Min(ms)",
-            "Max(ms)",
-            "IQR(ms)",
-            "Outliers",
-            "Match",
-        ]
+            s = _speedup(t)
+            row.append(f"{s:.2f}x" if s is not None else "")
+        row.append(f"{t.median_ms:.4f}")
+        if show_stats:
+            row += [
+                f"{t.mean_ms:.4f}",
+                f"{t.std_ms:.4f}",
+                f"{t.min_ms:.4f}",
+                f"{t.max_ms:.4f}",
+                f"{t.iqr_ms:.4f}",
+                t.outliers,
+            ]
+        if has_ref:
+            row.append(f"{t.ref_median_ms:.4f}" if t.ref_median_ms is not None else "")
+        row.append("✓" if t.verified else ("✗" if t.verified is False else "·"))
+        rows.append(row)
 
     print(file=sys.stderr)
     print(tabulate(rows, headers=headers, tablefmt="simple_outline"), file=sys.stderr)
 
     # Print statistical significance analysis if we have ref times
-    if has_ref:
+    if show_stats and has_ref:
         print(file=sys.stderr)
         for full_name, cls, method in parsed:
             t = results[full_name]
@@ -231,18 +196,18 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
             ci_lower = t.mean_ms - margin
             ci_upper = t.mean_ms + margin
 
-            speedup = t.ref_mean_ms / t.mean_ms
+            mean_speedup = t.ref_mean_ms / t.mean_ms
             # Statistically significant if kernel's upper CI bound < ref mean
             significant = ci_upper < t.ref_mean_ms
 
             if significant:
                 print(
-                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms) ✓ significant",
+                    f"  {method}: mean {mean_speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms) ✓ significant",
                     file=sys.stderr,
                 )
             else:
                 print(
-                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms)",
+                    f"  {method}: mean {mean_speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms)",
                     file=sys.stderr,
                 )
 
@@ -375,7 +340,7 @@ def collect_machine_info() -> MachineInfo:
                 backend_type = f"ROCm {rocm_version}"
             else:
                 backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
-            config, hardware = gpu_config(gpu_device(backend_name))
+            config, hardware = gpu_telemetry(backend_name).read_config()
         elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
             backend_type = "XPU"
@@ -458,7 +423,7 @@ def run_benchmark_class(
     if benchmark_cls.cuda_graph and not use_cuda_graph:
         print(f"  Warning: CUDA graphs are not supported on {device}, timing eagerly", file=sys.stderr)
     timing_mode = "cuda_graph" if use_cuda_graph else "eager"
-    device_handle = gpu_device(backend_name)
+    telemetry = gpu_telemetry(backend_name)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -508,7 +473,7 @@ def run_benchmark_class(
         timed_fn = _capture_cuda_graph(benchmark_fn) if use_cuda_graph else benchmark_fn
         times_ms = _time_fn(timed_fn, iterations=iterations, warmup=warmup)
         # Sample while the GPU is still under load.
-        state, hardware = gpu_state(device_handle)
+        state, hardware = telemetry.sample_state()
         results[workload_name] = _timing_results(times_ms, verified=verified, ref_times_ms=ref_times_ms)
         results[workload_name].timing_mode = timing_mode
         results[workload_name].params = instance.params
@@ -691,6 +656,7 @@ def run_benchmark(
     baseline: str | None = None,
     threshold: float = DEFAULT_THRESHOLD,
     fail_on_regression: bool = False,
+    show_stats: bool = False,
 ) -> BenchmarkResult:
     if MISSING_DEPS:
         print(
@@ -782,7 +748,7 @@ def run_benchmark(
             sys.exit(1)
 
     # Print results table
-    _print_results_table(timing_results)
+    _print_results_table(timing_results, show_stats=show_stats)
 
     # Store relative path for the result
     script_rel_path = "benchmarks"

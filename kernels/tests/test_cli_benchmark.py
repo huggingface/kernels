@@ -7,7 +7,7 @@ from kernels._internals.backends import CPU, CUDA, XPU, Backend, ROCm
 
 torch = pytest.importorskip("torch")
 
-from kernels._internals.cli import benchmark  # noqa: E402
+from kernels._internals.cli import benchmark, benchmark_gpu_state  # noqa: E402
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def machine_info(monkeypatch):
         monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
         monkeypatch.setattr(torch.version, "hip", hip, raising=False)
         monkeypatch.setattr(torch.version, "rocm", hip, raising=False)
-        monkeypatch.setattr(benchmark, "gpu_device", lambda backend_name: None)
+        monkeypatch.setattr(benchmark, "gpu_telemetry", lambda backend_name: benchmark_gpu_state.GpuTelemetry())
         return benchmark.collect_machine_info()
 
     return collect
@@ -76,11 +76,12 @@ def test_gpu_state_from_nvidia_smi(monkeypatch):
         return SimpleNamespace(returncode=0, stdout=", ".join(values[f] for f in fields))
 
     monkeypatch.setattr(benchmark_gpu_state.subprocess, "run", run)
-    assert benchmark_gpu_state.gpu_config(("nvidia", "GPU-0")) == (
+    telemetry = benchmark_gpu_state.NvidiaTelemetry("GPU-0")
+    assert telemetry.read_config() == (
         {"driver_version": "595.84", "gpu_max_clock_mhz": 3105, "gpu_power_limit_w": 450.0},
         {"vendor": "nvidia", "max_mem_clock_mhz": 10501, "persistence_mode": "Disabled"},
     )
-    assert benchmark_gpu_state.gpu_state(("nvidia", "GPU-0")) == (
+    assert telemetry.sample_state() == (
         {
             "gpu_clock_mhz": 2805,
             "gpu_mem_clock_mhz": 10251,
@@ -90,7 +91,9 @@ def test_gpu_state_from_nvidia_smi(monkeypatch):
         },
         {"clock_event_reasons": ["gpu_idle", "sw_power_cap"]},
     )
-    assert benchmark_gpu_state.gpu_state(None) == (dict.fromkeys(benchmark_gpu_state.STATE_FIELDS), {})
+    # The working event reasons field is remembered.
+    assert telemetry._event_reason_field == "clocks_throttle_reasons.active"
+    assert benchmark_gpu_state.GpuTelemetry().sample_state() == (dict.fromkeys(benchmark_gpu_state.STATE_FIELDS), {})
 
 
 def test_gpu_state_from_amd_smi(monkeypatch):
@@ -120,12 +123,12 @@ def test_gpu_state_from_amd_smi(monkeypatch):
         return SimpleNamespace(returncode=0, stdout=json.dumps({"gpu_data": [outputs[cmd[1]]]}))
 
     monkeypatch.setattr(benchmark_gpu_state.subprocess, "run", run)
-    device = ("amd", "0000:83:00.0")
-    assert benchmark_gpu_state.gpu_config(device) == (
+    telemetry = benchmark_gpu_state.AmdTelemetry("0000:83:00.0")
+    assert telemetry.read_config() == (
         {"driver_version": None, "gpu_max_clock_mhz": 2100, "gpu_power_limit_w": None},
         {"vendor": "amd", "target_graphics_version": "gfx942", "num_compute_units": 304},
     )
-    assert benchmark_gpu_state.gpu_state(device) == (
+    assert telemetry.sample_state() == (
         {
             "gpu_clock_mhz": 2100,
             "gpu_mem_clock_mhz": 1300,
@@ -198,7 +201,7 @@ def fake_kernel_repo(tmp_path, monkeypatch):
 
     monkeypatch.setattr(kernels, "get_local_kernel", lambda path: fake_kernel)
     monkeypatch.setattr(benchmark, "_backend", lambda: CPU())
-    monkeypatch.setattr(benchmark, "gpu_device", lambda backend_name: None)
+    monkeypatch.setattr(benchmark, "gpu_telemetry", lambda backend_name: benchmark_gpu_state.GpuTelemetry())
     return tmp_path
 
 
@@ -249,6 +252,22 @@ def test_run_benchmark_writes_records(fake_kernel_repo, tmp_path):
     assert small["params"] == {"shape": [64, 64], "dtype": "float32"}
     assert small["timing_mode"] == "eager"
     assert small["gpu_clock_mhz"] is None and small["hardware"] is None
+
+
+def test_speedup_uses_medians():
+    # One slow reference sample moves the mean but not the median.
+    t = benchmark._timing_results([1.0, 1.0, 1.0], verified=True, ref_times_ms=[2.0, 2.0, 32.0])
+    assert benchmark._speedup(t) == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("show_stats", [False, True])
+def test_results_table_stats_columns(capsys, show_stats):
+    t = benchmark._timing_results([1.0, 1.0, 1.0], verified=True, ref_times_ms=[2.0, 2.0, 2.0])
+    benchmark._print_results_table({"Bench.small": t}, show_stats=show_stats)
+    err = capsys.readouterr().err
+    assert "Speedup" in err and "Median(ms)" in err and "2.00x" in err
+    assert ("Std(ms)" in err) is show_stats
+    assert ("95% CI" in err) is show_stats
 
 
 def test_cuda_graph_falls_back_to_eager_on_cpu(fake_kernel_repo):

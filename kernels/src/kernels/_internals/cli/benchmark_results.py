@@ -108,8 +108,8 @@ def build_records(
     for name, timing in sorted(timing_results.items()):
         benchmark, _, workload = name.rpartition(".")
         speedup = None
-        if timing.ref_mean_ms is not None and timing.mean_ms > 0:
-            speedup = round(timing.ref_mean_ms / timing.mean_ms, 4)
+        if timing.ref_median_ms is not None and timing.median_ms > 0:
+            speedup = round(timing.ref_median_ms / timing.median_ms, 4)
 
         record: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,

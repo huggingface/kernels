@@ -143,6 +143,11 @@ def main():
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
     benchmark_parser.add_argument(
+        "--show-stats",
+        action="store_true",
+        help="Also show mean, std, min, max, IQR, outliers and confidence intervals",
+    )
+    benchmark_parser.add_argument(
         "--baseline",
         type=str,
         default=None,
@@ -283,4 +288,5 @@ def run_benchmark(args):
         warmup=args.warmup,
         output=args.output,
         print_json=args.json,
+        show_stats=args.show_stats,
     )

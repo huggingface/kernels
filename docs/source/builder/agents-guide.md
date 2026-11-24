@@ -110,9 +110,14 @@ information about your kernel project.
 
 ```
 [general]
-name = "your_kernels"
+name = "your-kernels"
+edition = 6
+license = "Apache-2.0"  # Use your kernel's license.
 backends = ["cuda"]
 version = 1
+
+[general.hub]
+repo-id = "your-org/your-kernel"
 
 [torch]
 src = ["torch-ext/torch_binding.cpp"]
@@ -235,33 +240,35 @@ matched the fact that RMSNorm accounted for only a small share of total compute.
 
 ## 7. Publish to the Hub
 
-Once the project is correct and benchmarked, you can build Hub-compatible
-artifacts and upload them. For this, you should first push to the Hub using the
-`hf` CLI tool:
+> [!NOTE]
+> To publish a kernel on the Hub, the user or organization that owns the
+> repository must have kernel-creation access. To request access,
+> [open a discussion on kernels-community](https://huggingface.co/spaces/kernels-community/README/discussions).
+
+After building and benchmarking the kernel, sign in to the Hub.
 
 ```shell
-# install the hf CLI tool
-hf skills add
-
-# Authenticate
 hf auth login
-
-# Push to the Hub
-<agent-prompt>
-Push the kernel to the Hub.
-</agent-prompt>
 ```
 
-Or, you can manually create the repository and upload the artifacts:
+To publish with an agent, install the `hf` CLI skill with `hf skills add` and
+give the agent the following prompt.
+
+```text
+Upload the built kernel to your-org/your-kernel using kernel-builder upload.
+```
+
+To publish manually, run the uploader from the kernel project directory after
+`kernel-builder build-and-copy`.
 
 ```shell
-# Create the repository
-hf repo create your-org/your-kernel --type model
-
-# Upload the artifacts
-# Run inside the main kernel directory, where build/ is.
 kernel-builder upload
 ```
+
+The uploader reads `general.hub.repo-id` from `build.toml`, creates the `kernel`
+repository if needed, and uploads the existing build artifacts to the version
+branch (`v1` for this example). You can also specify the destination with
+`kernel-builder upload --repo-id your-org/your-kernel`.
 
 After pushing to the Hub, users can load the kernel without compiling:
 

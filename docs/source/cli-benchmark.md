@@ -36,20 +36,33 @@ Running benchmark.py...
   PyTorch  2.14.0+cu130
 
   Running SiluWorkloads on cuda
+  Running SiluWorkloadsGraph on cuda
 
-┌───────────────┬────────────┬─────┬───────────┬──────────────┬───────────┬─────────┐
-│ Benchmark     │ Workload   │   N │ Speedup   │     Wall(ms) │   Ref(ms) │ Match   │
-├───────────────┼────────────┼─────┼───────────┼──────────────┼───────────┼─────────┤
-│ SiluWorkloads │ large      │ 100 │ 0.84x     │       1.7466 │    1.4702 │ ✓       │
-│ SiluWorkloads │ medium     │ 100 │ 1.67x     │       0.226  │    0.3769 │ ✓       │
-│ SiluWorkloads │ small      │ 100 │ 1.10x     │       0.032  │    0.035  │ ✓       │
-└───────────────┴────────────┴─────┴───────────┴──────────────┴───────────┴─────────┘
+┌────────────────────┬────────────────────┬─────┬───────────┬────────────┬───────────┬─────────┐
+│ Benchmark          │ Workload           │   N │ Speedup   │   Wall(ms) │   Ref(ms) │ Match   │
+├────────────────────┼────────────────────┼─────┼───────────┼────────────┼───────────┼─────────┤
+│ SiluWorkloads      │ qwen3_0_6b_decode  │ 100 │ 2.05x     │     0.006  │    0.0123 │ ✓       │
+│ SiluWorkloads      │ qwen3_0_6b_prefill │ 100 │ 1.50x     │     0.0207 │    0.0311 │ ✓       │
+│ SiluWorkloads      │ qwen3_32b_decode   │ 100 │ 1.09x     │     0.0113 │    0.0123 │ ✓       │
+│ SiluWorkloads      │ qwen3_32b_prefill  │ 100 │ 1.69x     │     0.3476 │    0.5864 │ ✓       │
+│ SiluWorkloads      │ qwen3_8b_decode    │ 100 │ 1.52x     │     0.0078 │    0.0119 │ ✓       │
+│ SiluWorkloads      │ qwen3_8b_prefill   │ 100 │ 1.70x     │     0.1706 │    0.2902 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_0_6b_decode  │ 100 │ 1.32x     │     0.0017 │    0.0023 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_0_6b_prefill │ 100 │ 1.44x     │     0.0152 │    0.0218 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_32b_decode   │ 100 │ 0.35x     │     0.0065 │    0.0023 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_32b_prefill  │ 100 │ 1.67x     │     0.341  │    0.5685 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_8b_decode    │ 100 │ 0.62x     │     0.0037 │    0.0023 │ ✓       │
+│ SiluWorkloadsGraph │ qwen3_8b_prefill   │ 100 │ 1.70x     │     0.165  │    0.2813 │ ✓       │
+└────────────────────┴────────────────────┴─────┴───────────┴────────────┴───────────┴─────────┘
 
-Kernel: cedce2e  Benchmark: 5b53516
+Kernel: cedce2e  Benchmark: dc8eb09
 ```
 
 Times are medians of the wall time per call, and `Speedup` is the reference
-median divided by the kernel median.
+median divided by the kernel median. This benchmark script defines its benchmark
+twice, the second time with `cuda_graph = True`, so that each workload is timed
+both eagerly and in a CUDA graph (see
+[Writing Benchmark Scripts](#writing-benchmark-scripts)).
 
 Pass `--show-stats` to also show the mean, standard deviation, min, max, IQR and
 outlier count of each workload, a 95% confidence interval for the mean, and the

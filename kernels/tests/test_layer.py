@@ -583,7 +583,9 @@ def test_torch_compile_layer_without_fallback(cls, device):
     silu_and_mul_with_kernel.eval()
 
     ctx = (
-        pytest.raises(ValueError, match="does not support mode") if cls is SiluAndMulNoCompileKernel else nullcontext()
+        pytest.raises(ValueError, match="does not support torch.compile")
+        if cls is SiluAndMulNoCompileKernel
+        else nullcontext()
     )
     with ctx:
         silu_and_mul_with_kernel = kernelize(
@@ -845,7 +847,13 @@ def test_invalid_mode_for_mapping_rejected():
         }
     ):
         with pytest.raises(ValueError, match="does not support backward"):
-            kernelize(linear, mode=Mode.TRAINING)
+            kernelize(linear, mode=Mode.TRAINING, use_fallback=KernelizeFallback.NONE)
+
+        # With fallback, the original forward is kept
+        kernelize(linear, mode=Mode.TRAINING)
+
+    linear(torch.randn(10, 32, device="cuda"))
+    assert linear.n_calls == 1
 
 
 @pytest.mark.cuda_only

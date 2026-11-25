@@ -21,8 +21,11 @@
 
   # Python version and ABI that the SDK is built for, e.g.
   # `{ version = "3.12"; abi = "abi3"; }`. Only `abi3` is currently
-  # supported.
-  python,
+  # supported. Set to `null` for a noarch SDK.
+  python ? null,
+
+  # Whether the SDK has backend variants.
+  useBackend ? true,
 
   # Directory with tests, run with pytest. Tests marked with `kernels_ci`
   # are run by `ci-test`.
@@ -38,6 +41,8 @@ let
     self.shortRev or self.dirtyShortRev or self.lastModifiedDate
   );
 
+  noarch = python == null;
+
   # Ensure that the Python of the build sets can build/load SDKs for the
   # Python version of the SDK.
   checkPython =
@@ -46,9 +51,21 @@ let
       (!(lib.hasPrefix "abi3" python.abi) || lib.versionAtLeast buildSet.python3.version python.version)
       "Build set Python ${buildSet.python3.version} cannot load an SDK for Python ${python.version} (${python.abi})";
 
-  applicableBuildSets = lib.filter checkPython buildSets;
+  variantOf =
+    buildSet:
+    if !noarch then
+      if useBackend then
+        buildSet.variants.sdkVariant python
+      else
+        buildSet.variants.sdkVariantNoBackend python
+    else if !useBackend then
+      buildSet.variants.sdkNoarchVariantNoBackend
+    else
+      buildSet.variants.sdkNoarchVariant;
 
-  variantOf = buildSet: buildSet.variants.sdkVariant python;
+  # Filter buildsets that can build for the given Python ABI version for
+  # arch SDKs. For noarch SDKs, all build sets are applicable.
+  applicableBuildSets = if noarch then buildSets else lib.filter checkPython buildSets;
 
   # SDK source provenance that is added to the metadata.
   provenance = {
@@ -78,7 +95,7 @@ let
       kernels = overrideTorch python3.pkgs.kernels;
     in
     assert lib.assertMsg (
-      python.abi == "abi3"
+      noarch || python.abi == "abi3"
     ) "Only abi3 SDKs are supported, got ABI `${python.abi}` for `${name}`";
     pkgs.stdenv.mkDerivation {
       name = "${name}-${variant}";
@@ -108,8 +125,8 @@ let
       inherit variant;
 
       doInstallCheck = true;
-      doAbiCheck = true;
-      pythonAbiVersion = python.version;
+      doAbiCheck = !noarch;
+      pythonAbiVersion = if noarch then "" else python.version;
 
       # Provenance is added by the builder, replacing any that the SDK wrote.
       provenance = pkgs.writeText "provenance.json" (builtins.toJSON provenance);

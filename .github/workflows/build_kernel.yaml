@@ -51,6 +51,8 @@ jobs:
         run: nix build -L ./examples/kernels#ci-build-cuda
       - name: Build all kernel builder test kernels
         run: nix build -L ./nix-builder/tests/kernels#ci-build-cuda -o result-tests
+      - name: Build and test kernel builder test SDKs
+        run: nix build -L ./nix-builder/tests/sdks#ci-build --no-link
       - name: Copy kernel artifacts
         run: cp -rL result/* result-tests/* .
 

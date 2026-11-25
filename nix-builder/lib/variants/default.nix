@@ -9,6 +9,9 @@ rec {
   tvm-ffi = import ./tvm-ffi.nix { inherit lib buildConfig; };
   sdk = import ./sdk.nix { inherit lib buildConfig; };
   sdkVariant = python: sdk.variant python;
+  sdkNoarchVariant = sdk.noarchVariant;
+  sdkNoarchVariantNoBackend = sdk.noarchVariantNoBackend;
+  sdkVariantNoBackend = python: sdk.variantNoBackend python;
 
   kernelVariant =
     kernelConfig:

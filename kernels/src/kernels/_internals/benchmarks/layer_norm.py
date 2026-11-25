@@ -10,10 +10,11 @@ class RMSNormBenchmark(Benchmark):
     # Workload: small (B=2, S=128, D=768)
     def setup_small(self):
         B, S, D = 2, 128, 768
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_small(self):
         self.out = self.kernel.dropout_add_ln_fwd(
@@ -40,10 +41,11 @@ class RMSNormBenchmark(Benchmark):
     # Workload: medium (B=4, S=512, D=2048)
     def setup_medium(self):
         B, S, D = 4, 512, 2048
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_medium(self):
         self.out = self.kernel.dropout_add_ln_fwd(
@@ -70,10 +72,11 @@ class RMSNormBenchmark(Benchmark):
     # Workload: large (B=8, S=1024, D=4096)
     def setup_large(self):
         B, S, D = 8, 1024, 4096
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_large(self):
         self.out = self.kernel.dropout_add_ln_fwd(
@@ -105,10 +108,11 @@ class LayerNormBenchmark(Benchmark):
     # Workload: small (B=2, S=128, D=768)
     def setup_small(self):
         B, S, D = 2, 128, 768
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_small(self):
         self.out = self.kernel.dropout_add_ln_fwd(
@@ -134,10 +138,11 @@ class LayerNormBenchmark(Benchmark):
     # Workload: medium (B=4, S=512, D=2048)
     def setup_medium(self):
         B, S, D = 4, 512, 2048
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_medium(self):
         self.out = self.kernel.dropout_add_ln_fwd(
@@ -163,10 +168,11 @@ class LayerNormBenchmark(Benchmark):
     # Workload: large (B=8, S=1024, D=4096)
     def setup_large(self):
         B, S, D = 8, 1024, 4096
-        self.x = torch.randn(B, S, D, device="cuda", dtype=torch.float16)
-        self.weight = torch.ones(D, device="cuda", dtype=torch.float16)
+        self.x = torch.randn(B, S, D, device=self.device, dtype=torch.float16)
+        self.weight = torch.ones(D, device=self.device, dtype=torch.float16)
         self.out = torch.empty_like(self.x)
         self.B, self.S, self.D = B, S, D
+        self.params = {"batch": B, "seq_len": S, "hidden": D, "dtype": "float16"}
 
     def benchmark_large(self):
         self.out = self.kernel.dropout_add_ln_fwd(

@@ -13,18 +13,22 @@ from pathlib import Path
 from typing import Any
 
 from huggingface_hub.dataclasses import strict
-from huggingface_hub.utils import (
-    build_hf_headers,
-    disable_progress_bars,
-    get_session,
-    hf_raise_for_status,
-)
+from huggingface_hub.utils import disable_progress_bars
 
 from kernels._internals.backends import _backend
 from kernels._internals.benchmark import Benchmark
+from kernels._internals.cli.benchmark_compare import DEFAULT_THRESHOLD
+from kernels._internals.cli.benchmark_compare import report as compare_report
+from kernels._internals.cli.benchmark_gpu_state import gpu_telemetry
+from kernels._internals.cli.benchmark_results import build_records, read_records, write_records
 from kernels._internals.hf_hub import _get_hf_api
 
 logger = logging.getLogger(__name__)
+
+# Calls captured in one CUDA graph, which spreads the replay overhead over several calls, as in a model's graph.
+GRAPH_CALLS = 10
+# Backends whose torch device can time with events.
+DEVICE_TIMING_BACKENDS = {"cuda", "rocm", "xpu"}
 
 MISSING_DEPS: list[str] = []
 
@@ -75,26 +79,72 @@ def _calculate_iqr_and_outliers(
 
 @strict
 @dataclass
-class TimingResults:
+class Stats:
+    """Statistics of the per-call samples of one clock, in ms."""
+
     mean_ms: float
+    median_ms: float
     std_ms: float
     min_ms: float
     max_ms: float
+    q1_ms: float  # 25th percentile
+    q3_ms: float  # 75th percentile
+    iqr_ms: float  # Interquartile range (Q3 - Q1)
+    outliers: int  # Count of outliers (outside Q1-1.5*IQR to Q3+1.5*IQR)
+    samples_ms: list[float]
+
+    def validate_timing_range(self):
+        if self.min_ms > self.max_ms:
+            raise ValueError(f"min_ms ({self.min_ms}) must be <= max_ms ({self.max_ms})")
+
+
+def compute_stats(samples_ms: list[float]) -> Stats:
+    if not samples_ms:
+        raise ValueError("no samples")
+    mean_ms = sum(samples_ms) / len(samples_ms)
+    variance = sum((t - mean_ms) ** 2 for t in samples_ms) / len(samples_ms)
+    sorted_samples = sorted(samples_ms)
+    q1, q3, iqr, outliers = _calculate_iqr_and_outliers(samples_ms)
+    return Stats(
+        mean_ms=mean_ms,
+        median_ms=_percentile(sorted_samples, 50),
+        std_ms=variance**0.5,
+        min_ms=sorted_samples[0],
+        max_ms=sorted_samples[-1],
+        q1_ms=q1,
+        q3_ms=q3,
+        iqr_ms=iqr,
+        outliers=outliers,
+        samples_ms=samples_ms,
+    )
+
+
+@strict
+@dataclass
+class TimingResults:
     iterations: int
-    q1_ms: float = 0.0  # 25th percentile
-    q3_ms: float = 0.0  # 75th percentile
-    iqr_ms: float = 0.0  # Interquartile range (Q3 - Q1)
-    outliers: int = 0  # Count of outliers (outside Q1-1.5*IQR to Q3+1.5*IQR)
+    wall: Stats  # Host clock per call, including the launch
+    ref_wall: Stats | None = None  # Same, for the `verify_*` reference
+    device: Stats | None = None  # Device events per call, None where unsupported
+    ref_device: Stats | None = None
     verified: bool | None = None  # None = no verify fn, True = passed, False = failed
-    ref_mean_ms: float | None = None  # Reference implementation mean time
+    timing_mode: str = "eager"  # "eager" or "cuda_graph"
+    params: dict[str, Any] | None = None
+    gpu_state: dict[str, Any] | None = None
+    hardware: dict[str, Any] | None = None
 
     def validate_iterations(self):
         if self.iterations <= 0:
             raise ValueError(f"iterations must be > 0, got {self.iterations}")
 
-    def validate_timing_range(self):
-        if self.min_ms > self.max_ms:
-            raise ValueError(f"min_ms ({self.min_ms}) must be <= max_ms ({self.max_ms})")
+    @property
+    def wall_speedup(self) -> float | None:
+        """Reference median over kernel median, or None without a reference."""
+        return _speedup(self.wall, self.ref_wall)
+
+    @property
+    def device_speedup(self) -> float | None:
+        return None if self.device is None else _speedup(self.device, self.ref_device)
 
 
 @strict
@@ -106,6 +156,8 @@ class MachineInfo:
     os: str
     cpu: str
     gpu_cores: int | None = None
+    gpu_config: dict[str, Any] | None = None
+    hardware: dict[str, Any] | None = None
 
 
 @strict
@@ -117,50 +169,14 @@ class BenchmarkResult:
     benchmark_script_path: str
     benchmark_script_sha: str | None = None
 
-    def to_payload(self) -> dict:
-        # Build results array for multiple workloads
-        results = []
-        for name, timing in sorted(self.timing_results.items()):
-            entry: dict = {
-                "workload": name,
-                "timingResults": {
-                    "mean_ms": timing.mean_ms,
-                    "std_ms": timing.std_ms,
-                    "min_ms": timing.min_ms,
-                    "max_ms": timing.max_ms,
-                    "q1_ms": timing.q1_ms,
-                    "q3_ms": timing.q3_ms,
-                    "iqr_ms": timing.iqr_ms,
-                    "outliers": timing.outliers,
-                    "iterations": timing.iterations,
-                },
-            }
-            if timing.verified is not None:
-                entry["verified"] = timing.verified
-            results.append(entry)
 
-        machine_info: dict[str, str | int] = {
-            "gpu": self.machine_info.gpu,
-            "backend": self.machine_info.backend,
-            "pytorchVersion": self.machine_info.pytorch_version,
-            "os": self.machine_info.os,
-            "cpu": self.machine_info.cpu,
-        }
-        if self.machine_info.gpu_cores is not None:
-            machine_info["gpuCores"] = self.machine_info.gpu_cores
-
-        payload = {
-            "results": results,
-            "machineInfo": machine_info,
-            "kernelCommitSha": self.kernel_commit_sha,
-            "benchmarkScriptPath": self.benchmark_script_path,
-        }
-        if self.benchmark_script_sha:
-            payload["benchmarkScriptSha"] = self.benchmark_script_sha
-        return payload
+def _speedup(kernel: Stats, ref: Stats | None) -> float | None:
+    if ref is None or kernel.median_ms <= 0:
+        return None
+    return ref.median_ms / kernel.median_ms
 
 
-def _print_results_table(results: dict[str, TimingResults]) -> None:
+def _print_results_table(results: dict[str, TimingResults], show_stats: bool = False) -> None:
     # Parse workload names into (class, method) tuples
     parsed: list[tuple[str, str, str]] = []  # (full_name, class_name, method_name)
     for name in sorted(results.keys()):
@@ -171,111 +187,81 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
         parsed.append((name, cls, method))
 
     # Check if we have any ref times to show
-    has_ref = any(results[name].ref_mean_ms is not None for name in results)
+    has_ref = any(results[name].ref_wall is not None for name in results)
+    has_device = show_stats and any(results[name].device is not None for name in results)
 
-    # Build table data
+    headers = ["Benchmark", "Workload", "N"]
+    if has_ref:
+        headers.append("Speedup")
+    headers.append("Wall(ms)")
+    if show_stats:
+        headers += ["Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)", "Outliers"]
+    if has_ref:
+        headers.append("Ref(ms)")
+    if has_device:
+        headers.append("Device(ms)")
+        if has_ref:
+            headers += ["Ref device(ms)", "Device speedup"]
+    headers.append("Match")
+
     rows = []
     for full_name, cls, method in parsed:
         t = results[full_name]
-        check = "✓" if t.verified else ("✗" if t.verified is False else "·")
-
+        w = t.wall
+        row: list[Any] = [cls, method, t.iterations]
         if has_ref:
-            ref_str = f"{t.ref_mean_ms:.4f}" if t.ref_mean_ms is not None else ""
-            if t.ref_mean_ms is not None and t.mean_ms > 0:
-                speedup_str = f"{t.ref_mean_ms / t.mean_ms:.2f}x"
-            else:
-                speedup_str = ""
-            rows.append(
-                [
-                    cls,
-                    method,
-                    t.iterations,
-                    speedup_str,
-                    f"{t.mean_ms:.4f}",
-                    f"{t.std_ms:.4f}",
-                    f"{t.min_ms:.4f}",
-                    f"{t.max_ms:.4f}",
-                    f"{t.iqr_ms:.4f}",
-                    t.outliers,
-                    ref_str,
-                    check,
-                ]
-            )
-        else:
-            rows.append(
-                [
-                    cls,
-                    method,
-                    t.iterations,
-                    f"{t.mean_ms:.4f}",
-                    f"{t.std_ms:.4f}",
-                    f"{t.min_ms:.4f}",
-                    f"{t.max_ms:.4f}",
-                    f"{t.iqr_ms:.4f}",
-                    t.outliers,
-                    check,
-                ]
-            )
-
-    # Define headers
-    if has_ref:
-        headers = [
-            "Benchmark",
-            "Workload",
-            "N",
-            "Speedup",
-            "Mean(ms)",
-            "Std(ms)",
-            "Min(ms)",
-            "Max(ms)",
-            "IQR(ms)",
-            "Outliers",
-            "Ref(ms)",
-            "Match",
-        ]
-    else:
-        headers = [
-            "Benchmark",
-            "Workload",
-            "N",
-            "Mean(ms)",
-            "Std(ms)",
-            "Min(ms)",
-            "Max(ms)",
-            "IQR(ms)",
-            "Outliers",
-            "Match",
-        ]
+            s = t.wall_speedup
+            row.append(f"{s:.2f}x" if s is not None else "")
+        row.append(f"{w.median_ms:.4f}")
+        if show_stats:
+            row += [
+                f"{w.mean_ms:.4f}",
+                f"{w.std_ms:.4f}",
+                f"{w.min_ms:.4f}",
+                f"{w.max_ms:.4f}",
+                f"{w.iqr_ms:.4f}",
+                w.outliers,
+            ]
+        if has_ref:
+            row.append(f"{t.ref_wall.median_ms:.4f}" if t.ref_wall is not None else "")
+        if has_device:
+            row.append(f"{t.device.median_ms:.4f}" if t.device is not None else "")
+            if has_ref:
+                ds = t.device_speedup
+                row.append(f"{t.ref_device.median_ms:.4f}" if t.ref_device is not None else "")
+                row.append(f"{ds:.2f}x" if ds is not None else "")
+        row.append("✓" if t.verified else ("✗" if t.verified is False else "·"))
+        rows.append(row)
 
     print(file=sys.stderr)
     print(tabulate(rows, headers=headers, tablefmt="simple_outline"), file=sys.stderr)
 
     # Print statistical significance analysis if we have ref times
-    if has_ref:
+    if show_stats and has_ref:
         print(file=sys.stderr)
         for full_name, cls, method in parsed:
-            t = results[full_name]
-            if t.ref_mean_ms is None or t.mean_ms <= 0:
+            w, ref = results[full_name].wall, results[full_name].ref_wall
+            if ref is None or w.mean_ms <= 0:
                 continue
 
             # 95% confidence interval: mean ± 1.96 * (std / sqrt(n))
-            n = t.iterations
-            margin = 1.96 * t.std_ms / (n**0.5)
-            ci_lower = t.mean_ms - margin
-            ci_upper = t.mean_ms + margin
+            n = len(w.samples_ms)
+            margin = 1.96 * w.std_ms / (n**0.5)
+            ci_lower = w.mean_ms - margin
+            ci_upper = w.mean_ms + margin
 
-            speedup = t.ref_mean_ms / t.mean_ms
+            mean_speedup = ref.mean_ms / w.mean_ms
             # Statistically significant if kernel's upper CI bound < ref mean
-            significant = ci_upper < t.ref_mean_ms
+            significant = ci_upper < ref.mean_ms
 
             if significant:
                 print(
-                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms) ✓ significant",
+                    f"  {method}: mean {mean_speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {ref.mean_ms:.4f}ms) ✓ significant",
                     file=sys.stderr,
                 )
             else:
                 print(
-                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms)",
+                    f"  {method}: mean {mean_speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {ref.mean_ms:.4f}ms)",
                     file=sys.stderr,
                 )
 
@@ -384,6 +370,7 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     gpu_cores = None
+    config, hardware = None, None
     backend_type = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
@@ -407,6 +394,7 @@ def collect_machine_info() -> MachineInfo:
                 backend_type = f"ROCm {rocm_version}"
             else:
                 backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+            config, hardware = gpu_telemetry(backend_name).read_config()
         elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
             backend_type = "XPU"
@@ -427,6 +415,8 @@ def collect_machine_info() -> MachineInfo:
         pytorch_version=pytorch_version,
         os=os_info,
         cpu=cpu,
+        gpu_config=config,
+        hardware=hardware or None,
     )
 
 
@@ -483,6 +473,12 @@ def run_benchmark_class(
     device = device_map.get(backend_name, backend_name)
     print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
+    use_cuda_graph = benchmark_cls.cuda_graph and backend_name in {"cuda", "rocm"}
+    time_device = backend_name in DEVICE_TIMING_BACKENDS
+    if benchmark_cls.cuda_graph and not use_cuda_graph:
+        print(f"  Warning: CUDA graphs are not supported on {device}, timing eagerly", file=sys.stderr)
+    telemetry = gpu_telemetry(backend_name)
+
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
 
@@ -512,60 +508,107 @@ def run_benchmark_class(
 
         # Run verification and time reference if verify exists
         verified: bool | None = None
-        ref_mean_ms: float | None = None
+        ref_times_ms: list[float] | None = None
         if verify_fn is not None:
             benchmark_fn()  # Populate output
             _synchronize()
-
-            # Warmup the verify/reference computation
-            for _ in range(warmup):
-                verify_fn()
-                _synchronize()
-
-            # Time the verify/reference computation
-            start = time.perf_counter()
             verify_result = verify_fn()
             _synchronize()
-            ref_mean_ms = round((time.perf_counter() - start) * 1000, 4)
 
             verified = torch.allclose(instance.out, verify_result, atol=1e-2)
             if not verified:
                 raise RuntimeError(f"Verification failed for {workload_name}")
 
-        # Warmup
-        for _ in range(warmup):
-            benchmark_fn()
-            _synchronize()
+        # The kernel and its reference are timed the same way, so that the speedup compares like with like.
+        timed_fn, ref_fn, calls = benchmark_fn, verify_fn, 1
+        if use_cuda_graph:
+            try:
+                timed_fn = _capture_cuda_graph(benchmark_fn, GRAPH_CALLS)
+                ref_fn = _capture_cuda_graph(verify_fn, GRAPH_CALLS) if verify_fn is not None else None
+                calls = GRAPH_CALLS
+            except Exception as e:
+                print(
+                    f"  Warning: could not capture {workload_name} in a CUDA graph, timing eagerly: {e}",
+                    file=sys.stderr,
+                )
+                timed_fn, ref_fn = benchmark_fn, verify_fn
 
-        # Timing
-        times_ms = []
-        for _ in range(iterations):
-            start = time.perf_counter()
-            benchmark_fn()
-            _synchronize()
-            end = time.perf_counter()
-            times_ms.append((end - start) * 1000)
-
-        mean_ms = sum(times_ms) / len(times_ms)
-        variance = sum((t - mean_ms) ** 2 for t in times_ms) / len(times_ms)
-        std_ms = variance**0.5
-        q1, q3, iqr, outlier_count = _calculate_iqr_and_outliers(times_ms)
-
+        ref_times_ms = _time_fn(ref_fn, iterations, warmup, calls) if ref_fn is not None else None
+        times_ms = _time_fn(timed_fn, iterations, warmup, calls)
+        # Sample while the GPU is still under load.
+        state, hardware = telemetry.sample_state()
+        # A separate pass, so that recording events does not change the wall time.
+        device_ms, ref_device_ms = None, None
+        if time_device:
+            ref_device_ms = _time_fn_device(ref_fn, iterations, device, calls) if ref_fn is not None else None
+            device_ms = _time_fn_device(timed_fn, iterations, device, calls)
         results[workload_name] = TimingResults(
-            mean_ms=round(mean_ms, 4),
-            std_ms=round(std_ms, 4),
-            min_ms=round(min(times_ms), 4),
-            max_ms=round(max(times_ms), 4),
             iterations=iterations,
-            q1_ms=round(q1, 4),
-            q3_ms=round(q3, 4),
-            iqr_ms=round(iqr, 4),
-            outliers=outlier_count,
+            wall=compute_stats(times_ms),
+            ref_wall=compute_stats(ref_times_ms) if ref_times_ms else None,
+            device=compute_stats(device_ms) if device_ms else None,
+            ref_device=compute_stats(ref_device_ms) if ref_device_ms else None,
             verified=verified,
-            ref_mean_ms=ref_mean_ms,
+            timing_mode="cuda_graph" if calls > 1 else "eager",
+            params=instance.params,
+            gpu_state=state,
+            hardware=hardware or None,
         )
 
     return results, kernel_sha
+
+
+def _capture_cuda_graph(fn: Any, calls: int) -> Any:
+    """Capture `calls` back-to-back calls of `fn`, like a kernel runs in a model's graph."""
+    # Warm up on a side stream so that lazy initialization is not captured.
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        for _ in range(3):
+            fn()
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        for _ in range(calls):
+            fn()
+    return graph.replay
+
+
+def _time_fn(fn: Any, iterations: int, warmup: int, calls: int = 1) -> list[float]:
+    """Run `fn` `warmup` times, then return `iterations` wall-clock samples in ms per call.
+
+    `fn` makes `calls` calls per invocation (a CUDA graph replay), and each sample is divided by it.
+    """
+    for _ in range(warmup):
+        fn()
+        _synchronize()
+
+    times_ms = []
+    for _ in range(iterations):
+        start = time.perf_counter_ns()
+        fn()
+        _synchronize()
+        end = time.perf_counter_ns()
+        times_ms.append((end - start) / 1e6 / calls)
+    return times_ms
+
+
+def _time_fn_device(fn: Any, iterations: int, device: str, calls: int = 1) -> list[float]:
+    """Return `iterations` device-clock samples in ms per call, `fn` must already be warm.
+
+    The time between events recorded before and after `fn` on the current stream.
+    This is the GPU's view: it leaves out the launch, but includes any idle time between the kernels `fn` launches.
+    """
+    start = torch.Event(device=device, enable_timing=True)
+    end = torch.Event(device=device, enable_timing=True)
+    times_ms = []
+    for _ in range(iterations):
+        start.record()
+        fn()
+        end.record()
+        end.synchronize()
+        times_ms.append(start.elapsed_time(end) / calls)
+    return times_ms
 
 
 def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchmark]]:
@@ -664,32 +707,18 @@ def run_benchmark_script(
     return all_results, kernel_sha
 
 
-def submit_benchmark(
-    repo_id: str,
-    result: BenchmarkResult,
-) -> None:
-    # TODO: follow up on API design for benchmark submission
-    response = get_session().post(
-        f"https://huggingface.co/api/kernels/{repo_id}/benchmarks",
-        json=result.to_payload(),
-        headers=build_hf_headers(headers={"Content-Type": "application/json"}),
-    )
-    if response.status_code != 200:
-        print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
-    hf_raise_for_status(response)
-
-
 def run_benchmark(
     repo_id: str,
     branch: str | None,
     version: int | None,
     iterations: int = 100,
     warmup: int = 10,
-    upload: bool = False,
     output: str | None = None,
     print_json: bool = False,
-    visual: str | None = None,
-    rasterized: bool = False,
+    baseline: str | None = None,
+    threshold: float = DEFAULT_THRESHOLD,
+    fail_on_regression: bool = False,
+    show_stats: bool = False,
 ) -> BenchmarkResult:
     if MISSING_DEPS:
         print(
@@ -698,6 +727,9 @@ def run_benchmark(
         )
         print("Install with: pip install 'kernels[benchmark]'", file=sys.stderr)
         sys.exit(1)
+
+    # Read the baseline first, so that a bad path fails before benchmarking.
+    baseline_records = read_records(baseline) if baseline else None
 
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
@@ -744,7 +776,18 @@ def run_benchmark(
     if is_local:
         repo_path = repo_id_path.resolve()
     else:
-        repo_path = Path(str(_get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)))
+        repo_path = Path(
+            str(
+                # Only the benchmark scripts are needed, the kernel itself is
+                # loaded (for the current variant only) by the runner.
+                _get_hf_api().snapshot_download(
+                    repo_id=repo_id,
+                    repo_type="kernel",
+                    revision=revision,
+                    allow_patterns=["benchmarks/**"],
+                )
+            )
+        )
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 
@@ -767,7 +810,7 @@ def run_benchmark(
             sys.exit(1)
 
     # Print results table
-    _print_results_table(timing_results)
+    _print_results_table(timing_results, show_stats=show_stats)
 
     # Store relative path for the result
     script_rel_path = "benchmarks"
@@ -791,66 +834,30 @@ def run_benchmark(
         benchmark_script_sha=script_sha,
     )
 
+    records = build_records(
+        timing_results,
+        machine_info,
+        repo_id=repo_id,
+        revision=revision,
+        kernel_sha=kernel_sha,
+        benchmark_sha=script_sha,
+        warmup=warmup,
+    )
+
     if output:
-        with open(output, "w") as f:
-            json.dump(result.to_payload(), f, indent=2)
+        write_records(output, records)
         print(f"Results saved to: {output}", file=sys.stderr)
 
     if print_json:
-        print(json.dumps(result.to_payload(), indent=2))
+        for record in records:
+            print(json.dumps(record))
 
-    if visual:
-        from kernels._internals.cli.benchmark_graphics import (
-            save_speedup_animation,
-            save_speedup_image,
+    if baseline_records is not None:
+        compare_report(
+            baseline_records,
+            records,
+            threshold=threshold,
+            fail_on_regression=fail_on_regression,
         )
-
-        media_dir = Path("media")
-        media_dir.mkdir(exist_ok=True)
-
-        for theme in ("light", "dark"):
-            dark = theme == "dark"
-            base_path = media_dir / f"{visual}_{theme}"
-
-            # Always produce SVGs
-            save_speedup_image(
-                timing_results,
-                f"{base_path}.svg",
-                machine_info.backend,
-                repo_id,
-                machine_info.pytorch_version,
-                dark=dark,
-            )
-            save_speedup_animation(
-                timing_results,
-                f"{base_path}_animation.svg",
-                machine_info.backend,
-                repo_id,
-                machine_info.pytorch_version,
-                dark=dark,
-            )
-
-            # Additionally produce PNGs and GIFs when --rasterized is used
-            if rasterized:
-                save_speedup_image(
-                    timing_results,
-                    f"{base_path}.png",
-                    machine_info.backend,
-                    repo_id,
-                    machine_info.pytorch_version,
-                    dark=dark,
-                )
-                save_speedup_animation(
-                    timing_results,
-                    f"{base_path}_animation.gif",
-                    machine_info.backend,
-                    repo_id,
-                    machine_info.pytorch_version,
-                    dark=dark,
-                )
-
-    if upload:
-        submit_benchmark(repo_id=repo_id, result=result)
-        print("Benchmark submitted successfully!", file=sys.stderr)
 
     return result

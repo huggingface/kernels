@@ -212,7 +212,6 @@
               huggingface-hub
               jax
               jax-tvm-ffi
-              matplotlib
               maturin
               mktestdocs
               openssl.dev

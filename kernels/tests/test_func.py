@@ -291,6 +291,19 @@ def test_kernel_func_serialization_is_independent(restore_fn):
     torch.testing.assert_close(model(x), x + 1)
 
 
+def test_kernel_func_fallback_leaves_no_forward():
+    model = SurpriseMe()
+    _bind_forward(model._kernel_funcs["surprise_me"], AddOne.forward)
+
+    # No kernel for `surprise_me`: fall back to the original function
+    with use_kernel_mapping({"surprise_me": {}}, inherit_mapping=False):
+        kernelize(model, device="cpu", mode=Mode.INFERENCE)
+
+    assert "forward" not in model._kernel_funcs["surprise_me"].__dict__
+    x = torch.arange(4).float()
+    torch.testing.assert_close(model(x), x)
+
+
 @pytest.mark.parametrize("compile", [False, True])
 def test_kernel_func_nested_dispatch(compile):
     model = Outer()

@@ -56,6 +56,7 @@ class KernelizeFallback(Flag):
     - `NO_COMPATIBLE_PROPERTIES`: No mapping matches the device properties.
     - `NO_COMPATIBLE_MODE`: No repository or loaded kernel supports the requested mode.
     - `CANNOT_LOAD`: Kernel loading fails.
+    - `MISSING_DEPENDENCIES`: Kernel fails due to missing dependencies.
     - `DEFAULT`: Fall back for missing mappings, properties, or mode; raise on a loading error.
     - `ALL`: Fall back in every case above, including missing files during loading.
     """
@@ -66,9 +67,10 @@ class KernelizeFallback(Flag):
     NO_COMPATIBLE_PROPERTIES = auto()
     NO_COMPATIBLE_MODE = auto()
     CANNOT_LOAD = auto()
+    MISSING_DEPENDENCIES = auto()
 
     DEFAULT = NO_LAYER | NO_DEVICE | NO_COMPATIBLE_PROPERTIES | NO_COMPATIBLE_MODE
-    ALL = DEFAULT | CANNOT_LOAD
+    ALL = DEFAULT | CANNOT_LOAD | MISSING_DEPENDENCIES
 
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
@@ -695,6 +697,17 @@ def kernelize_layer(
             "Kernel for layer `%s` on %s could not be loaded; using the original forward.",
             layer_name,
             device_type.type,
+        )
+        _replace_forward(module, module_class)
+        return
+    except ImportError as e:
+        if KernelizeFallback.MISSING_DEPENDENCIES not in use_fallback:
+            raise
+        logger.info(
+            "Kernel for layer `%s` on %s has missing dependencies; using the original forward: %s",
+            layer_name,
+            device_type.type,
+            e,
         )
         _replace_forward(module, module_class)
         return

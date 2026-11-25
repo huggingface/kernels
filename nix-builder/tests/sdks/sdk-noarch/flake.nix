@@ -24,6 +24,6 @@
           backend = "cpu";
         };
 
-      tests = ./tests;
+      mkTests = _: ./tests;
     };
 }

@@ -27,9 +27,10 @@
   # Whether the SDK has backend variants.
   useBackend ? true,
 
-  # Directory with tests, run with pytest. Tests marked with `kernels_ci`
-  # are run by `ci-test`.
-  tests ? null,
+  # Make the tests for one variant of the SDK. This is a function to allow
+  # the SDK flake to pull the tests from the source, while also e.g. replacing
+  # imports by `get_kernel` calls.
+  mkTests ? null,
 
   # Build one variant of the SDK, called with `{ buildSet, variant, rev,
   # buildSets }` where `buildSets`. Returns a derivation.
@@ -217,19 +218,29 @@ import ./gen-flake-outputs.nix {
     );
 
   mkCiTests =
-    if tests == null then
+    if mkTests == null then
       null
     else
       sets:
       lib.listToAttrs (
-        map (buildSet: {
-          name = variantOf buildSet;
-          value = writeShellScriptBin "ci-test" ''
-            unset LD_LIBRARY_PATH
-            export LOCAL_KERNELS="${localKernels (variantOf buildSet)}"
-            # Accept exit code 5: no tests are selected
-            ${testPython buildSet}/bin/python3 -m pytest ${tests} -m kernels_ci -p no:cacheprovider || test $? -eq 5
-          '';
-        }) sets
+        map (
+          buildSet:
+          let
+            variant = variantOf buildSet;
+            tests = mkTests {
+              inherit buildSet variant rev;
+              buildSets = applicableBuildSets;
+            };
+          in
+          {
+            name = variant;
+            value = writeShellScriptBin "ci-test" ''
+              unset LD_LIBRARY_PATH
+              export LOCAL_KERNELS="${localKernels variant}"
+              # Accept exit code 5: no tests are selected
+              ${testPython buildSet}/bin/python3 -m pytest ${tests} -m kernels_ci -p no:cacheprovider || test $? -eq 5
+            '';
+          }
+        ) sets
       );
 }

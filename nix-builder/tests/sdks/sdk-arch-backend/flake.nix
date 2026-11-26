@@ -29,6 +29,6 @@
           inherit (buildSet.buildConfig) backend;
         };
 
-      tests = ./tests;
+      mkTests = _: ./tests;
     };
 }

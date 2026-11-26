@@ -405,3 +405,10 @@ def test_digest_validator_raises_on_mismatch(tmp_path, make_metadata, recorded_d
 def test_default_kernel_validators_check_signature_and_digest():
     validators = default_kernel_validators()
     assert [type(validator) for validator in validators] == [SignatureValidator, DigestValidator]
+
+
+def test_minver_reported_for_unknown_backend(unknown_backend_metadata):
+    # Metadata for a backend that this version does not know about must still
+    # parse, so that the minimum version error is what the user sees.
+    with pytest.raises(RuntimeError, match=r"requires kernels>=999\.1\.0"):
+        MinverValidator().validate_metadata(metadata=unknown_backend_metadata, variant="test-variant")

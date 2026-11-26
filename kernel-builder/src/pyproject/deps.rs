@@ -104,6 +104,11 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                 // generic image, so that image can only lower to cri and pvc/bmg need
                 // alias targets. Otherwise one image serves all three, halving the
                 // device compilations per TU.
+                //
+                // The SYCL runtime takes the last AOT image that matches a
+                // device, and a spir64_gen image matches every Intel GPU, so
+                // spir64_gen must come before the aliases. spir64 is the JIT
+                // image for other GPUs.
                 let cri_isolated_image = build.kernels.values().any(|kernel| {
                     kernel.sycl_flags().is_some_and(|flags| {
                         flags
@@ -112,7 +117,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     })
                 });
                 let (sycl_aot_devices, sycl_offload_targets) = if cri_isolated_image {
-                    ("cri", "intel_gpu_pvc,intel_gpu_bmg_g21,spir64_gen,spir64")
+                    ("cri", "spir64_gen,intel_gpu_pvc,intel_gpu_bmg_g21,spir64")
                 } else {
                     ("pvc,bmg-g21,cri", "spir64_gen,spir64")
                 };
@@ -203,6 +208,8 @@ mod tests {
     fn cri_grf_size_sets_ocloc_internal_options() {
         let rendered = render("[general.xpu]\ncri-grf-size = 512", true).unwrap();
         assert!(rendered.contains(r#"set(SYCL_AOT_DEVICES "cri")"#));
+        assert!(rendered
+            .contains(r#"set(SYCL_OFFLOAD_TARGETS "spir64_gen,intel_gpu_pvc,intel_gpu_bmg_g21,spir64")"#));
         assert!(
             rendered.contains(r#"set(SYCL_AOT_INTERNAL_OPTIONS "-cl-intel-512-GRF-per-thread")"#)
         );

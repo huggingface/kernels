@@ -26,6 +26,12 @@ endif()
 if(GPU_LANG STREQUAL "SYCL")
     target_link_options(${OPS_NAME} PRIVATE ${sycl_link_flags})
     target_link_libraries(${OPS_NAME} PRIVATE dnnl)
+    # The static symbol table and the device symbol table (.tgtsym) that
+    # the offload bundler adds are not loaded at runtime, but take tens of
+    # MB in large kernels.
+    add_custom_command(TARGET ${OPS_NAME} POST_BUILD
+        COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.tgtsym $<TARGET_FILE:${OPS_NAME}>
+        VERBATIM)
 endif()
 
 # Compile Metal shaders if any were found

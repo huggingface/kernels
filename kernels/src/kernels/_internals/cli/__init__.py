@@ -130,6 +130,12 @@ def main():
     benchmark_parser.add_argument("--branch", type=str, help="Kernel branch to benchmark")
     benchmark_parser.add_argument("--version", type=int, help="Kernel version to benchmark")
     benchmark_parser.add_argument(
+        "--flavor",
+        nargs="+",
+        action="extend",
+        help="Submit one Hugging Face Job per hardware flavor (e.g. --flavor l4x1 h200)",
+    )
+    benchmark_parser.add_argument(
         "--output",
         type=str,
         default=None,
@@ -275,6 +281,12 @@ def run_benchmark_compare(args):
 
 
 def run_benchmark(args):
+    if args.flavor:
+        from kernels._internals.cli.benchmark_jobs import submit_benchmark_jobs
+
+        submit_benchmark_jobs(args)
+        return
+
     from kernels._internals.cli import benchmark
 
     benchmark.run_benchmark(

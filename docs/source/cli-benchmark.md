@@ -12,7 +12,7 @@ The command:
 
 ## Installation
 
-`kernels benchmark` requires extra dependencies:
+Install the benchmark dependencies to run workloads locally.
 
 ```bash
 uv pip install 'kernels[benchmark]' # or pip install 'kernels[benchmark]'
@@ -117,6 +117,51 @@ Benchmark a local kernel checkout (must contain `benchmarks/`):
 ```bash
 kernels benchmark ./my_kernel
 ```
+
+## Running on Hugging Face Jobs
+
+Use `--flavor` to submit a public Hub kernel to Hugging Face Jobs. Log in with
+`hf auth login` using a token with permission to run Jobs. List available
+hardware with `hf jobs hardware`. Each selected flavor starts a billable job.
+See the [HF Jobs guide](https://huggingface.co/docs/huggingface_hub/guides/jobs)
+for hardware and billing details.
+
+```bash
+kernels benchmark kernels-community/activation@v1 --flavor l4x1
+```
+
+Pass a space-separated list to `--flavor` to run the same workloads on several
+machines. Include `--json` to make the workload records available in each job's
+logs.
+
+```bash
+kernels benchmark kernels-community/activation@v1 \
+  --flavor l4x1 a10g-small h200 --warmup 20 --iterations 200 --json
+```
+
+The command prints a URL for each job and exits after submission. The job
+installs the benchmark dependencies on the worker. Released versions use the
+same `kernels` version on the worker and the submitting machine. Development
+versions install the runner from the upstream `main` branch.
+
+### Fetching results
+
+Open a job URL to see its results table, or use the ID at the end of the URL
+with `hf jobs logs <job_id>`. To watch the benchmark as it runs, use
+`hf jobs logs --follow <job_id>`.
+
+For a job submitted with `--json`, wait for it to finish successfully and use
+`jq` to extract the workload records from the logs. For example, to save the L4
+run on your machine:
+
+```bash
+job_id="<L4 job ID>"
+hf jobs wait "$job_id" && hf jobs logs "$job_id" \
+  | jq -Rce 'fromjson? | objects | select(has("run_id") and has("workload"))' > l4x1.jsonl
+```
+
+Use each flavor's job ID and a separate filename when fetching multiple runs.
+These files have the same format as a local `kernels benchmark --output` file.
 
 ## Output
 

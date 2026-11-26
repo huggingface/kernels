@@ -247,6 +247,7 @@ impl From<NeuronGeneral> for super::NeuronGeneral {
 impl From<XpuGeneral> for super::XpuGeneral {
     fn from(xpu: XpuGeneral) -> Self {
         Self {
+            cri_grf_size: None,
             kernel_depends: None,
             python_depends: xpu.python_depends,
         }

@@ -77,6 +77,10 @@ set(DPCPP_AOT_MIN_VERSION "2026.0")
 if(DPCPP_VERSION VERSION_GREATER_EQUAL DPCPP_AOT_MIN_VERSION)
   set(SYCL_AOT_DEVICES "{{ sycl_aot_devices }}")
   set(SYCL_OFFLOAD_TARGETS "{{ sycl_offload_targets }}")
+{% if sycl_aot_internal_options %}
+  # general.xpu.cri-grf-size: GRF size of the cri kernels that do not set one.
+  set(SYCL_AOT_INTERNAL_OPTIONS "{{ sycl_aot_internal_options }}")
+{% endif %}
 else()
   set(SYCL_OFFLOAD_TARGETS "spir64")
 endif()

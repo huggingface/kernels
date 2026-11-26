@@ -214,6 +214,8 @@ elseif(GPU_LANG STREQUAL "SYCL")
   set(SYCL_OFFLOAD_TARGETS "spir64_gen,spir64")
   set(SYCL_AOT_DEVICES "pvc,xe-lpg,ats-m150")
   set(SYCL_AOT_BACKEND_OPTIONS " -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required")
+  # ocloc -internal_options, spir64_gen only (e.g. a GRF size for one device).
+  set(SYCL_AOT_INTERNAL_OPTIONS "")
   set(SYCL_SPIRV_EXT "")
 
   # Rebuild sycl_flags (compile) and sycl_link_flags (link) from the variables
@@ -231,14 +233,20 @@ elseif(GPU_LANG STREQUAL "SYCL")
     # Backend options reach one target each: spir64_gen takes -device, the
     # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
     # the identical -options and silently dropping all but the first target.
+    # -exclude_ir: AOT images do not carry a SPIR-V copy (spir64 is the JIT
+    # image when there is one).
     string(REPLACE "," ";" _sycl_aot_targets "${SYCL_OFFLOAD_TARGETS}")
+    set(_sycl_aot_internal_options "")
+    if(SYCL_AOT_INTERNAL_OPTIONS)
+      set(_sycl_aot_internal_options " -internal_options ${SYCL_AOT_INTERNAL_OPTIONS}")
+    endif()
     foreach(_tgt IN LISTS _sycl_aot_targets)
       if(_tgt STREQUAL "spir64_gen")
         string(APPEND sycl_link_flags
-          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -exclude_ir${_sycl_aot_internal_options} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
       elseif(_tgt MATCHES "^intel_gpu_")
         string(APPEND sycl_link_flags
-          ";SHELL:-Xsycl-target-backend=${_tgt} \"-options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+          ";SHELL:-Xsycl-target-backend=${_tgt} \"-exclude_ir -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
       endif()
     endforeach()
 

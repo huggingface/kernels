@@ -234,6 +234,18 @@ The following sections enumerate all supported options for `build.toml`.
   is provided for kernels that require functionality only provided by newer CUDA
   toolkits.
 
+### `general.xpu`
+
+- `cri-grf-size` (optional): the number of GRF registers per thread (128,
+  256, or 512) for the CRI (Xe3P) kernels that do not request a size with a
+  kernel property. This lets kernels use 512 GRF, which the `grf_size` kernel
+  property does not support. It is an option for the whole AOT image, so it
+  also applies to kernels that come from other `kernel.<name>` sections. Use
+  `grf_size<256>` on kernels that should not get the larger GRF. This option
+  requires a kernel that depends on `sycl_tla` and is built for CRI only (with
+  `-D__SYCL_TARGET_INTEL_GPU_CRI__=1` in its `sycl-flags`), because the
+  option is not supported for other GPUs.
+
 ### Framework sections
 
 The framework section specifies framework-specific settings. The name of the

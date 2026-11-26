@@ -153,8 +153,8 @@ struct PyBackendInfo {
 impl From<BackendInfo> for PyBackendInfo {
     fn from(backend_info: BackendInfo) -> Self {
         Self {
-            backend_type: backend_info.backend_type.into(),
-            archs: backend_info.archs,
+            backend_type: backend_info.backend().into(),
+            archs: backend_info.archs().map(<[String]>::to_vec),
         }
     }
 }

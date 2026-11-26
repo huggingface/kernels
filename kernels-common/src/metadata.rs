@@ -10,13 +10,61 @@ use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
 use crate::version::Version;
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct BackendInfo {
-    #[serde(rename = "type")]
-    pub backend_type: Backend,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub archs: Option<Vec<String>>,
+/// Backend and backend-specific metadata.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum BackendInfo {
+    Cann {},
+    Cpu {},
+    Cuda {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        archs: Option<Vec<String>>,
+    },
+    Metal {},
+    Neuron {},
+    Rocm {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        archs: Option<Vec<String>>,
+    },
+    Tpu {},
+    Xpu {},
+}
+
+impl BackendInfo {
+    pub fn new(backend: Backend, archs: Option<Vec<String>>) -> Self {
+        match backend {
+            Backend::Cann => Self::Cann {},
+            Backend::Cpu => Self::Cpu {},
+            Backend::Cuda => Self::Cuda { archs },
+            Backend::Metal => Self::Metal {},
+            Backend::Neuron => Self::Neuron {},
+            Backend::Rocm => Self::Rocm { archs },
+            Backend::Tpu => Self::Tpu {},
+            Backend::Xpu => Self::Xpu {},
+        }
+    }
+
+    /// The backend that this info describes.
+    pub fn backend(&self) -> Backend {
+        match self {
+            Self::Cann {} => Backend::Cann,
+            Self::Cpu {} => Backend::Cpu,
+            Self::Cuda { .. } => Backend::Cuda,
+            Self::Metal {} => Backend::Metal,
+            Self::Neuron {} => Backend::Neuron,
+            Self::Rocm { .. } => Backend::Rocm,
+            Self::Tpu {} => Backend::Tpu,
+            Self::Xpu {} => Backend::Xpu,
+        }
+    }
+
+    /// Architectures of the build, for backends that have them.
+    pub fn archs(&self) -> Option<&[String]> {
+        match self {
+            Self::Cuda { archs } | Self::Rocm { archs } => archs.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -156,10 +204,7 @@ impl Metadata {
             source: build.general.source.clone(),
             python_depends,
             kernel_depends,
-            backend: BackendInfo {
-                archs,
-                backend_type: backend,
-            },
+            backend: BackendInfo::new(backend, archs),
             digest: None,
             provenance: None,
         })
@@ -196,7 +241,7 @@ mod tests {
     use crate::git::{GitStatus, Oid};
     use crate::version::Version;
 
-    use super::{KernelBuilderVersion, Metadata, Provenance};
+    use super::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
 
     /// During the development of kernels 0.17, we had a time period where
     /// `sha` was used before `oid`. The Hub as a bunch of kernels with `sha`
@@ -257,10 +302,10 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
+        assert_eq!(metadata.backend.backend(), Backend::Cuda);
         assert_eq!(
-            metadata.backend.archs,
-            Some(vec!["7.0".to_string(), "8.0".to_string()])
+            metadata.backend.archs(),
+            Some(["7.0".to_string(), "8.0".to_string()].as_slice())
         );
     }
 
@@ -269,8 +314,11 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Rocm).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Rocm);
-        assert_eq!(metadata.backend.archs, Some(vec!["gfx90a".to_string()]));
+        assert_eq!(metadata.backend.backend(), Backend::Rocm);
+        assert_eq!(
+            metadata.backend.archs(),
+            Some(["gfx90a".to_string()].as_slice())
+        );
     }
 
     #[test]
@@ -278,8 +326,8 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cpu).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cpu);
-        assert!(metadata.backend.archs.is_none());
+        assert_eq!(metadata.backend.backend(), Backend::Cpu);
+        assert!(metadata.backend.archs().is_none());
     }
 
     #[test]
@@ -311,8 +359,38 @@ mod tests {
         };
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
-        assert!(metadata.backend.archs.is_none());
+        assert_eq!(metadata.backend.backend(), Backend::Cuda);
+        assert!(metadata.backend.archs().is_none());
+    }
+
+    #[test]
+    fn backend_info_ignores_archs_on_non_arch_backends() {
+        for json in [
+            r#"{"type":"cpu"}"#,
+            r#"{"type":"cpu","archs":null}"#,
+            r#"{"type":"cpu","archs":["x"]}"#,
+            r#"{"type":"cann","future":1}"#,
+        ] {
+            let info: BackendInfo = serde_json::from_str(json).unwrap();
+            assert!(info.archs().is_none(), "{json}");
+        }
+        let info: BackendInfo = serde_json::from_str(r#"{"type":"cpu","archs":["x"]}"#).unwrap();
+        assert_eq!(serde_json::to_string(&info).unwrap(), r#"{"type":"cpu"}"#);
+    }
+
+    #[test]
+    fn backend_info_arch_backends_round_trip() {
+        for json in [
+            r#"{"type":"cuda","archs":["7.0","8.0"]}"#,
+            r#"{"type":"rocm","archs":["gfx90a"]}"#,
+            r#"{"type":"cuda"}"#,
+        ] {
+            let info: BackendInfo = serde_json::from_str(json).unwrap();
+            assert_eq!(serde_json::to_string(&info).unwrap(), json);
+        }
+        let info: BackendInfo = serde_json::from_str(r#"{"type":"cuda","archs":null}"#).unwrap();
+        assert_eq!(info, BackendInfo::Cuda { archs: None });
+        assert!(serde_json::from_str::<BackendInfo>(r#"{"type":"bogus"}"#).is_err());
     }
 
     #[test]
@@ -530,7 +608,7 @@ mod tests {
         assert!(metadata.source.is_none());
         assert!(metadata.python_depends.is_empty());
         assert!(metadata.kernel_depends.is_empty());
-        assert_eq!(metadata.backend.backend_type, Backend::Cpu);
+        assert_eq!(metadata.backend.backend(), Backend::Cpu);
         assert!(metadata.digest.is_some());
     }
 

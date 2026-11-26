@@ -8,6 +8,9 @@
 
   variant,
 
+  # Unique ID of the build variant.
+  sdkId,
+
   # Backend that is written to the metadata.
   backend,
 }:
@@ -23,7 +26,7 @@ stdenv.mkDerivation {
 
   dontFixup = true;
 
-  inherit variant backend;
+  inherit variant sdkId backend;
 
   nativeBuildInputs = [ cudaPackages.cuda_nvcc ];
 
@@ -67,7 +70,7 @@ stdenv.mkDerivation {
     cat > $out/$variant/metadata.json <<EOF
     {
       "name": "sdk-arch-backend",
-      "id": "_sdk_arch_backend_test",
+      "id": "$sdkId",
       "version": 1,
       "license": "Apache-2.0",
       "python-depends": [],

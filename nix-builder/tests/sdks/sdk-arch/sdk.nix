@@ -5,6 +5,9 @@
 
   variant,
 
+  # Unique ID of the build variant.
+  sdkId,
+
   backend,
 }:
 
@@ -16,7 +19,7 @@ manylinux_2_28.stdenv.mkDerivation {
 
   dontFixup = true;
 
-  inherit variant backend;
+  inherit variant sdkId backend;
 
   buildPhase = ''
     runHook preBuild
@@ -40,7 +43,7 @@ manylinux_2_28.stdenv.mkDerivation {
     cat > $out/$variant/metadata.json <<EOF
     {
       "name": "sdk-arch",
-      "id": "_sdk_arch_test",
+      "id": "$sdkId",
       "version": 1,
       "license": "Apache-2.0",
       "python-depends": [],

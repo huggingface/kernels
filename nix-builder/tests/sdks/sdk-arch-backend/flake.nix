@@ -23,9 +23,13 @@
         versions: builtins.filter (version: (version.cudaVersion or null) == "12.6") versions;
 
       mkVariant =
-        { buildSet, variant, ... }:
+        {
+          buildSet,
+          variant,
+          sdkId,
+        }:
         buildSet.pkgs.callPackage ./sdk.nix {
-          inherit variant;
+          inherit variant sdkId;
           inherit (buildSet.buildConfig) backend;
         };
 

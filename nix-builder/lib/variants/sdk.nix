@@ -5,6 +5,8 @@
 
 # SDK build variants. Shape:
 #
+# - `sdk`
+# - `sdk-<backend>`
 # - `sdk-<backend>[-<version>]-cpython-<python_version>-<abi>-<platform>-<os>`
 
 let
@@ -24,12 +26,25 @@ let
       "${buildConfig.backend}-${lib.versions.majorMinor backendVersion}";
 in
 {
-  # The variant string for an SDK with the given Python version and ABI,
-  # e.g. `{ version = "3.12"; abi = "abi3"; }`.
+  # Noarch variants with a backend.
+  noarchVariant = "sdk-${buildConfig.backend}";
+
+  # Noarch variant without a backend.
+  noarchVariantNoBackend = "sdk";
+
+  # Arch variants with a backend for a given Python version and ABI.
   variant =
     {
       version,
       abi,
     }:
     "sdk-${backendString}-cpython-${lib.versions.majorMinor version}-${abi}-${buildConfig.system}";
+
+  # Arch variants without a backend for a given Python version and ABI.
+  variantNoBackend =
+    {
+      version,
+      abi,
+    }:
+    "sdk-cpython-${lib.versions.majorMinor version}-${abi}-${buildConfig.system}";
 }

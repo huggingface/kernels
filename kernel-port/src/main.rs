@@ -31,6 +31,8 @@ struct Cli {
     vendor: Vec<String>,
     #[arg(long, requires = "out")]
     partial: bool,
+    #[arg(long, requires = "out")]
+    ephemeral: bool,
 }
 
 fn main() {
@@ -52,6 +54,7 @@ fn run() -> Result<()> {
         diff,
         vendor,
         partial,
+        ephemeral,
     } = Cli::parse();
 
     let mut vendors = std::collections::BTreeMap::new();
@@ -136,6 +139,9 @@ fn run() -> Result<()> {
     match (&out, &dir, dry_run) {
         (Some(out), _, _) => {
             ws.materialize_into(out)?;
+            if ephemeral {
+                return Ok(());
+            }
             let provenance = provenance_json(
                 &text,
                 recipe.effective_version(),

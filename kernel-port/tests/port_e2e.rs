@@ -19,7 +19,7 @@ fn read_tree(root: &Path) -> BTreeMap<PathBuf, String> {
     files
 }
 
-fn check_port(flavor: &str) {
+fn check_port(flavor: &str, ephemeral: bool) {
     let example = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/examples")
         .join(flavor);
@@ -39,6 +39,7 @@ fn check_port(flavor: &str) {
         .arg(&upstream)
         .arg("--out")
         .arg(&out)
+        .args(ephemeral.then_some("--ephemeral"))
         .current_dir(temp.path())
         .output()
         .unwrap();
@@ -52,7 +53,8 @@ fn check_port(flavor: &str) {
     let expected = read_tree(&example.join("expected"));
     let mut actual = read_tree(&out);
     // Provenance depends on the recipe text and is not part of the snapshot.
-    assert!(actual.remove(Path::new("port-provenance.json")).is_some());
+    let provenance = actual.remove(Path::new("port-provenance.json"));
+    assert_eq!(provenance.is_some(), !ephemeral, "{flavor}: provenance");
     assert_eq!(
         actual.keys().collect::<Vec<_>>(),
         expected.keys().collect::<Vec<_>>()
@@ -65,10 +67,15 @@ fn check_port(flavor: &str) {
 
 #[test]
 fn aot_relu_port() {
-    check_port("relu-aot");
+    check_port("relu-aot", false);
 }
 
 #[test]
 fn jit_relu_port() {
-    check_port("relu-jit");
+    check_port("relu-jit", false);
+}
+
+#[test]
+fn ephemeral_port_skips_provenance() {
+    check_port("relu-jit", true);
 }

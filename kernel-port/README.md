@@ -54,7 +54,7 @@ The [cookbook](#cookbook) is one such command per op.
 
 ```sh
 cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
-    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial]
+    [--vendor name=dir] [--dry-run] [--diff] [--print] [--partial] [--ephemeral]
 ```
 
 - `--dir` is the upstream checkout. It is read, never written.
@@ -64,6 +64,7 @@ cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
 - `--print` dumps every file in the resulting tree.
 - `--vendor name=dir` supplies a second pinned checkout for [`vendor`](#vendor).
 - `--partial` writes the state as of the last successful op to `--out`, to inspect what a failing op saw. The run still exits non-zero.
+- `--ephemeral` skips writing `port-provenance.json` to `--out`.
 
 ## Ops
 

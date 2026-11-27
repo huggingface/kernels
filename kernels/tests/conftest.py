@@ -82,6 +82,20 @@ def make_metadata():
 
 
 @pytest.fixture
+def unknown_backend_metadata() -> Metadata:
+    metadata = {
+        "name": "test-kernel",
+        "id": "test_id",
+        "version": 1,
+        "kernels-minver": "999.1.0",
+        "license": "mit",
+        "python-depends": [],
+        "backend": {"type": "some-future-backend"},
+    }
+    return Metadata.from_bytes(json.dumps(metadata).encode("utf-8"))
+
+
+@pytest.fixture
 def fake_cuda_device(monkeypatch):
     monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
     monkeypatch.setattr(torch.version, "hip", None, raising=False)

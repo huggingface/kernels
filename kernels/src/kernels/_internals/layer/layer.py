@@ -699,12 +699,6 @@ def kernelize_layer(
         _replace_forward(module, module_class)
         return
 
-    # Ideally we would do validation on the mapping where we check that
-    # e.g. if a repo class is registered for TRAINING | TORCH_COMPILE,
-    # the actual layer is compatible with that. Unfortunately, this would
-    # mean that we have to pre-download everything.
-    _validate_layer_has_mode(layer_name=layer_name, module=layer, repo=repo, repo_mode=repo_mode)
-
     _conditionally_replace_forward(
         module=module,
         layer=layer,
@@ -777,11 +771,8 @@ def _conditionally_replace_forward(
 ):
     module_class = type(module)
 
-    # Switch to fallback if the mode is not supported by the layer.
-    # Note that this is useful even after _validate_layer_has_mode because
-    # layers registered with the FALLBACK mode never get rejected by
-    # _validate_layer_has_mode. For such layers, we want to fall back in
-    # case the layer does not support the given mode.
+    # Switch to fallback if the mode is not supported by the layer, even when it
+    # was registered for that mode (e.g. no backward on some hardware).
     needs_fallback_for_compile = Mode.TORCH_COMPILE in mode and not getattr(layer, "can_torch_compile", False)
     needs_fallback_for_backward = Mode.TRAINING in mode and not getattr(layer, "has_backward", True)
 
@@ -792,8 +783,12 @@ def _conditionally_replace_forward(
             if needs_fallback_for_backward:
                 logging.info("Layer does not support backward, using fallback")
             _replace_forward(module, module_class)
+        elif needs_fallback_for_backward:
+            raise ValueError(f"Function/layer from repo {repo} does not support backward, needed for mode `{mode}`")
         else:
-            raise ValueError(f"Available kernel does not support mode: {mode}")
+            raise ValueError(
+                f"Function/layer from repo {repo} does not support torch.compile, needed for mode `{mode}`"
+            )
     else:
         _replace_forward(module, layer, repo=repo)
 
@@ -804,39 +799,16 @@ def _replace_forward(
     *,
     repo: RepositoryProtocol | None = None,
 ):
-    module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
+    if layer is type(module):
+        module.__dict__.pop("forward", None)
+    else:
+        module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
 
     if repo is None:
         # No repository, typically when reverting to the original forward.
         module.__dict__.pop("_kernel_repo", None)
     else:
         module.__dict__["_kernel_repo"] = repo
-
-
-def _validate_layer_has_mode(
-    *,
-    layer_name: str,
-    module: Type["nn.Module"],
-    repo: RepositoryProtocol,
-    repo_mode: Mode,
-):
-    """
-    Check that a repository supports the mode that it was registered for.
-    """
-
-    if Mode.TRAINING in repo_mode and not getattr(module, "has_backward", True):
-        raise ValueError(
-            f"Function/layer from repo {repo} does not support backward.\n"
-            f"Was registered for `{layer_name}` with mode `{repo_mode}`"
-        )
-
-    if Mode.TORCH_COMPILE in repo_mode and not getattr(module, "can_torch_compile", False):
-        raise ValueError(
-            f"Function/layer from repo {repo} does not support torch.compile.\n"
-            f"Was registered for `{layer_name}` with mode `{repo_mode}`"
-        )
-
-    return True
 
 
 _CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}

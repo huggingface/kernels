@@ -143,6 +143,54 @@ def test_metadata_load_cann(tmp_path):
     assert Metadata.read_from_file(path).backend.backend_type == Backend.CANN
 
 
+def test_metadata_load_agnostic_backend(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps(
+            {
+                "id": "_my_sdk_8a3be8f",
+                "version": 1,
+                "name": "my-sdk",
+                "kernels-minver": "0.19.0",
+                "license": "Apache-2.0",
+                "python-depends": [],
+                "backend": {"type": "agnostic"},
+            }
+        )
+    )
+    m = Metadata.read_from_file(path)
+
+    # Backend-agnostic builds have no backend type, this is not an error.
+    assert m.backend.backend_type is None
+    assert m.backend.archs is None
+    assert repr(m.backend) == "BackendInfo(backend_type=None, archs=None)"
+
+
+def test_metadata_load_unknown_backend(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps(
+            {
+                "id": "_my_kernel_8a3be8f",
+                "version": 1,
+                "name": "my-kernel",
+                "kernels-minver": "99.0.0",
+                "license": "Apache-2.0",
+                "python-depends": [],
+                "backend": {"type": "some-future-backend", "archs": ["x"], "extra": 1},
+            }
+        )
+    )
+    m = Metadata.read_from_file(path)
+
+    # The rest of the metadata is usable, so that e.g. `kernels-minver` can be checked.
+    assert str(m.kernels_minver) == "99.0.0"
+    assert m.backend.archs is None
+    assert "Unknown" in repr(m.backend)
+    with pytest.raises(ValueError, match="unknown backend"):
+        m.backend.backend_type
+
+
 def test_metadata_load_unknown_field_accepted(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(

@@ -23,6 +23,8 @@ pub struct UnknownBackendError;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum BackendInfo {
+    /// Used for builds that are not for a specific backend (e.g. some SDKs).
+    Agnostic {},
     Cann {},
     Cpu {},
     Cuda {
@@ -59,9 +61,11 @@ impl BackendInfo {
 
     /// The backend that this info describes.
     ///
-    /// Fails for backends that this version does not know about.
-    pub fn backend(&self) -> Result<Backend, UnknownBackendError> {
-        Ok(match self {
+    /// `Ok(None)` for backend-agnostic builds. Fails for backends that this
+    /// version does not know about.
+    pub fn backend(&self) -> Result<Option<Backend>, UnknownBackendError> {
+        Ok(Some(match self {
+            Self::Agnostic {} => return Ok(None),
             Self::Cann {} => Backend::Cann,
             Self::Cpu {} => Backend::Cpu,
             Self::Cuda { .. } => Backend::Cuda,
@@ -71,7 +75,12 @@ impl BackendInfo {
             Self::Tpu {} => Backend::Tpu,
             Self::Xpu {} => Backend::Xpu,
             Self::Unknown => return Err(UnknownBackendError),
-        })
+        }))
+    }
+
+    /// Whether the build is backend-agnostic.
+    pub fn is_agnostic(&self) -> bool {
+        matches!(self, Self::Agnostic {})
     }
 
     /// Architectures of the build, for backends that have them.
@@ -318,7 +327,7 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend().unwrap(), Backend::Cuda);
+        assert_eq!(metadata.backend.backend().unwrap(), Some(Backend::Cuda));
         assert_eq!(
             metadata.backend.archs(),
             Some(["7.0".to_string(), "8.0".to_string()].as_slice())
@@ -330,7 +339,7 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Rocm).unwrap();
 
-        assert_eq!(metadata.backend.backend().unwrap(), Backend::Rocm);
+        assert_eq!(metadata.backend.backend().unwrap(), Some(Backend::Rocm));
         assert_eq!(
             metadata.backend.archs(),
             Some(["gfx90a".to_string()].as_slice())
@@ -342,7 +351,7 @@ mod tests {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cpu).unwrap();
 
-        assert_eq!(metadata.backend.backend().unwrap(), Backend::Cpu);
+        assert_eq!(metadata.backend.backend().unwrap(), Some(Backend::Cpu));
         assert!(metadata.backend.archs().is_none());
     }
 
@@ -375,7 +384,7 @@ mod tests {
         };
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
-        assert_eq!(metadata.backend.backend().unwrap(), Backend::Cuda);
+        assert_eq!(metadata.backend.backend().unwrap(), Some(Backend::Cuda));
         assert!(metadata.backend.archs().is_none());
     }
 
@@ -406,10 +415,41 @@ mod tests {
             let info: BackendInfo = serde_json::from_str(json).unwrap();
             assert_eq!(info, BackendInfo::Unknown, "{json}");
             assert_eq!(info.backend(), Err(UnknownBackendError));
+            assert!(!info.is_agnostic());
             assert!(info.archs().is_none());
             // Writing it back would lose the backend.
             assert!(serde_json::to_string(&info).is_err());
         }
+    }
+
+    #[test]
+    fn agnostic_backend() {
+        for json in [
+            r#"{"type":"agnostic"}"#,
+            r#"{"type":"agnostic","archs":["x"],"future":1}"#,
+        ] {
+            let info: BackendInfo = serde_json::from_str(json).unwrap();
+            assert_eq!(info, BackendInfo::Agnostic {}, "{json}");
+            assert_eq!(info.backend(), Ok(None));
+            assert!(info.is_agnostic());
+            assert!(info.archs().is_none());
+            assert_eq!(
+                serde_json::to_string(&info).unwrap(),
+                r#"{"type":"agnostic"}"#
+            );
+        }
+        assert!(!BackendInfo::new(Backend::Cpu, None).is_agnostic());
+    }
+
+    #[test]
+    fn agnostic_backend_in_metadata_parses() {
+        let json = r#"{"name":"test-kernel","id":"test-id","version":1,"kernels-minver":"0.19.0","license":"apache-2.0","python-depends":[],"backend":{"type":"agnostic"}}"#;
+        let metadata: Metadata = serde_json::from_str(json).unwrap();
+        assert!(metadata.backend.is_agnostic());
+        assert_eq!(metadata.backend.backend(), Ok(None));
+        let parsed: Metadata =
+            serde_json::from_str(&serde_json::to_string(&metadata).unwrap()).unwrap();
+        assert!(parsed.backend.is_agnostic());
     }
 
     #[test]
@@ -661,7 +701,7 @@ mod tests {
         assert!(metadata.source.is_none());
         assert!(metadata.python_depends.is_empty());
         assert!(metadata.kernel_depends.is_empty());
-        assert_eq!(metadata.backend.backend().unwrap(), Backend::Cpu);
+        assert_eq!(metadata.backend.backend().unwrap(), Some(Backend::Cpu));
         assert!(metadata.digest.is_some());
     }
 

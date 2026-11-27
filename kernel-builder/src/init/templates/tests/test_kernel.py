@@ -1,8 +1,9 @@
 import platform
 
+import kernels
 import torch
 
-import {{ kernel_name_normalized }}
+{{ kernel_name_normalized }} = kernels.get_kernel("{{ repo_id }}", version=1)
 
 
 def test_{{ kernel_name_normalized }}():

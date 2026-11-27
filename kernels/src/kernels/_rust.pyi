@@ -74,8 +74,10 @@ class BackendInfo:
     """Backend information."""
 
     @property
-    def backend_type(self) -> Backend:
+    def backend_type(self) -> Optional[Backend]:
         """Return the backend type.
+
+        `None` for backend-agnostic builds (e.g. some SDKs).
 
         Raises:
             ValueError: If the kernel was built for a backend that this

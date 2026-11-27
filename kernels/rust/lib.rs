@@ -146,15 +146,18 @@ impl PyBackend {
 #[pyclass(name = "BackendInfo", frozen)]
 #[derive(Clone, Debug)]
 struct PyBackendInfo {
-    backend_type: PyBackend,
+    backend_type: Result<PyBackend, String>,
     archs: Option<Vec<String>>,
 }
 
 impl From<BackendInfo> for PyBackendInfo {
     fn from(backend_info: BackendInfo) -> Self {
         Self {
-            backend_type: backend_info.backend_type.into(),
-            archs: backend_info.archs,
+            backend_type: backend_info
+                .backend()
+                .map(Into::into)
+                .map_err(|err| err.to_string()),
+            archs: backend_info.archs().map(<[String]>::to_vec),
         }
     }
 }
@@ -162,16 +165,19 @@ impl From<BackendInfo> for PyBackendInfo {
 #[pymethods]
 impl PyBackendInfo {
     fn __repr__(&self) -> String {
+        let backend_type = match &self.backend_type {
+            Ok(backend) => backend.__repr__(),
+            Err(_) => "Unknown".to_string(),
+        };
         format!(
             "BackendInfo(backend_type={}, archs={:?})",
-            self.backend_type.__repr__(),
-            self.archs
+            backend_type, self.archs
         )
     }
 
     #[getter]
-    fn backend_type(&self) -> PyBackend {
-        self.backend_type
+    fn backend_type(&self) -> PyResult<PyBackend> {
+        self.backend_type.clone().map_err(PyValueError::new_err)
     }
 
     #[getter]

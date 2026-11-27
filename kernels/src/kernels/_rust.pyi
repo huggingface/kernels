@@ -75,7 +75,12 @@ class BackendInfo:
 
     @property
     def backend_type(self) -> Backend:
-        """Return the backend type."""
+        """Return the backend type.
+
+        Raises:
+            ValueError: If the kernel was built for a backend that this
+                version does not know about (e.g. a newer backend).
+        """
         ...
 
     @property

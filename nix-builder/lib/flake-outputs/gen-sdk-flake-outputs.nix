@@ -103,9 +103,6 @@ let
 
       dontUnpack = true;
 
-      # Keep the binaries as the SDK built them.
-      dontFixup = true;
-
       # SDKs can contain multiple libraries that depend on each other, using
       # rpaths relative to the library origin. In such cases, we want to keep
       # the origin-rlative rpaths, but remove anyother.

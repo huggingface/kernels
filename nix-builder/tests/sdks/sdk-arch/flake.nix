@@ -20,9 +20,13 @@
       useBackend = false;
 
       mkVariant =
-        { buildSet, variant, ... }:
+        {
+          buildSet,
+          variant,
+          sdkId,
+        }:
         buildSet.pkgs.callPackage ./sdk.nix {
-          inherit variant;
+          inherit variant sdkId;
           backend = "cpu";
         };
 

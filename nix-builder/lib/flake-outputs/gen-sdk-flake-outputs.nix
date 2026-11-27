@@ -32,15 +32,17 @@
   # imports by `get_kernel` calls.
   mkTests ? null,
 
-  # Build one variant of the SDK, called with `{ buildSet, variant, rev,
-  # buildSets }` where `buildSets`. Returns a derivation.
+  # Build one variant of the SDK, called with `{ buildSet, variant, sdkId }`.
+  # Returns a derivation.
   mkVariant,
 }:
 
 let
-  rev = lib.replaceStrings [ "-" ] [ "_" ] (
-    self.shortRev or self.dirtyShortRev or self.lastModifiedDate
-  );
+  sanitize = lib.replaceStrings [ "-" "." ] [ "_" "_" ];
+
+  rev = sanitize (self.shortRev or self.dirtyShortRev or self.lastModifiedDate);
+
+  sdkIdOf = variant: "_${sanitize name}_${sanitize variant}_${rev}";
 
   noarch = python == null;
 
@@ -154,8 +156,8 @@ let
         value = checkVariant {
           inherit buildSet variant;
           sdk = mkVariant {
-            inherit buildSet variant rev;
-            buildSets = applicableBuildSets;
+            inherit buildSet variant;
+            sdkId = sdkIdOf variant;
           };
         };
       }
@@ -227,10 +229,7 @@ import ./gen-flake-outputs.nix {
           buildSet:
           let
             variant = variantOf buildSet;
-            tests = mkTests {
-              inherit buildSet variant rev;
-              buildSets = applicableBuildSets;
-            };
+            tests = mkTests { inherit buildSet; };
           in
           {
             name = variant;

@@ -22,8 +22,8 @@
   ninja,
   python3,
   remove-bytecode-hook,
+  strip-rpath-hook,
   zip-build-hook,
-  rewrite-nix-paths-macho,
   writeScriptBin,
 
   # Framework packages
@@ -214,8 +214,8 @@ stdenv.mkDerivation (prevAttrs: {
     xpuPackages.ocloc
     oneapi-torch-dev
   ])
-  ++ lib.optionals stdenv.hostPlatform.isDarwin [
-    rewrite-nix-paths-macho
+  ++ lib.optionals stripRPath [
+    strip-rpath-hook
   ];
 
   buildInputs = [
@@ -314,18 +314,6 @@ stdenv.mkDerivation (prevAttrs: {
 
   postInstall = ''
     rm -rf $out/_${moduleName}_*_${rev}
-  ''
-  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
-    find $out/ -name '*.so' \
-      -exec patchelf --set-rpath "" {} \;
-  ''
-  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
-    find $out/ -name '*.so' \
-      -exec rewrite-nix-paths-macho {} \;
-
-    # Stub some rpath.
-    find $out/ -name '*.so' \
-      -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
   '';
 
   doInstallCheck = true;
